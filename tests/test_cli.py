@@ -66,3 +66,27 @@ def test_launch_reports_steam_not_found(
 def test_missing_subcommand_exits():
     with pytest.raises(SystemExit):
         main([])
+
+
+def test_terminate_reports_killed(
+    mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+):
+    mocker.patch("vrcpilot.cli.terminate_vrchat", return_value=True)
+
+    exit_code = main(["terminate"])
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "Terminated" in captured.out
+
+
+def test_terminate_reports_not_running(
+    mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+):
+    mocker.patch("vrcpilot.cli.terminate_vrchat", return_value=False)
+
+    exit_code = main(["terminate"])
+
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "not running" in captured.out

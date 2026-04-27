@@ -16,16 +16,24 @@ Typical use::
 from importlib import metadata
 
 from vrcpilot._steam import SteamNotFoundError
-from vrcpilot.launcher import VRCHAT_STEAM_APP_ID, build_launch_command, launch_vrchat
+from vrcpilot.launcher import (
+    VRCHAT_PROCESS_NAME,
+    VRCHAT_STEAM_APP_ID,
+    build_launch_command,
+    launch_vrchat,
+    terminate_vrchat,
+)
 
 #: Installed package version, resolved from distribution metadata so it stays
 #: in sync with ``pyproject.toml`` without being hard-coded here.
 __version__ = metadata.version(__name__.replace("_", "-"))
 
 __all__ = [
+    "VRCHAT_PROCESS_NAME",
     "VRCHAT_STEAM_APP_ID",
     "SteamNotFoundError",
     "__version__",
     "build_launch_command",
     "launch_vrchat",
+    "terminate_vrchat",
 ]

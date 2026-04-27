@@ -14,11 +14,18 @@ import sys
 from pathlib import Path
 from typing import Final
 
+import psutil
+
 from vrcpilot._steam import find_steam_executable
 
 #: Steam application id for VRChat. Hard-coded as a published constant rather
 #: than discovered at runtime so callers can reference it without launching.
 VRCHAT_STEAM_APP_ID: Final[int] = 438100
+
+#: Process name used by VRChat across platforms. On Linux/Steam Deck the
+#: client runs under Proton and still presents itself as ``VRChat.exe``,
+#: so the same constant is correct for every supported OS.
+VRCHAT_PROCESS_NAME: Final[str] = "VRChat.exe"
 
 
 def build_launch_command(
@@ -94,3 +101,40 @@ def launch_vrchat(
         stdin=subprocess.DEVNULL,
         start_new_session=True,
     )
+
+
+def terminate_vrchat(*, timeout: float = 5.0) -> bool:
+    """Forcefully terminate any running VRChat processes.
+
+    Iterates over running processes and sends SIGKILL
+    (:meth:`psutil.Process.kill`, which uses ``TerminateProcess`` on
+    Windows) to every process whose name matches
+    :data:`VRCHAT_PROCESS_NAME`. Forceful termination is appropriate for
+    automation: VRChat does not require an orderly shutdown for typical
+    workflows.
+
+    Args:
+        timeout: Seconds to wait for the killed processes to disappear
+            before returning. Used to give the OS time to reap the
+            processes; if a process is still listed after the timeout,
+            the function still returns successfully.
+
+    Returns:
+        ``True`` if at least one matching process was found and killed,
+        ``False`` if no VRChat process was running.
+    """
+    procs = [
+        p
+        for p in psutil.process_iter(["name"])
+        if p.info["name"] == VRCHAT_PROCESS_NAME
+    ]
+    if not procs:
+        return False
+    for proc in procs:
+        try:
+            proc.kill()
+        except psutil.NoSuchProcess:
+            # Process exited between enumeration and kill — treat as success.
+            pass
+    psutil.wait_procs(procs, timeout=timeout)
+    return True

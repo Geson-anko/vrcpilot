@@ -3,15 +3,25 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
+import psutil
 import pytest
 from pytest_mock import MockerFixture
 
 from vrcpilot.launcher import (
+    VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
     build_launch_command,
     launch_vrchat,
+    terminate_vrchat,
 )
+
+
+def _make_proc_mock(mocker: MockerFixture, name: str) -> MagicMock:
+    proc = mocker.MagicMock()
+    proc.info = {"name": name}
+    return proc
 
 
 def test_build_launch_command_basic():
@@ -107,3 +117,66 @@ def test_launch_vrchat_uses_new_session_on_posix(
 
     assert popen_mock.call_args.kwargs.get("start_new_session") is True
     assert "creationflags" not in popen_mock.call_args.kwargs
+
+
+def test_terminate_vrchat_kills_matching_process(mocker: MockerFixture):
+    proc = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME)
+    mocker.patch(
+        "vrcpilot.launcher.psutil.process_iter",
+        return_value=[proc],
+    )
+    wait_mock = mocker.patch("vrcpilot.launcher.psutil.wait_procs")
+
+    result = terminate_vrchat()
+
+    assert result is True
+    proc.kill.assert_called_once()
+    wait_mock.assert_called_once()
+
+
+def test_terminate_vrchat_returns_false_when_not_running(mocker: MockerFixture):
+    other = _make_proc_mock(mocker, "explorer.exe")
+    mocker.patch(
+        "vrcpilot.launcher.psutil.process_iter",
+        return_value=[other],
+    )
+    wait_mock = mocker.patch("vrcpilot.launcher.psutil.wait_procs")
+
+    result = terminate_vrchat()
+
+    assert result is False
+    other.kill.assert_not_called()
+    wait_mock.assert_not_called()
+
+
+def test_terminate_vrchat_kills_all_matching(mocker: MockerFixture):
+    p1 = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME)
+    p2 = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME)
+    other = _make_proc_mock(mocker, "explorer.exe")
+    mocker.patch(
+        "vrcpilot.launcher.psutil.process_iter",
+        return_value=[p1, other, p2],
+    )
+    mocker.patch("vrcpilot.launcher.psutil.wait_procs")
+
+    result = terminate_vrchat()
+
+    assert result is True
+    p1.kill.assert_called_once()
+    p2.kill.assert_called_once()
+    other.kill.assert_not_called()
+
+
+def test_terminate_vrchat_swallows_no_such_process(mocker: MockerFixture):
+    proc = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME)
+    proc.kill.side_effect = psutil.NoSuchProcess(pid=9999)
+    mocker.patch(
+        "vrcpilot.launcher.psutil.process_iter",
+        return_value=[proc],
+    )
+    mocker.patch("vrcpilot.launcher.psutil.wait_procs")
+
+    result = terminate_vrchat()
+
+    assert result is True
+    proc.kill.assert_called_once()

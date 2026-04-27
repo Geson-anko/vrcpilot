@@ -8,6 +8,7 @@ keeping behavioral logic in the library itself.
 Invocation::
 
     python -m vrcpilot launch [--app-id ID] [--steam-path PATH]
+    python -m vrcpilot terminate
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ import sys
 from pathlib import Path
 
 from vrcpilot._steam import SteamNotFoundError
-from vrcpilot.launcher import VRCHAT_STEAM_APP_ID, launch_vrchat
+from vrcpilot.launcher import VRCHAT_STEAM_APP_ID, launch_vrchat, terminate_vrchat
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -61,11 +62,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Override the auto-detected Steam executable path.",
     )
 
+    subparsers.add_parser(
+        "terminate",
+        help="Forcefully terminate any running VRChat process.",
+    )
+
     args = parser.parse_args(argv)
 
     match args.command:
         case "launch":
             return _run_launch(app_id=args.app_id, steam_path=args.steam_path)
+        case "terminate":
+            return _run_terminate()
         case _:
             parser.error(f"Unknown command: {args.command}")
 
@@ -86,4 +94,21 @@ def _run_launch(*, app_id: int, steam_path: Path | None) -> int:
         print(f"vrcpilot: {exc}", file=sys.stderr)
         return 2
     print(f"Launched Steam process pid={process.pid}")
+    return 0
+
+
+def _run_terminate() -> int:
+    """Execute the ``terminate`` subcommand.
+
+    Termination is treated as idempotent: callers can invoke it without
+    knowing whether VRChat is currently running, and either outcome is
+    reported on stdout with a successful exit code.
+
+    Returns:
+        ``0`` whether VRChat was running or not.
+    """
+    if terminate_vrchat():
+        print("Terminated VRChat.")
+    else:
+        print("VRChat is not running.")
     return 0
