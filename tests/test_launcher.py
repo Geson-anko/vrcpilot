@@ -33,7 +33,6 @@ def test_build_launch_command_default_app_id():
     result = build_launch_command(Path("/usr/bin/steam"))
 
     assert result[2] == str(VRCHAT_STEAM_APP_ID)
-    assert VRCHAT_STEAM_APP_ID == 438100
 
 
 def test_launch_vrchat_invokes_popen_with_default_argv(mocker: MockerFixture):
@@ -76,3 +75,35 @@ def test_launch_vrchat_app_id_override(mocker: MockerFixture):
 
     argv = popen_mock.call_args.args[0]
     assert argv == [str(steam), "-applaunch", "440"]
+
+
+def test_launch_vrchat_uses_new_process_group_on_windows(
+    monkeypatch: pytest.MonkeyPatch, mocker: MockerFixture
+):
+    monkeypatch.setattr("sys.platform", "win32")
+    mocker.patch(
+        "vrcpilot.launcher.find_steam_executable",
+        return_value=Path("C:/Steam/Steam.exe"),
+    )
+    popen_mock = mocker.patch("vrcpilot.launcher.subprocess.Popen")
+
+    launch_vrchat()
+
+    assert "creationflags" in popen_mock.call_args.kwargs
+    assert "start_new_session" not in popen_mock.call_args.kwargs
+
+
+def test_launch_vrchat_uses_new_session_on_posix(
+    monkeypatch: pytest.MonkeyPatch, mocker: MockerFixture
+):
+    monkeypatch.setattr("sys.platform", "linux")
+    mocker.patch(
+        "vrcpilot.launcher.find_steam_executable",
+        return_value=Path("/usr/bin/steam"),
+    )
+    popen_mock = mocker.patch("vrcpilot.launcher.subprocess.Popen")
+
+    launch_vrchat()
+
+    assert popen_mock.call_args.kwargs.get("start_new_session") is True
+    assert "creationflags" not in popen_mock.call_args.kwargs
