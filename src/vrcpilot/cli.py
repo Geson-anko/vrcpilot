@@ -8,7 +8,8 @@ keeping behavioral logic in the library itself.
 Invocation::
 
     python -m vrcpilot launch [--app-id ID] [--steam-path PATH] [--no-vr]
-        [--screen-width N] [--screen-height N] [--osc-in-port N]
+        [--screen-width N] [--screen-height N]
+        [--osc-in-port N [--osc-out-ip IP] [--osc-out-port N]]
     python -m vrcpilot terminate
 """
 
@@ -88,7 +89,11 @@ def main(argv: list[str] | None = None) -> int:
         "--osc-in-port",
         type=int,
         default=None,
-        help="OSC inbound port. When set, OSC config is forwarded to VRChat.",
+        help=(
+            "OSC inbound port. When set, OSC config (including --osc-out-ip "
+            "and --osc-out-port) is forwarded to VRChat. When unset, all "
+            "--osc-out-* flags are ignored."
+        ),
     )
     launch_parser.add_argument(
         "--osc-out-ip",

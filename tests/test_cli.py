@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
@@ -13,7 +12,7 @@ from vrcpilot.cli import main
 from vrcpilot.launcher import VRCHAT_STEAM_APP_ID, OscConfig
 
 
-def _patch_launch_vrchat(mocker: MockerFixture, pid: int = 1234) -> MagicMock:
+def _patch_launch_vrchat(mocker: MockerFixture, pid: int = 1234):
     process = mocker.MagicMock()
     process.pid = pid
     return mocker.patch("vrcpilot.cli.launch_vrchat", return_value=process)
