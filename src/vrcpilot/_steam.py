@@ -5,7 +5,6 @@ from __future__ import annotations
 import shutil
 import sys
 from pathlib import Path
-from typing import cast
 
 
 class SteamNotFoundError(RuntimeError):
@@ -25,10 +24,11 @@ def _find_steam_on_windows() -> Path:
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as key:
             value, _ = winreg.QueryValueEx(key, "SteamPath")
-        steam_path = Path(cast(str, value)) / "Steam.exe"
-        if steam_path.is_file():
-            return steam_path
-    except (OSError, FileNotFoundError):
+        if isinstance(value, str):
+            steam_path = Path(value) / "Steam.exe"
+            if steam_path.is_file():
+                return steam_path
+    except OSError:
         pass
 
     for candidate in _WINDOWS_STANDARD_PATHS:
