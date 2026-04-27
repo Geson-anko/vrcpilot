@@ -1,3 +1,5 @@
+set windows-shell := ["C:/Program Files/Git/bin/bash.exe", "-c"]
+
 # Default recipe (shows help)
 default:
     @just --list
@@ -15,10 +17,11 @@ clean:
     find . | grep -E ".ipynb_checkpoints" | xargs rm -rf
     rm -f .coverage
 
-# Makes the venv
-venv:
+# Setup the environment
+setup:
     uv venv
     uv sync --all-extras
+    uv run pre-commit install
 
 # Run pre-commit hooks
 format:
@@ -34,31 +37,3 @@ type:
 
 # Run all workflow (format, test, type)
 run: format test type
-
-# -----------------
-#  Docker Settings
-# -----------------
-
-# Build docker images
-docker-build:
-    docker compose -f docker-compose.yml build --no-cache
-
-# Start docker containers
-docker-up:
-    docker compose -f docker-compose.yml up -d
-
-# Stop docker containers
-docker-down:
-    docker compose -f docker-compose.yml down
-
-# Restart docker containers
-docker-restart:
-    docker compose -f docker-compose.yml restart
-
-# Stop docker containers with removing volumes
-docker-down-volume:
-    docker compose -f docker-compose.yml down -v
-
-# Attach to development container
-docker-attach:
-    docker compose -f docker-compose.yml exec dev bash
