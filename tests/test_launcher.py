@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -48,7 +49,7 @@ class TestOscConfig:
     def test_is_frozen(self):
         cfg = OscConfig()
 
-        with pytest.raises(Exception):  # noqa: B017 - dataclass FrozenInstanceError
+        with pytest.raises(dataclasses.FrozenInstanceError):
             cfg.in_port = 1234  # type: ignore[misc]
 
 
