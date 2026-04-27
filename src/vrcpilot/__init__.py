@@ -19,7 +19,9 @@ from vrcpilot._steam import SteamNotFoundError
 from vrcpilot.launcher import (
     VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
+    OscConfig,
     build_launch_command,
+    build_vrchat_launch_args,
     launch_vrchat,
     terminate_vrchat,
 )
@@ -31,7 +33,9 @@ __version__ = metadata.version(__name__.replace("_", "-"))
 __all__ = [
     "__version__",
     "build_launch_command",
+    "build_vrchat_launch_args",
     "launch_vrchat",
+    "OscConfig",
     "SteamNotFoundError",
     "terminate_vrchat",
     "VRCHAT_PROCESS_NAME",

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
@@ -28,9 +29,87 @@ VRCHAT_STEAM_APP_ID: Final[int] = 438100
 VRCHAT_PROCESS_NAME: Final[str] = "VRChat.exe"
 
 
+@dataclass(frozen=True)
+class OscConfig:
+    """OSC endpoint configuration for VRChat's ``--osc`` launch flag.
+
+    VRChat accepts a single ``--osc=<in_port>:<out_ip>:<out_port>`` argument
+    that controls the OSC server it spins up at startup. Defaults match
+    VRChat's own out-of-the-box configuration so passing
+    ``OscConfig()`` is equivalent to leaving OSC at factory settings while
+    still ensuring the flag is forwarded explicitly.
+
+    Attributes:
+        in_port: UDP port VRChat listens on for inbound OSC messages.
+        out_ip: IP address VRChat sends outbound OSC messages to.
+        out_port: UDP port VRChat sends outbound OSC messages to.
+    """
+
+    in_port: int = 9000
+    out_ip: str = "127.0.0.1"
+    out_port: int = 9001
+
+    def to_launch_arg(self) -> str:
+        """Render the configuration as a single ``--osc=...`` CLI token.
+
+        Returns:
+            The argument string to pass to VRChat, e.g.
+            ``"--osc=9000:127.0.0.1:9001"``.
+        """
+        return f"--osc={self.in_port}:{self.out_ip}:{self.out_port}"
+
+
+def build_vrchat_launch_args(
+    *,
+    no_vr: bool = False,
+    screen_width: int | None = None,
+    screen_height: int | None = None,
+    osc: OscConfig | None = None,
+    extra_args: list[str] | None = None,
+) -> list[str]:
+    """Assemble the VRChat-specific argument list passed after ``-applaunch``.
+
+    Pure helper that turns a structured set of options into the flat string
+    list VRChat (and Unity) expect on the command line. Kept separate from
+    :func:`build_launch_command` so callers can build, inspect, or extend
+    the VRChat-side argv independently of the Steam wrapper invocation.
+
+    The output order is deterministic — ``no_vr`` → ``screen_width`` →
+    ``screen_height`` → ``osc`` → ``extra_args`` — so tests and log lines
+    stay stable.
+
+    Args:
+        no_vr: When ``True``, append ``--no-vr`` to launch in desktop mode.
+        screen_width: Optional Unity ``-screen-width`` value.
+        screen_height: Optional Unity ``-screen-height`` value.
+        osc: Optional :class:`OscConfig` rendered via
+            :meth:`OscConfig.to_launch_arg`.
+        extra_args: Additional raw tokens appended verbatim after every
+            structured option. Use for flags this helper does not model.
+
+    Returns:
+        A list of CLI tokens ready to splice in after the Steam
+        ``-applaunch <app_id>`` prefix.
+    """
+    args: list[str] = []
+    if no_vr:
+        args.append("--no-vr")
+    if screen_width is not None:
+        args.extend(["-screen-width", str(screen_width)])
+    if screen_height is not None:
+        args.extend(["-screen-height", str(screen_height)])
+    if osc is not None:
+        args.append(osc.to_launch_arg())
+    if extra_args:
+        args.extend(extra_args)
+    return args
+
+
 def build_launch_command(
     steam_executable: Path,
     app_id: int = VRCHAT_STEAM_APP_ID,
+    *,
+    vrchat_args: list[str] | None = None,
 ) -> list[str]:
     """Build the argv used to launch a Steam game via Steam's CLI.
 
@@ -46,17 +125,28 @@ def build_launch_command(
             have already verified.
         app_id: Steam application id of the game to launch. Defaults to
             :data:`VRCHAT_STEAM_APP_ID`.
+        vrchat_args: Optional list of arguments forwarded to VRChat after
+            ``-applaunch <app_id>``. Pre-built via
+            :func:`build_vrchat_launch_args` or supplied as raw tokens.
 
     Returns:
         Argument vector suitable for :class:`subprocess.Popen`.
     """
-    return [str(steam_executable), "-applaunch", str(app_id)]
+    cmd = [str(steam_executable), "-applaunch", str(app_id)]
+    if vrchat_args:
+        cmd.extend(vrchat_args)
+    return cmd
 
 
 def launch_vrchat(
     *,
     app_id: int = VRCHAT_STEAM_APP_ID,
     steam_path: Path | None = None,
+    no_vr: bool = False,
+    screen_width: int | None = None,
+    screen_height: int | None = None,
+    osc: OscConfig | None = None,
+    extra_args: list[str] | None = None,
 ) -> subprocess.Popen[bytes]:
     """Launch VRChat through Steam and return the spawned subprocess.
 
@@ -78,6 +168,12 @@ def launch_vrchat(
             different title (e.g. a test app id).
         steam_path: Optional explicit path to the Steam executable. When
             omitted, the path is auto-detected per platform.
+        no_vr: Pass ``--no-vr`` to launch VRChat in desktop mode.
+        screen_width: Optional ``-screen-width`` value forwarded to Unity.
+        screen_height: Optional ``-screen-height`` value forwarded to
+            Unity.
+        osc: Optional :class:`OscConfig` rendered into ``--osc=...``.
+        extra_args: Additional raw tokens forwarded verbatim to VRChat.
 
     Returns:
         The :class:`~subprocess.Popen` handle for the launched Steam
@@ -88,7 +184,14 @@ def launch_vrchat(
         SteamNotFoundError: If the Steam executable cannot be located.
     """
     steam_executable = find_steam_executable(steam_path)
-    argv = build_launch_command(steam_executable, app_id)
+    vrchat_args = build_vrchat_launch_args(
+        no_vr=no_vr,
+        screen_width=screen_width,
+        screen_height=screen_height,
+        osc=osc,
+        extra_args=extra_args,
+    )
+    argv = build_launch_command(steam_executable, app_id, vrchat_args=vrchat_args)
 
     if sys.platform == "win32":
         return subprocess.Popen(
