@@ -1,4 +1,10 @@
-"""Steam executable discovery utilities."""
+"""Steam executable discovery utilities.
+
+Internal module. The only symbol intended for external use is
+:class:`SteamNotFoundError`, which is re-exported from :mod:`vrcpilot`.
+The discovery routines are platform-specific and may change as more
+operating systems are supported.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +14,15 @@ from pathlib import Path
 
 
 class SteamNotFoundError(RuntimeError):
-    """Raised when the Steam executable cannot be located."""
+    """Raised when the Steam executable cannot be located.
+
+    This signals that auto-detection failed on the current platform,
+    that an explicit override path does not exist, or that the platform
+    itself is not supported. Catch this at the boundary of any workflow
+    that depends on Steam being installed and surface a user-actionable
+    message; recovery typically requires the user to install Steam or
+    pass an explicit path.
+    """
 
 
 _WINDOWS_STANDARD_PATHS: tuple[Path, ...] = (
@@ -49,7 +63,13 @@ def _find_steam_on_linux() -> Path:
 
 
 def find_steam_executable(override: Path | None = None) -> Path:
-    """Return the path to the Steam executable.
+    """Return the path to the Steam executable for the current platform.
+
+    Use this as the single entry point whenever a Steam binary is needed;
+    it centralises platform-specific discovery (Windows registry plus
+    standard install dirs, Linux ``PATH`` lookup) so callers do not have
+    to branch on :data:`sys.platform`. Pass ``override`` to skip detection
+    entirely — useful for portable Steam installs and tests.
 
     Args:
         override: Explicit path to the Steam executable. When provided, the
@@ -59,9 +79,9 @@ def find_steam_executable(override: Path | None = None) -> Path:
         Path to a verified Steam executable.
 
     Raises:
-        SteamNotFoundError: If ``override`` is provided but does not exist, or
-            if auto-detection fails on the current platform, or the platform
-            is not supported.
+        SteamNotFoundError: If ``override`` is provided but does not exist,
+            if auto-detection fails on the current platform, or if the
+            platform is not supported.
     """
     if override is not None:
         if override.is_file():

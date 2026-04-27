@@ -1,4 +1,14 @@
-"""Command line interface for vrcpilot."""
+"""Command line interface for vrcpilot.
+
+Thin wrapper around the public Python API so the same workflows are
+reachable from a shell. The CLI is intentionally minimal: it shells out
+to the library functions and translates exceptions into exit codes,
+keeping behavioral logic in the library itself.
+
+Invocation::
+
+    python -m vrcpilot launch [--app-id ID] [--steam-path PATH]
+"""
 
 from __future__ import annotations
 
@@ -13,13 +23,20 @@ from vrcpilot.launcher import VRCHAT_STEAM_APP_ID, launch_vrchat
 def main(argv: list[str] | None = None) -> int:
     """Run the ``vrcpilot`` command line interface.
 
+    Entry point used both by the console script and by ``python -m
+    vrcpilot``. Returns an exit code instead of calling :func:`sys.exit`
+    so it stays trivially testable: pass ``argv`` explicitly from a test
+    and assert on the return value.
+
     Args:
-        argv: Optional argument list passed to :mod:`argparse`. When ``None``
-            (the default), arguments are read from :data:`sys.argv`.
+        argv: Optional argument list passed to :mod:`argparse`. When
+            ``None`` (the default), arguments are read from
+            :data:`sys.argv`.
 
     Returns:
-        Process exit code. ``0`` on success, ``2`` on a recoverable error such
-        as Steam not being found.
+        Process exit code. ``0`` on success, ``2`` on a recoverable error
+        such as Steam not being found (mirrors common CLI conventions for
+        usage / environment errors).
     """
     parser = argparse.ArgumentParser(
         prog="vrcpilot",
