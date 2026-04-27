@@ -1,0 +1,5 @@
+- [User role and collaboration style](user_role.md) — Japanese-speaking dev, terse style, English docstrings, brief reports
+- [vrcpilot project purpose](project_purpose.md) — VRChat automation library; launcher is foundational, document as automation entry points
+- [No shell tool in docstring-author agent](feedback_environment_no_shell.md) — cannot run just/git here; hand verification back to user
+- [pytest --doctest-modules is enabled](reference_pytest_doctest_modules.md) — every `>>>` in src docstrings runs during tests
+- [vrcpilot tooling and verification commands](reference_tooling.md) — just format/test/type, docformatter quirks, pyright strict
