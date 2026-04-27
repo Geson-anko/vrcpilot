@@ -31,18 +31,32 @@ VRCHAT_PROCESS_NAME: Final[str] = "VRChat.exe"
 
 @dataclass(frozen=True)
 class OscConfig:
-    """OSC endpoint configuration for VRChat's ``--osc`` launch flag.
+    """Python representation of VRChat's ``--osc=in:ip:out`` launch flag.
 
     VRChat accepts a single ``--osc=<in_port>:<out_ip>:<out_port>`` argument
-    that controls the OSC server it spins up at startup. Defaults match
-    VRChat's own out-of-the-box configuration so passing
-    ``OscConfig()`` is equivalent to leaving OSC at factory settings while
-    still ensuring the flag is forwarded explicitly.
+    that pins the OSC server it spins up at startup. This dataclass models
+    that triple as a typed, structured value so callers do not assemble the
+    string by hand and so two configurations can be compared with ``==``.
+
+    Defaults intentionally mirror VRChat's own factory OSC settings, so
+    ``OscConfig()`` reproduces the client's out-of-the-box behaviour while
+    still forwarding the flag explicitly — useful when you want the
+    deterministic argv (e.g. for logging) without changing semantics.
+
+    The dataclass is ``frozen=True``: instances are hashable and safe to
+    share across threads or use as cache keys. To change a port, construct
+    a new instance (or use :func:`dataclasses.replace`).
 
     Attributes:
         in_port: UDP port VRChat listens on for inbound OSC messages.
         out_ip: IP address VRChat sends outbound OSC messages to.
         out_port: UDP port VRChat sends outbound OSC messages to.
+
+    Examples:
+        >>> OscConfig() == OscConfig(9000, "127.0.0.1", 9001)
+        True
+        >>> OscConfig(in_port=9100).to_launch_arg()
+        '--osc=9100:127.0.0.1:9001'
     """
 
     in_port: int = 9000
@@ -52,9 +66,16 @@ class OscConfig:
     def to_launch_arg(self) -> str:
         """Render the configuration as a single ``--osc=...`` CLI token.
 
+        The result is one argv element (no spaces), ready to be appended to
+        the VRChat-side argument list returned by
+        :func:`build_vrchat_launch_args`.
+
         Returns:
-            The argument string to pass to VRChat, e.g.
-            ``"--osc=9000:127.0.0.1:9001"``.
+            The argument string to pass to VRChat.
+
+        Examples:
+            >>> OscConfig().to_launch_arg()
+            '--osc=9000:127.0.0.1:9001'
         """
         return f"--osc={self.in_port}:{self.out_ip}:{self.out_port}"
 
@@ -69,20 +90,29 @@ def build_vrchat_launch_args(
 ) -> list[str]:
     """Assemble the VRChat-specific argument list passed after ``-applaunch``.
 
-    Pure helper that turns a structured set of options into the flat string
-    list VRChat (and Unity) expect on the command line. Kept separate from
-    :func:`build_launch_command` so callers can build, inspect, or extend
-    the VRChat-side argv independently of the Steam wrapper invocation.
+    Pure helper that turns a structured set of options into the flat token
+    list VRChat (and the underlying Unity runtime) expect. It is kept
+    separate from :func:`build_launch_command` because the two operate on
+    different layers: this function only knows about VRChat's own flags,
+    while :func:`build_launch_command` deals with Steam's wrapper argv.
+    Splitting them lets callers reuse, inspect, or further filter the
+    VRChat-side argv without re-implementing Steam's invocation contract.
 
-    The output order is deterministic — ``no_vr`` → ``screen_width`` →
-    ``screen_height`` → ``osc`` → ``extra_args`` — so tests and log lines
-    stay stable.
+    The output order is fixed — ``no_vr`` → ``screen_width`` →
+    ``screen_height`` → ``osc`` → ``extra_args`` — so the produced argv is
+    byte-stable across runs, which keeps tests, logs, and reproducibility
+    tooling honest.
+
+    ``extra_args`` is the deliberate escape hatch for flags this helper
+    does not model (e.g. ``--profile=N`` or future VRChat options): tokens
+    are forwarded verbatim with no interpretation, so callers retain full
+    control when the structured arguments are not enough.
 
     Args:
         no_vr: When ``True``, append ``--no-vr`` to launch in desktop mode.
         screen_width: Optional Unity ``-screen-width`` value.
         screen_height: Optional Unity ``-screen-height`` value.
-        osc: Optional :class:`OscConfig` rendered via
+        osc: Optional :class:`OscConfig`; rendered via
             :meth:`OscConfig.to_launch_arg`.
         extra_args: Additional raw tokens appended verbatim after every
             structured option. Use for flags this helper does not model.
@@ -118,6 +148,12 @@ def build_launch_command(
     a different process manager) without paying the cost of an actual
     launch. The function is pure and side-effect free, which also makes
     it easy to unit-test command-shape regressions.
+
+    Steam's ``-applaunch`` form forwards every trailing token to the
+    launched game, which is how VRChat ends up receiving its own flags
+    even though the process Python actually spawns is Steam itself. That
+    one-step transport is the reason ``vrchat_args`` belongs here rather
+    than as a parallel ``Popen`` argument.
 
     Args:
         steam_executable: Path to the Steam executable. Not validated
@@ -162,6 +198,12 @@ def launch_vrchat(
     ``steam_path``; the user is not required to be signed in beforehand,
     Steam will surface its own login UI if needed.
 
+    The keyword arguments below mirror :func:`build_vrchat_launch_args` —
+    they are forwarded as-is and converted into the VRChat argv that
+    Steam's ``-applaunch`` form transports to the game. Use ``extra_args``
+    when you need to pass an option this function does not model
+    explicitly (e.g. uncommon or future VRChat flags).
+
     Args:
         app_id: Steam application id to launch. Defaults to
             :data:`VRCHAT_STEAM_APP_ID`. Override only when targeting a
@@ -172,8 +214,11 @@ def launch_vrchat(
         screen_width: Optional ``-screen-width`` value forwarded to Unity.
         screen_height: Optional ``-screen-height`` value forwarded to
             Unity.
-        osc: Optional :class:`OscConfig` rendered into ``--osc=...``.
+        osc: Optional :class:`OscConfig` rendered into ``--osc=...``. Pass
+            ``OscConfig()`` to forward the flag with VRChat's defaults, or
+            customise ports/IP as needed.
         extra_args: Additional raw tokens forwarded verbatim to VRChat.
+            Escape hatch for options this signature does not cover.
 
     Returns:
         The :class:`~subprocess.Popen` handle for the launched Steam

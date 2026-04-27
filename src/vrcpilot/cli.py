@@ -146,6 +146,14 @@ def _run_launch(
 ) -> int:
     """Execute the ``launch`` subcommand.
 
+    Bridges the flat CLI argument shape onto :func:`launch_vrchat`. The
+    inbound OSC port acts as the gate: when it is ``None`` the entire OSC
+    triple is suppressed (no ``--osc`` flag is forwarded, and
+    ``osc_out_ip`` / ``osc_out_port`` are silently ignored). This keeps
+    the CLI ergonomic — users who do not care about OSC do not have to
+    blank the outbound defaults — at the cost of letting unused flags
+    pass without a warning.
+
     Args:
         app_id: Steam app id to launch.
         steam_path: Optional explicit path to the Steam executable.
