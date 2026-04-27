@@ -33,17 +33,23 @@ _WINDOWS_STANDARD_PATHS: tuple[Path, ...] = (
 
 def _find_steam_on_windows() -> Path:
     """Locate ``Steam.exe`` on Windows via the registry or standard paths."""
-    import winreg
+    # sys.platform == "win32" narrows so pyright resolves the Windows-only
+    # winreg stubs from typeshed; without the guard the imports are unknown
+    # on POSIX type-check runs.
+    if sys.platform == "win32":
+        import winreg
 
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as key:
-            value, _ = winreg.QueryValueEx(key, "SteamPath")
-        if isinstance(value, str):
-            steam_path = Path(value) / "Steam.exe"
-            if steam_path.is_file():
-                return steam_path
-    except OSError:
-        pass
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam"
+            ) as key:
+                value, _ = winreg.QueryValueEx(key, "SteamPath")
+            if isinstance(value, str):
+                steam_path = Path(value) / "Steam.exe"
+                if steam_path.is_file():
+                    return steam_path
+        except OSError:
+            pass
 
     for candidate in _WINDOWS_STANDARD_PATHS:
         if candidate.is_file():
