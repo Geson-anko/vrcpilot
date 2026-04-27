@@ -10,6 +10,7 @@ import psutil
 import pytest
 from pytest_mock import MockerFixture
 
+from tests.helpers import only_linux, only_windows
 from vrcpilot.launcher import (
     VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
@@ -193,10 +194,8 @@ class TestLaunchVrchat:
         argv = popen_mock.call_args.args[0]
         assert argv == [str(steam), "-applaunch", "440"]
 
-    def test_uses_new_process_group_on_windows(
-        self, monkeypatch: pytest.MonkeyPatch, mocker: MockerFixture
-    ):
-        monkeypatch.setattr("sys.platform", "win32")
+    @only_windows
+    def test_uses_new_process_group_on_windows(self, mocker: MockerFixture):
         mocker.patch(
             "vrcpilot.launcher.find_steam_executable",
             return_value=Path("C:/Steam/Steam.exe"),
@@ -208,10 +207,8 @@ class TestLaunchVrchat:
         assert "creationflags" in popen_mock.call_args.kwargs
         assert "start_new_session" not in popen_mock.call_args.kwargs
 
-    def test_uses_new_session_on_posix(
-        self, monkeypatch: pytest.MonkeyPatch, mocker: MockerFixture
-    ):
-        monkeypatch.setattr("sys.platform", "linux")
+    @only_linux
+    def test_uses_new_session_on_linux(self, mocker: MockerFixture):
         mocker.patch(
             "vrcpilot.launcher.find_steam_executable",
             return_value=Path("/usr/bin/steam"),
