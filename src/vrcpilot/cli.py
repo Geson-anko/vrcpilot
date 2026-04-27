@@ -33,7 +33,13 @@ from vrcpilot.launcher import (
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the top-level argparse parser with all subcommands."""
+    """Build the top-level argparse parser with all subcommands.
+
+    Extracted from :func:`main` so tests (and the ``argcomplete`` shell
+    hook) can obtain a fully-configured parser without running the
+    command. Each call returns a fresh parser; callers that mutate it
+    should not share the instance.
+    """
     parser = argparse.ArgumentParser(
         prog="vrcpilot",
         description="Automation tooling for VRChat.",
