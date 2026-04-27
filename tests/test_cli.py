@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock import MockerFixture
 
+from vrcpilot._steam import SteamNotFoundError
 from vrcpilot.cli import main
 from vrcpilot.launcher import VRCHAT_STEAM_APP_ID
 
 
-def _patch_launch_vrchat(mocker: MockerFixture, pid: int = 1234):
+def _patch_launch_vrchat(mocker: MockerFixture, pid: int = 1234) -> MagicMock:
     process = mocker.MagicMock()
     process.pid = pid
     return mocker.patch("vrcpilot.cli.launch_vrchat", return_value=process)
@@ -49,8 +51,6 @@ def test_launch_steam_path_override(mocker: MockerFixture):
 def test_launch_reports_steam_not_found(
     mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
 ):
-    from vrcpilot._steam import SteamNotFoundError
-
     mocker.patch(
         "vrcpilot.cli.launch_vrchat",
         side_effect=SteamNotFoundError("nope"),

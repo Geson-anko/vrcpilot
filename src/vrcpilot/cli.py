@@ -46,14 +46,11 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    command: str = args.command
-    if command == "launch":
-        app_id: int = args.app_id
-        steam_path: Path | None = args.steam_path
-        return _run_launch(app_id=app_id, steam_path=steam_path)
-
-    parser.error(f"Unknown command: {command}")
-    return 2  # unreachable; parser.error raises SystemExit.
+    match args.command:
+        case "launch":
+            return _run_launch(app_id=args.app_id, steam_path=args.steam_path)
+        case _:
+            parser.error(f"Unknown command: {args.command}")
 
 
 def _run_launch(*, app_id: int, steam_path: Path | None) -> int:
