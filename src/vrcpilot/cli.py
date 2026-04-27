@@ -1,3 +1,4 @@
+# PYTHON_ARGCOMPLETE_OK
 """Command line interface for vrcpilot.
 
 Thin wrapper around the public Python API so the same workflows are
@@ -19,6 +20,9 @@ import argparse
 import sys
 from pathlib import Path
 
+import argcomplete
+from argcomplete.completers import FilesCompleter
+
 from vrcpilot._steam import SteamNotFoundError
 from vrcpilot.launcher import (
     VRCHAT_STEAM_APP_ID,
@@ -28,24 +32,8 @@ from vrcpilot.launcher import (
 )
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Run the ``vrcpilot`` command line interface.
-
-    Entry point used both by the console script and by ``python -m
-    vrcpilot``. Returns an exit code instead of calling :func:`sys.exit`
-    so it stays trivially testable: pass ``argv`` explicitly from a test
-    and assert on the return value.
-
-    Args:
-        argv: Optional argument list passed to :mod:`argparse`. When
-            ``None`` (the default), arguments are read from
-            :data:`sys.argv`.
-
-    Returns:
-        Process exit code. ``0`` on success, ``2`` on a recoverable error
-        such as Steam not being found (mirrors common CLI conventions for
-        usage / environment errors).
-    """
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the top-level argparse parser with all subcommands."""
     parser = argparse.ArgumentParser(
         prog="vrcpilot",
         description="Automation tooling for VRChat.",
@@ -62,11 +50,14 @@ def main(argv: list[str] | None = None) -> int:
         default=VRCHAT_STEAM_APP_ID,
         help="Steam app id to launch (default: VRChat's app id).",
     )
-    launch_parser.add_argument(
+    steam_path_action = launch_parser.add_argument(
         "--steam-path",
         type=Path,
         default=None,
         help="Override the auto-detected Steam executable path.",
+    )
+    steam_path_action.completer = FilesCompleter(  # type: ignore[attr-defined]
+        allowednames=("exe",), directories=True
     )
     launch_parser.add_argument(
         "--no-vr",
@@ -113,6 +104,29 @@ def main(argv: list[str] | None = None) -> int:
         help="Forcefully terminate any running VRChat process.",
     )
 
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the ``vrcpilot`` command line interface.
+
+    Entry point used both by the console script and by ``python -m
+    vrcpilot``. Returns an exit code instead of calling :func:`sys.exit`
+    so it stays trivially testable: pass ``argv`` explicitly from a test
+    and assert on the return value.
+
+    Args:
+        argv: Optional argument list passed to :mod:`argparse`. When
+            ``None`` (the default), arguments are read from
+            :data:`sys.argv`.
+
+    Returns:
+        Process exit code. ``0`` on success, ``2`` on a recoverable error
+        such as Steam not being found (mirrors common CLI conventions for
+        usage / environment errors).
+    """
+    parser = _build_parser()
+    argcomplete.autocomplete(parser)
     args = parser.parse_args(argv)
 
     match args.command:

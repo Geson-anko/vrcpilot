@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import pytest
+from argcomplete.completers import FilesCompleter
 from pytest_mock import MockerFixture
 
 from vrcpilot._steam import SteamNotFoundError
-from vrcpilot.cli import main
+from vrcpilot.cli import _build_parser, main
 from vrcpilot.launcher import VRCHAT_STEAM_APP_ID, OscConfig
 
 
@@ -192,3 +194,43 @@ class TestMain:
     def test_missing_subcommand_exits(self):
         with pytest.raises(SystemExit):
             main([])
+
+
+class TestArgcompleteIntegration:
+    def test_autocomplete_invoked_with_parser(self, mocker: MockerFixture):
+        autocomplete_mock = mocker.patch("vrcpilot.cli.argcomplete.autocomplete")
+        _patch_launch_vrchat(mocker)
+
+        exit_code = main(["launch"])
+
+        assert exit_code == 0
+        autocomplete_mock.assert_called_once()
+        call_args = autocomplete_mock.call_args
+        assert isinstance(call_args.args[0], argparse.ArgumentParser)
+
+    def test_steam_path_has_files_completer(self):
+        parser = _build_parser()
+
+        subparsers_action = parser._subparsers._group_actions[0]  # type: ignore[union-attr]
+        launch_parser = subparsers_action.choices["launch"]
+        steam_path_action = next(
+            action
+            for action in launch_parser._actions
+            if "--steam-path" in action.option_strings
+        )
+
+        completer = steam_path_action.completer  # type: ignore[attr-defined]
+        assert isinstance(completer, FilesCompleter)
+        # argcomplete normalizes allowednames; "exe" should appear in some form.
+        allowednames = completer.allowednames
+        assert any("exe" in name for name in allowednames)
+
+    def test_autocomplete_does_not_block_normal_run(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.delenv("_ARGCOMPLETE", raising=False)
+        _patch_launch_vrchat(mocker)
+
+        exit_code = main(["launch"])
+
+        assert exit_code == 0
