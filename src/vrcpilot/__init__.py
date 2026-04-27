@@ -29,11 +29,11 @@ from vrcpilot.launcher import (
 __version__ = metadata.version(__name__.replace("_", "-"))
 
 __all__ = [
-    "VRCHAT_PROCESS_NAME",
-    "VRCHAT_STEAM_APP_ID",
-    "SteamNotFoundError",
     "__version__",
     "build_launch_command",
     "launch_vrchat",
+    "SteamNotFoundError",
     "terminate_vrchat",
+    "VRCHAT_PROCESS_NAME",
+    "VRCHAT_STEAM_APP_ID",
 ]

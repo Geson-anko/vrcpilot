@@ -115,9 +115,10 @@ def terminate_vrchat(*, timeout: float = 5.0) -> bool:
 
     Args:
         timeout: Seconds to wait for the killed processes to disappear
-            before returning. Used to give the OS time to reap the
-            processes; if a process is still listed after the timeout,
-            the function still returns successfully.
+            before returning, giving the OS time to reap them. If a
+            process is still listed after the timeout, the function
+            still returns ``True`` — the kill was issued, even if the
+            wait did not observe completion.
 
     Returns:
         ``True`` if at least one matching process was found and killed,
