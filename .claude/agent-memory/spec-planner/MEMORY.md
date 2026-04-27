@@ -1,0 +1,1 @@
+- [argcomplete reference facts](reference_argcomplete.md) — v3.6.3, --shell choices, FilesCompleter normalization, 1024-byte marker rule
