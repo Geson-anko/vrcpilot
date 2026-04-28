@@ -37,3 +37,7 @@ type:
 
 # Run all workflow (format, test, type)
 run: format test type
+
+# Run a manual end-to-end scenario script (e.g. `just manual launch_terminate`)
+manual NAME:
+    uv run python tests/manual/{{NAME}}.py
