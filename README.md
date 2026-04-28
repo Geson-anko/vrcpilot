@@ -19,7 +19,7 @@ uv tool install vrcpilot
 
 ## Shell completion
 
-`vrcpilot` は [`argcomplete`](https://pypi.org/project/argcomplete/) を利用して、サブコマンド (`launch` / `terminate`)、オプション (`--steam-path` など)、および `--steam-path` に渡す `.exe` ファイルパスの Tab 補完を提供する。
+`vrcpilot` は [`argcomplete`](https://pypi.org/project/argcomplete/) を利用して、サブコマンド (`launch` / `status` / `terminate`)、オプション (`--steam-path` など)、および `--steam-path` に渡す `.exe` ファイルパスの Tab 補完を提供する。
 
 ### 前提条件
 
@@ -39,7 +39,7 @@ eval "$(register-python-argcomplete vrcpilot)"
 動作確認の例。
 
 ```bash
-vrcpilot <TAB><TAB>           # → launch terminate
+vrcpilot <TAB><TAB>           # → launch status terminate
 vrcpilot launch --<TAB><TAB>  # → --app-id --steam-path --no-vr ...
 vrcpilot launch --steam-path <TAB>  # → カレントの .exe / ディレクトリ
 ```
