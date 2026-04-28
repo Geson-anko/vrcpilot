@@ -17,14 +17,16 @@ from vrcpilot.launcher import (
     OscConfig,
     build_launch_command,
     build_vrchat_launch_args,
+    find_vrchat_pid,
     launch_vrchat,
     terminate_vrchat,
 )
 
 
-def _make_proc_mock(mocker: MockerFixture, name: str) -> MagicMock:
+def _make_proc_mock(mocker: MockerFixture, name: str, pid: int = 12345) -> MagicMock:
     proc = mocker.MagicMock()
     proc.info = {"name": name}
+    proc.pid = pid
     return proc
 
 
@@ -245,6 +247,44 @@ class TestLaunchVrchat:
 
         argv = popen_mock.call_args.args[0]
         assert "--osc=9000:127.0.0.1:9001" in argv
+
+
+class TestFindVrchatPid:
+    def test_returns_pid_when_running(self, mocker: MockerFixture):
+        proc = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME, pid=4242)
+        mocker.patch(
+            "vrcpilot.launcher.psutil.process_iter",
+            return_value=[proc],
+        )
+
+        assert find_vrchat_pid() == 4242
+
+    def test_returns_none_when_not_running(self, mocker: MockerFixture):
+        mocker.patch(
+            "vrcpilot.launcher.psutil.process_iter",
+            return_value=[],
+        )
+
+        assert find_vrchat_pid() is None
+
+    def test_ignores_other_processes(self, mocker: MockerFixture):
+        other = _make_proc_mock(mocker, "explorer.exe", pid=1)
+        mocker.patch(
+            "vrcpilot.launcher.psutil.process_iter",
+            return_value=[other],
+        )
+
+        assert find_vrchat_pid() is None
+
+    def test_returns_first_when_multiple_match(self, mocker: MockerFixture):
+        p1 = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME, pid=111)
+        p2 = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME, pid=222)
+        mocker.patch(
+            "vrcpilot.launcher.psutil.process_iter",
+            return_value=[p1, p2],
+        )
+
+        assert find_vrchat_pid() == 111
 
 
 class TestTerminateVrchat:
