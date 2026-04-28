@@ -9,7 +9,6 @@ success.
 from __future__ import annotations
 
 import sys
-import time
 from pathlib import Path
 
 import vrcpilot
@@ -26,22 +25,19 @@ def _scenario() -> None:
 
     _helpers.log("waiting for VRChat PID")
     pid = _helpers.wait_for_pid()
-    _helpers.expect(pid is not None, "VRChat PID did not appear within timeout")
+    assert pid is not None, "VRChat PID did not appear within timeout"
     _helpers.log(f"VRChat PID detected: {pid}")
 
-    _helpers.log(f"warming up for {_NO_VR_WARMUP_SECONDS:.0f}s")
-    time.sleep(_NO_VR_WARMUP_SECONDS)
+    _helpers.warmup(_NO_VR_WARMUP_SECONDS)
 
     pid_after = vrcpilot.find_pid()
-    _helpers.expect(
-        pid_after == pid,
-        f"VRChat PID changed after warmup (before={pid}, after={pid_after})",
-    )
+    assert (
+        pid_after == pid
+    ), f"VRChat PID changed after warmup (before={pid}, after={pid_after})"
     _helpers.log(f"VRChat PID stable after warmup: {pid_after}")
 
     _helpers.log("terminating VRChat")
-    terminated = vrcpilot.terminate(timeout=10.0)
-    _helpers.expect(terminated, "vrcpilot.terminate() returned False")
+    assert vrcpilot.terminate(), "vrcpilot.terminate() returned False"
     _helpers.log("terminate reported success")
 
 

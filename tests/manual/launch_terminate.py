@@ -26,21 +26,20 @@ def _scenario() -> None:
 
     _helpers.log("waiting for VRChat PID")
     pid = _helpers.wait_for_pid()
-    _helpers.expect(pid is not None, "VRChat PID was not observed before timeout")
+    assert pid is not None, "VRChat PID was not observed before timeout"
     _helpers.log(f"VRChat started (pid={pid})")
 
     _helpers.warmup()
 
     pid_after = vrcpilot.find_pid()
-    _helpers.expect(
-        pid_after == pid,
-        f"VRChat PID changed or disappeared after warmup (before={pid}, after={pid_after})",
+    assert pid_after == pid, (
+        f"VRChat PID changed or disappeared after warmup "
+        f"(before={pid}, after={pid_after})"
     )
     _helpers.log(f"VRChat still alive after warmup (pid={pid_after})")
 
     _helpers.log("terminating VRChat")
-    terminated = vrcpilot.terminate(timeout=10.0)
-    _helpers.expect(terminated, "vrcpilot.terminate() returned False")
+    assert vrcpilot.terminate(), "vrcpilot.terminate() returned False"
     _helpers.log("VRChat terminated")
 
 
