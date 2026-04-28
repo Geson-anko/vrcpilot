@@ -183,16 +183,20 @@ def launch_vrchat(
     screen_height: int | None = None,
     osc: OscConfig | None = None,
     extra_args: list[str] | None = None,
-) -> subprocess.Popen[bytes]:
-    """Launch VRChat through Steam and return the spawned subprocess.
+) -> None:
+    """Launch VRChat through Steam.
 
     Use this as the standard way to bring VRChat up before driving any
-    higher-level automation. The handed-back :class:`~subprocess.Popen`
-    represents the Steam launcher invocation, not VRChat itself: Steam
-    keeps its own long-lived client process, so the actual game window
-    is owned by Steam and may outlive the returned handle. The launcher
-    is also detached from the parent's process group / session so that
-    the Python script can exit without taking VRChat down with it.
+    higher-level automation. The launcher is detached from the parent's
+    process group / session so that the Python script can exit without
+    taking VRChat down with it.
+
+    The PID of the spawned Steam invoker is intentionally not exposed: it
+    is short-lived and unrelated to the actual VRChat process. When Steam
+    is already running, the invoker hands the launch request off to the
+    existing Steam client and exits almost immediately, so its PID is not
+    a useful handle. To observe whether VRChat itself is up, use
+    :func:`find_vrchat_pid`.
 
     Steam must be installed and either auto-detectable or supplied via
     ``steam_path``; the user is not required to be signed in beforehand,
@@ -220,11 +224,6 @@ def launch_vrchat(
         extra_args: Additional raw tokens forwarded verbatim to VRChat.
             Escape hatch for options this signature does not cover.
 
-    Returns:
-        The :class:`~subprocess.Popen` handle for the launched Steam
-        process. Treat its lifetime as informational; do not rely on
-        terminating it to stop VRChat.
-
     Raises:
         SteamNotFoundError: If the Steam executable cannot be located.
     """
@@ -239,12 +238,13 @@ def launch_vrchat(
     argv = build_launch_command(steam_executable, app_id, vrchat_args=vrchat_args)
 
     if sys.platform == "win32":
-        return subprocess.Popen(
+        subprocess.Popen(
             argv,
             stdin=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
         )
-    return subprocess.Popen(
+        return
+    subprocess.Popen(
         argv,
         stdin=subprocess.DEVNULL,
         start_new_session=True,

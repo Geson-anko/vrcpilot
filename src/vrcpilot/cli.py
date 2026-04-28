@@ -199,7 +199,7 @@ def _run_launch(
             is set.
 
     Returns:
-        ``0`` if Steam was launched successfully, ``2`` if Steam was not found.
+        ``0`` if VRChat was launched successfully, ``2`` if Steam was not found.
     """
     osc = (
         OscConfig(
@@ -211,7 +211,7 @@ def _run_launch(
         else None
     )
     try:
-        process = launch_vrchat(
+        launch_vrchat(
             app_id=app_id,
             steam_path=steam_path,
             no_vr=no_vr,
@@ -222,7 +222,7 @@ def _run_launch(
     except SteamNotFoundError as exc:
         print(f"vrcpilot: {exc}", file=sys.stderr)
         return 2
-    print(f"Launched Steam process pid={process.pid}")
+    print("Launched VRChat.")
     return 0
 
 

@@ -14,10 +14,8 @@ from vrcpilot.cli import _build_parser, main
 from vrcpilot.launcher import VRCHAT_STEAM_APP_ID, OscConfig
 
 
-def _patch_launch_vrchat(mocker: MockerFixture, pid: int = 1234):
-    process = mocker.MagicMock()
-    process.pid = pid
-    return mocker.patch("vrcpilot.cli.launch_vrchat", return_value=process)
+def _patch_launch_vrchat(mocker: MockerFixture):
+    return mocker.patch("vrcpilot.cli.launch_vrchat", return_value=None)
 
 
 class TestLaunchCommand:
@@ -35,6 +33,17 @@ class TestLaunchCommand:
             screen_height=None,
             osc=None,
         )
+
+    def test_reports_launched_message(
+        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    ):
+        _patch_launch_vrchat(mocker)
+
+        exit_code = main(["launch"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Launched VRChat." in captured.out
 
     def test_app_id_override(self, mocker: MockerFixture):
         launch_mock = _patch_launch_vrchat(mocker)

@@ -10,7 +10,7 @@ Typical use::
 
     import vrcpilot
 
-    process = vrcpilot.launch_vrchat()
+    vrcpilot.launch_vrchat()
 """
 
 from importlib import metadata
