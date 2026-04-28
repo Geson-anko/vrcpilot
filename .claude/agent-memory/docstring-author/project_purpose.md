@@ -6,7 +6,7 @@ type: project
 
 vrcpilot is a Python library for automating VRChat. Scope spans:
 
-- **Launch / process control**: spawning VRChat through Steam, terminating it (see `src/vrcpilot/launcher.py`).
+- **Launch / process control**: spawning VRChat through Steam, terminating it (see `src/vrcpilot/process.py`).
 - **VRChat client UI operations**: driving the desktop client (planned).
 - **In-game operations**: typically via OSC and other VRChat-exposed surfaces.
 

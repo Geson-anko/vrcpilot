@@ -25,12 +25,12 @@ import argcomplete
 from argcomplete.completers import FilesCompleter
 
 from vrcpilot._steam import SteamNotFoundError
-from vrcpilot.launcher import (
+from vrcpilot.process import (
     VRCHAT_STEAM_APP_ID,
     OscConfig,
-    find_vrchat_pid,
-    launch_vrchat,
-    terminate_vrchat,
+    find_pid,
+    launch,
+    terminate,
 )
 
 
@@ -175,7 +175,7 @@ def _run_launch(
 ) -> int:
     """Execute the ``launch`` subcommand.
 
-    Bridges the flat CLI argument shape onto :func:`launch_vrchat`. The
+    Bridges the flat CLI argument shape onto :func:`launch`. The
     inbound OSC port acts as the gate: when it is ``None`` the entire OSC
     triple is suppressed (no ``--osc`` flag is forwarded, and
     ``osc_out_ip`` / ``osc_out_port`` are silently ignored). This keeps
@@ -199,7 +199,7 @@ def _run_launch(
             is set.
 
     Returns:
-        ``0`` if Steam was launched successfully, ``2`` if Steam was not found.
+        ``0`` if VRChat was launched successfully, ``2`` if Steam was not found.
     """
     osc = (
         OscConfig(
@@ -211,7 +211,7 @@ def _run_launch(
         else None
     )
     try:
-        process = launch_vrchat(
+        launch(
             app_id=app_id,
             steam_path=steam_path,
             no_vr=no_vr,
@@ -222,7 +222,7 @@ def _run_launch(
     except SteamNotFoundError as exc:
         print(f"vrcpilot: {exc}", file=sys.stderr)
         return 2
-    print(f"Launched Steam process pid={process.pid}")
+    print("Launched VRChat.")
     return 0
 
 
@@ -230,7 +230,7 @@ def _run_status() -> int:
     """Execute the ``status`` subcommand.
 
     Reports whether VRChat is currently running by delegating to
-    :func:`find_vrchat_pid`. The exit code is intentionally
+    :func:`find_pid`. The exit code is intentionally
     state-dependent — unlike :func:`_run_terminate`, which is idempotent —
     so shell users can branch on it (``if vrcpilot status; then ...``).
 
@@ -238,7 +238,7 @@ def _run_status() -> int:
         ``0`` if a VRChat process was found (PID is printed to stdout),
         ``1`` if no VRChat process is running.
     """
-    pid = find_vrchat_pid()
+    pid = find_pid()
     if pid is None:
         print("VRChat is not running")
         return 1
@@ -256,7 +256,7 @@ def _run_terminate() -> int:
     Returns:
         ``0`` whether VRChat was running or not.
     """
-    if terminate_vrchat():
+    if terminate():
         print("Terminated VRChat.")
     else:
         print("VRChat is not running.")

@@ -1,10 +1,12 @@
-"""VRChat launch API.
+"""VRChat process management API.
 
-Public entry points for starting VRChat through Steam. The launcher is the
-foundation other automation layers build on: anything that drives the live
-client first needs the client to be running. Use :func:`launch_vrchat` for
-the end-to-end flow and :func:`build_launch_command` when you need to
-inspect or customize the command before spawning.
+Public entry points for starting, observing, and stopping the VRChat
+client. This layer is the foundation other automation builds on:
+anything that drives the live client first needs to launch it, confirm
+it is running, or shut it down. Use :func:`launch` for the end-to-end
+start flow, :func:`find_pid` to check liveness, :func:`terminate` to
+stop it, and :func:`build_launch_command` when you need to inspect or
+customize the command before spawning.
 """
 
 from __future__ import annotations
@@ -143,7 +145,7 @@ def build_launch_command(
 ) -> list[str]:
     """Build the argv used to launch a Steam game via Steam's CLI.
 
-    Exposed separately from :func:`launch_vrchat` so callers can inspect,
+    Exposed separately from :func:`launch` so callers can inspect,
     log, or wrap the command (for example, to spawn it under a sandbox or
     a different process manager) without paying the cost of an actual
     launch. The function is pure and side-effect free, which also makes
@@ -174,7 +176,7 @@ def build_launch_command(
     return cmd
 
 
-def launch_vrchat(
+def launch(
     *,
     app_id: int = VRCHAT_STEAM_APP_ID,
     steam_path: Path | None = None,
@@ -183,16 +185,20 @@ def launch_vrchat(
     screen_height: int | None = None,
     osc: OscConfig | None = None,
     extra_args: list[str] | None = None,
-) -> subprocess.Popen[bytes]:
-    """Launch VRChat through Steam and return the spawned subprocess.
+) -> None:
+    """Launch VRChat through Steam.
 
     Use this as the standard way to bring VRChat up before driving any
-    higher-level automation. The handed-back :class:`~subprocess.Popen`
-    represents the Steam launcher invocation, not VRChat itself: Steam
-    keeps its own long-lived client process, so the actual game window
-    is owned by Steam and may outlive the returned handle. The launcher
-    is also detached from the parent's process group / session so that
-    the Python script can exit without taking VRChat down with it.
+    higher-level automation. The launcher is detached from the parent's
+    process group / session so that the Python script can exit without
+    taking VRChat down with it.
+
+    The PID of the spawned Steam invoker is intentionally not exposed: it
+    is short-lived and unrelated to the actual VRChat process. When Steam
+    is already running, the invoker hands the launch request off to the
+    existing Steam client and exits almost immediately, so its PID is not
+    a useful handle. To observe whether VRChat itself is up, use
+    :func:`find_pid`.
 
     Steam must be installed and either auto-detectable or supplied via
     ``steam_path``; the user is not required to be signed in beforehand,
@@ -220,11 +226,6 @@ def launch_vrchat(
         extra_args: Additional raw tokens forwarded verbatim to VRChat.
             Escape hatch for options this signature does not cover.
 
-    Returns:
-        The :class:`~subprocess.Popen` handle for the launched Steam
-        process. Treat its lifetime as informational; do not rely on
-        terminating it to stop VRChat.
-
     Raises:
         SteamNotFoundError: If the Steam executable cannot be located.
     """
@@ -239,19 +240,20 @@ def launch_vrchat(
     argv = build_launch_command(steam_executable, app_id, vrchat_args=vrchat_args)
 
     if sys.platform == "win32":
-        return subprocess.Popen(
+        subprocess.Popen(
             argv,
             stdin=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
         )
-    return subprocess.Popen(
+        return
+    subprocess.Popen(
         argv,
         stdin=subprocess.DEVNULL,
         start_new_session=True,
     )
 
 
-def find_vrchat_pid() -> int | None:
+def find_pid() -> int | None:
     """Return the PID of a running VRChat process, or ``None`` if absent.
 
     Use this to check whether VRChat is already up before deciding to
@@ -275,7 +277,7 @@ def find_vrchat_pid() -> int | None:
     return None
 
 
-def terminate_vrchat(*, timeout: float = 5.0) -> bool:
+def terminate(*, timeout: float = 5.0) -> bool:
     """Forcefully terminate any running VRChat processes.
 
     Iterates over running processes and sends SIGKILL

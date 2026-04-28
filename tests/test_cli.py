@@ -11,18 +11,16 @@ from pytest_mock import MockerFixture
 
 from vrcpilot._steam import SteamNotFoundError
 from vrcpilot.cli import _build_parser, main
-from vrcpilot.launcher import VRCHAT_STEAM_APP_ID, OscConfig
+from vrcpilot.process import VRCHAT_STEAM_APP_ID, OscConfig
 
 
-def _patch_launch_vrchat(mocker: MockerFixture, pid: int = 1234):
-    process = mocker.MagicMock()
-    process.pid = pid
-    return mocker.patch("vrcpilot.cli.launch_vrchat", return_value=process)
+def _patch_launch(mocker: MockerFixture):
+    return mocker.patch("vrcpilot.cli.launch", return_value=None)
 
 
 class TestLaunchCommand:
     def test_uses_defaults(self, mocker: MockerFixture):
-        launch_mock = _patch_launch_vrchat(mocker)
+        launch_mock = _patch_launch(mocker)
 
         exit_code = main(["launch"])
 
@@ -36,8 +34,19 @@ class TestLaunchCommand:
             osc=None,
         )
 
+    def test_reports_launched_message(
+        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    ):
+        _patch_launch(mocker)
+
+        exit_code = main(["launch"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Launched VRChat." in captured.out
+
     def test_app_id_override(self, mocker: MockerFixture):
-        launch_mock = _patch_launch_vrchat(mocker)
+        launch_mock = _patch_launch(mocker)
 
         exit_code = main(["launch", "--app-id", "12345"])
 
@@ -52,7 +61,7 @@ class TestLaunchCommand:
         )
 
     def test_steam_path_override(self, mocker: MockerFixture):
-        launch_mock = _patch_launch_vrchat(mocker)
+        launch_mock = _patch_launch(mocker)
 
         exit_code = main(["launch", "--steam-path", "/foo/Steam.exe"])
 
@@ -70,7 +79,7 @@ class TestLaunchCommand:
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
         mocker.patch(
-            "vrcpilot.cli.launch_vrchat",
+            "vrcpilot.cli.launch",
             side_effect=SteamNotFoundError("nope"),
         )
 
@@ -81,7 +90,7 @@ class TestLaunchCommand:
         assert "nope" in captured.err
 
     def test_no_vr_flag_propagates(self, mocker: MockerFixture):
-        launch_mock = _patch_launch_vrchat(mocker)
+        launch_mock = _patch_launch(mocker)
 
         exit_code = main(["launch", "--no-vr"])
 
@@ -96,7 +105,7 @@ class TestLaunchCommand:
         )
 
     def test_screen_dimensions_propagate(self, mocker: MockerFixture):
-        launch_mock = _patch_launch_vrchat(mocker)
+        launch_mock = _patch_launch(mocker)
 
         exit_code = main(["launch", "--screen-width", "1280", "--screen-height", "720"])
 
@@ -111,7 +120,7 @@ class TestLaunchCommand:
         )
 
     def test_osc_in_port_creates_config(self, mocker: MockerFixture):
-        launch_mock = _patch_launch_vrchat(mocker)
+        launch_mock = _patch_launch(mocker)
 
         exit_code = main(["launch", "--osc-in-port", "9000"])
 
@@ -126,7 +135,7 @@ class TestLaunchCommand:
         )
 
     def test_osc_full_override(self, mocker: MockerFixture):
-        launch_mock = _patch_launch_vrchat(mocker)
+        launch_mock = _patch_launch(mocker)
 
         exit_code = main(
             [
@@ -151,7 +160,7 @@ class TestLaunchCommand:
         )
 
     def test_osc_out_options_ignored_without_in_port(self, mocker: MockerFixture):
-        launch_mock = _patch_launch_vrchat(mocker)
+        launch_mock = _patch_launch(mocker)
 
         exit_code = main(["launch", "--osc-out-ip", "192.168.1.10"])
 
@@ -170,7 +179,7 @@ class TestStatusCommand:
     def test_reports_running(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        mocker.patch("vrcpilot.cli.find_vrchat_pid", return_value=12345)
+        mocker.patch("vrcpilot.cli.find_pid", return_value=12345)
 
         exit_code = main(["status"])
 
@@ -182,7 +191,7 @@ class TestStatusCommand:
     def test_reports_not_running(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        mocker.patch("vrcpilot.cli.find_vrchat_pid", return_value=None)
+        mocker.patch("vrcpilot.cli.find_pid", return_value=None)
 
         exit_code = main(["status"])
 
@@ -195,7 +204,7 @@ class TestTerminateCommand:
     def test_reports_killed(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        mocker.patch("vrcpilot.cli.terminate_vrchat", return_value=True)
+        mocker.patch("vrcpilot.cli.terminate", return_value=True)
 
         exit_code = main(["terminate"])
 
@@ -206,7 +215,7 @@ class TestTerminateCommand:
     def test_reports_not_running(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        mocker.patch("vrcpilot.cli.terminate_vrchat", return_value=False)
+        mocker.patch("vrcpilot.cli.terminate", return_value=False)
 
         exit_code = main(["terminate"])
 
@@ -224,7 +233,7 @@ class TestMain:
 class TestArgcompleteIntegration:
     def test_autocomplete_invoked_with_parser(self, mocker: MockerFixture):
         autocomplete_mock = mocker.patch("vrcpilot.cli.argcomplete.autocomplete")
-        _patch_launch_vrchat(mocker)
+        _patch_launch(mocker)
 
         exit_code = main(["launch"])
 
@@ -254,7 +263,7 @@ class TestArgcompleteIntegration:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.delenv("_ARGCOMPLETE", raising=False)
-        _patch_launch_vrchat(mocker)
+        _patch_launch(mocker)
 
         exit_code = main(["launch"])
 
