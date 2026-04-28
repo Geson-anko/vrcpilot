@@ -166,6 +166,31 @@ class TestLaunchCommand:
         )
 
 
+class TestStatusCommand:
+    def test_reports_running(
+        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    ):
+        mocker.patch("vrcpilot.cli.find_vrchat_pid", return_value=12345)
+
+        exit_code = main(["status"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "VRChat is running" in captured.out
+        assert "12345" in captured.out
+
+    def test_reports_not_running(
+        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    ):
+        mocker.patch("vrcpilot.cli.find_vrchat_pid", return_value=None)
+
+        exit_code = main(["status"])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "VRChat is not running" in captured.out
+
+
 class TestTerminateCommand:
     def test_reports_killed(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
