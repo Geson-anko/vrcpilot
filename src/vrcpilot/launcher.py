@@ -251,6 +251,30 @@ def launch_vrchat(
     )
 
 
+def find_vrchat_pid() -> int | None:
+    """Return the PID of a running VRChat process, or ``None`` if absent.
+
+    Use this to check whether VRChat is already up before deciding to
+    launch it, or to obtain a handle for higher-level automation that
+    needs to attach to the live process. The lookup is read-only — it
+    does not signal or otherwise disturb the process.
+
+    Iterates over running processes via :func:`psutil.process_iter` and
+    returns the first one whose name matches :data:`VRCHAT_PROCESS_NAME`.
+    Enumeration order is OS-defined, so when multiple instances are
+    running the choice is not configurable; callers that need every PID
+    should walk :func:`psutil.process_iter` themselves.
+
+    Returns:
+        The PID of the first matching process, or ``None`` if no VRChat
+        process is currently running.
+    """
+    for proc in psutil.process_iter(["name"]):
+        if proc.info["name"] == VRCHAT_PROCESS_NAME:
+            return proc.pid
+    return None
+
+
 def terminate_vrchat(*, timeout: float = 5.0) -> bool:
     """Forcefully terminate any running VRChat processes.
 

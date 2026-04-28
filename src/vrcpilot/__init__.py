@@ -22,6 +22,7 @@ from vrcpilot.launcher import (
     OscConfig,
     build_launch_command,
     build_vrchat_launch_args,
+    find_vrchat_pid,
     launch_vrchat,
     terminate_vrchat,
 )
@@ -34,6 +35,7 @@ __all__ = [
     "__version__",
     "build_launch_command",
     "build_vrchat_launch_args",
+    "find_vrchat_pid",
     "launch_vrchat",
     "OscConfig",
     "SteamNotFoundError",

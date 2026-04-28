@@ -11,6 +11,7 @@ Invocation::
     python -m vrcpilot launch [--app-id ID] [--steam-path PATH] [--no-vr]
         [--screen-width N] [--screen-height N]
         [--osc-in-port N [--osc-out-ip IP] [--osc-out-port N]]
+    python -m vrcpilot status
     python -m vrcpilot terminate
 """
 
@@ -27,6 +28,7 @@ from vrcpilot._steam import SteamNotFoundError
 from vrcpilot.launcher import (
     VRCHAT_STEAM_APP_ID,
     OscConfig,
+    find_vrchat_pid,
     launch_vrchat,
     terminate_vrchat,
 )
@@ -106,6 +108,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     subparsers.add_parser(
+        "status",
+        help="Report whether VRChat is currently running.",
+    )
+
+    subparsers.add_parser(
         "terminate",
         help="Forcefully terminate any running VRChat process.",
     )
@@ -147,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
                 osc_out_ip=args.osc_out_ip,
                 osc_out_port=args.osc_out_port,
             )
+        case "status":
+            return _run_status()
         case "terminate":
             return _run_terminate()
         case _:
@@ -214,6 +223,26 @@ def _run_launch(
         print(f"vrcpilot: {exc}", file=sys.stderr)
         return 2
     print(f"Launched Steam process pid={process.pid}")
+    return 0
+
+
+def _run_status() -> int:
+    """Execute the ``status`` subcommand.
+
+    Reports whether VRChat is currently running by delegating to
+    :func:`find_vrchat_pid`. The exit code is intentionally
+    state-dependent — unlike :func:`_run_terminate`, which is idempotent —
+    so shell users can branch on it (``if vrcpilot status; then ...``).
+
+    Returns:
+        ``0`` if a VRChat process was found (PID is printed to stdout),
+        ``1`` if no VRChat process is running.
+    """
+    pid = find_vrchat_pid()
+    if pid is None:
+        print("VRChat is not running")
+        return 1
+    print(f"VRChat is running (pid={pid})")
     return 0
 
 
