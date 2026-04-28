@@ -2,7 +2,7 @@
 
 Public entry points for starting VRChat through Steam. The launcher is the
 foundation other automation layers build on: anything that drives the live
-client first needs the client to be running. Use :func:`launch_vrchat` for
+client first needs the client to be running. Use :func:`launch` for
 the end-to-end flow and :func:`build_launch_command` when you need to
 inspect or customize the command before spawning.
 """
@@ -143,7 +143,7 @@ def build_launch_command(
 ) -> list[str]:
     """Build the argv used to launch a Steam game via Steam's CLI.
 
-    Exposed separately from :func:`launch_vrchat` so callers can inspect,
+    Exposed separately from :func:`launch` so callers can inspect,
     log, or wrap the command (for example, to spawn it under a sandbox or
     a different process manager) without paying the cost of an actual
     launch. The function is pure and side-effect free, which also makes
@@ -174,7 +174,7 @@ def build_launch_command(
     return cmd
 
 
-def launch_vrchat(
+def launch(
     *,
     app_id: int = VRCHAT_STEAM_APP_ID,
     steam_path: Path | None = None,
@@ -196,7 +196,7 @@ def launch_vrchat(
     is already running, the invoker hands the launch request off to the
     existing Steam client and exits almost immediately, so its PID is not
     a useful handle. To observe whether VRChat itself is up, use
-    :func:`find_vrchat_pid`.
+    :func:`find_pid`.
 
     Steam must be installed and either auto-detectable or supplied via
     ``steam_path``; the user is not required to be signed in beforehand,
@@ -251,7 +251,7 @@ def launch_vrchat(
     )
 
 
-def find_vrchat_pid() -> int | None:
+def find_pid() -> int | None:
     """Return the PID of a running VRChat process, or ``None`` if absent.
 
     Use this to check whether VRChat is already up before deciding to
@@ -275,7 +275,7 @@ def find_vrchat_pid() -> int | None:
     return None
 
 
-def terminate_vrchat(*, timeout: float = 5.0) -> bool:
+def terminate(*, timeout: float = 5.0) -> bool:
     """Forcefully terminate any running VRChat processes.
 
     Iterates over running processes and sends SIGKILL

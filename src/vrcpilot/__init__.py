@@ -10,7 +10,7 @@ Typical use::
 
     import vrcpilot
 
-    vrcpilot.launch_vrchat()
+    vrcpilot.launch()
 """
 
 from importlib import metadata
@@ -22,9 +22,9 @@ from vrcpilot.launcher import (
     OscConfig,
     build_launch_command,
     build_vrchat_launch_args,
-    find_vrchat_pid,
-    launch_vrchat,
-    terminate_vrchat,
+    find_pid,
+    launch,
+    terminate,
 )
 
 #: Installed package version, resolved from distribution metadata so it stays
@@ -35,11 +35,11 @@ __all__ = [
     "__version__",
     "build_launch_command",
     "build_vrchat_launch_args",
-    "find_vrchat_pid",
-    "launch_vrchat",
+    "find_pid",
+    "launch",
     "OscConfig",
     "SteamNotFoundError",
-    "terminate_vrchat",
+    "terminate",
     "VRCHAT_PROCESS_NAME",
     "VRCHAT_STEAM_APP_ID",
 ]
