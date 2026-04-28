@@ -11,7 +11,7 @@ from pytest_mock import MockerFixture
 
 from vrcpilot._steam import SteamNotFoundError
 from vrcpilot.cli import _build_parser, main
-from vrcpilot.launcher import VRCHAT_STEAM_APP_ID, OscConfig
+from vrcpilot.process import VRCHAT_STEAM_APP_ID, OscConfig
 
 
 def _patch_launch(mocker: MockerFixture):

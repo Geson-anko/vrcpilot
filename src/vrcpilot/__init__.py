@@ -16,7 +16,7 @@ Typical use::
 from importlib import metadata
 
 from vrcpilot._steam import SteamNotFoundError
-from vrcpilot.launcher import (
+from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
     OscConfig,

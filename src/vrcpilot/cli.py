@@ -25,7 +25,7 @@ import argcomplete
 from argcomplete.completers import FilesCompleter
 
 from vrcpilot._steam import SteamNotFoundError
-from vrcpilot.launcher import (
+from vrcpilot.process import (
     VRCHAT_STEAM_APP_ID,
     OscConfig,
     find_pid,
