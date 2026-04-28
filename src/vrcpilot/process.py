@@ -1,10 +1,12 @@
-"""VRChat launch API.
+"""VRChat process management API.
 
-Public entry points for starting VRChat through Steam. The launcher is the
-foundation other automation layers build on: anything that drives the live
-client first needs the client to be running. Use :func:`launch` for
-the end-to-end flow and :func:`build_launch_command` when you need to
-inspect or customize the command before spawning.
+Public entry points for starting, observing, and stopping the VRChat
+client. This layer is the foundation other automation builds on:
+anything that drives the live client first needs to launch it, confirm
+it is running, or shut it down. Use :func:`launch` for the end-to-end
+start flow, :func:`find_pid` to check liveness, :func:`terminate` to
+stop it, and :func:`build_launch_command` when you need to inspect or
+customize the command before spawning.
 """
 
 from __future__ import annotations
