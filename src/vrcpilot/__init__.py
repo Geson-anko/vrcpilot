@@ -16,6 +16,7 @@ Typical use::
 from importlib import metadata
 
 from vrcpilot._steam import SteamNotFoundError
+from vrcpilot.capture import take_screenshot
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
@@ -41,6 +42,7 @@ __all__ = [
     "launch",
     "OscConfig",
     "SteamNotFoundError",
+    "take_screenshot",
     "terminate",
     "unfocus",
     "VRCHAT_PROCESS_NAME",

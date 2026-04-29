@@ -48,22 +48,22 @@ def _scenario() -> None:
     _helpers.log("calling vrcpilot.unfocus() (1/4: leave initial foreground)")
     assert vrcpilot.unfocus(), "vrcpilot.unfocus() returned False"
     time.sleep(0.5)
-    _helpers.take_screenshot("focus_unfocus", "1_unfocus")
+    _helpers.save_monitor_screenshot("focus_unfocus", "1_unfocus")
 
     _helpers.log("calling vrcpilot.focus() (2/4: return to foreground)")
     assert vrcpilot.focus(), "vrcpilot.focus() returned False"
     time.sleep(0.5)
-    _helpers.take_screenshot("focus_unfocus", "2_focus")
+    _helpers.save_monitor_screenshot("focus_unfocus", "2_focus")
 
     _helpers.log("calling vrcpilot.unfocus() (3/4: repeat for idempotence)")
     assert vrcpilot.unfocus(), "vrcpilot.unfocus() returned False"
     time.sleep(0.5)
-    _helpers.take_screenshot("focus_unfocus", "3_unfocus")
+    _helpers.save_monitor_screenshot("focus_unfocus", "3_unfocus")
 
     _helpers.log("calling vrcpilot.focus() (4/4: repeat for idempotence)")
     assert vrcpilot.focus(), "vrcpilot.focus() returned False"
     time.sleep(0.5)
-    _helpers.take_screenshot("focus_unfocus", "4_focus")
+    _helpers.save_monitor_screenshot("focus_unfocus", "4_focus")
 
 
 def main() -> int:

@@ -272,6 +272,76 @@ class TestUnfocusCommand:
         assert "Could not" in captured.out
 
 
+class TestScreenshotCommand:
+    def test_reports_saved_on_success(
+        self,
+        mocker: MockerFixture,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ):
+        fake_image = mocker.Mock()
+        mocker.patch("vrcpilot.cli.take_screenshot", return_value=fake_image)
+        output = tmp_path / "shot.png"
+
+        exit_code = main(["screenshot", "--output", str(output)])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Saved screenshot to" in captured.out
+        fake_image.save.assert_called_once_with(output)
+
+    def test_reports_failure(
+        self,
+        mocker: MockerFixture,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ):
+        mocker.patch("vrcpilot.cli.take_screenshot", return_value=None)
+
+        exit_code = main(["screenshot", "--output", str(tmp_path / "shot.png")])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Could not" in captured.err
+
+    def test_short_output_flag(
+        self,
+        mocker: MockerFixture,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ):
+        fake_image = mocker.Mock()
+        mocker.patch("vrcpilot.cli.take_screenshot", return_value=fake_image)
+        output = tmp_path / "shot.png"
+
+        exit_code = main(["screenshot", "-o", str(output)])
+
+        assert exit_code == 0
+        fake_image.save.assert_called_once_with(output)
+
+    def test_default_output_is_cwd_with_timestamp(
+        self,
+        mocker: MockerFixture,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        fake_image = mocker.Mock()
+        mocker.patch("vrcpilot.cli.take_screenshot", return_value=fake_image)
+        monkeypatch.chdir(tmp_path)
+
+        exit_code = main(["screenshot"])
+
+        assert exit_code == 0
+        fake_image.save.assert_called_once()
+        saved_path = fake_image.save.call_args.args[0]
+        assert isinstance(saved_path, Path)
+        assert saved_path.parent == tmp_path
+        # vrcpilot_screenshot_YYYYMMDD_HHMMSS.png
+        assert saved_path.name.startswith("vrcpilot_screenshot_")
+        assert saved_path.suffix == ".png"
+
+
 class TestMain:
     def test_missing_subcommand_exits(self):
         with pytest.raises(SystemExit):
