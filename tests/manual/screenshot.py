@@ -1,9 +1,10 @@
 """Manual scenario: capture a VRChat-only screenshot via ``vrcpilot.take_screenshot()``.
 
 Drives ``vrcpilot.take_screenshot()`` against a real running VRChat
-client to confirm that the returned PIL image contains **only** the
-VRChat window region (not the surrounding desktop, taskbar, or other
-applications).
+client to confirm that the returned :class:`vrcpilot.Screenshot`
+contains **only** the VRChat window region (not the surrounding
+desktop, taskbar, or other applications) and that its on-screen
+geometry metadata matches what mss saw.
 
 VRChat is launched in Desktop mode with a 1280x720 window so the client
 is smaller than the screen. That makes the cropping behaviour observable
@@ -17,21 +18,22 @@ Run with::
 
 The captured image is written to
 ``_manual_artifacts/screenshot_vrchat_<YYYYMMDD_HHMMSS>.png`` for the
-human or Claude Code to open and verify.
+human or Claude Code to open and verify. The window geometry and the
+captured-at timestamp are also logged.
 """
 
 from __future__ import annotations
 
 import sys
-from datetime import datetime
 from pathlib import Path
 
+from PIL import Image
+
 import vrcpilot
+from vrcpilot.screenshot import take_screenshot
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _helpers  # noqa: E402
-
-_ARTIFACTS = Path(__file__).resolve().parents[2] / "_manual_artifacts"
 
 
 def _scenario() -> None:
@@ -47,15 +49,36 @@ def _scenario() -> None:
 
     _helpers.warmup()
 
-    _helpers.log("calling vrcpilot.take_screenshot()")
-    image = vrcpilot.take_screenshot()
-    assert image is not None, "vrcpilot.take_screenshot() returned None"
-    _helpers.log(f"captured size={image.size}")
+    _helpers.log("calling take_screenshot()")
+    shot = take_screenshot()
+    assert shot is not None, "take_screenshot() returned None"
 
-    _ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = _ARTIFACTS / f"screenshot_vrchat_{stamp}.png"
-    image.save(out)
+    # ASCII-only log lines: cp932 (Windows + JP locale) cannot encode
+    # em-dash / arrow / ellipsis, so any unicode escape leaks here would
+    # crash the manual run.
+    _helpers.log(
+        "captured: "
+        f"x={shot.x} y={shot.y} "
+        f"width={shot.width} height={shot.height} "
+        f"monitor_index={shot.monitor_index} "
+        f"captured_at={shot.captured_at.isoformat()}"
+    )
+    _helpers.log(f"image: shape={shot.image.shape} dtype={shot.image.dtype}")
+
+    # Geometry sanity. ``x`` / ``y`` may be negative on multi-monitor
+    # layouts where VRChat is on a left-of-primary monitor, so do not
+    # constrain their sign — only the size and monitor index are
+    # universally non-negative.
+    assert shot.width > 0, f"non-positive width: {shot.width}"
+    assert shot.height > 0, f"non-positive height: {shot.height}"
+    assert shot.monitor_index >= 0, f"negative monitor index: {shot.monitor_index}"
+    assert shot.image.shape == (shot.height, shot.width, 3), (
+        f"image shape {shot.image.shape} disagrees with "
+        f"({shot.height}, {shot.width}, 3)"
+    )
+    assert shot.image.dtype.name == "uint8", f"unexpected dtype: {shot.image.dtype}"
+
+    out = _helpers.save_image("screenshot", "vrchat", Image.fromarray(shot.image))
     _helpers.log(f"VRChat screenshot saved: {out}")
 
 
