@@ -31,12 +31,6 @@ from vrcpilot._x11 import (
 )
 from vrcpilot.process import find_pid
 
-# Transitional re-export: the single-shot ``take_screenshot`` lives in
-# :mod:`vrcpilot.screenshot` now. Re-exporting here keeps existing
-# ``from vrcpilot.capture import take_screenshot`` import paths working
-# until callers migrate to the new ``vrcpilot.screenshot`` module.
-from vrcpilot.screenshot import take_screenshot as take_screenshot
-
 if TYPE_CHECKING or sys.platform == "linux":
     import Xlib.display
     import Xlib.error
