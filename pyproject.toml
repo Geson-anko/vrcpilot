@@ -29,7 +29,7 @@ dev = [
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
-    "types-python-xlib>=0.33 ; sys_platform == 'linux'",
+    "types-python-xlib>=0.33",
     "types-pywin32>=311.0.0.20260408 ; sys_platform == 'win32'",
 ]
 
@@ -63,6 +63,9 @@ exclude = [
 ]
 strict = ["./src/"]
 reportMissingTypeStubs = false
+# Windows ホストでは python-xlib 本体は install されず stubs のみで型解決する
+# ため source の欠落警告は想定内。Linux 側は本体も入るので発火しない。
+reportMissingModuleSource = false
 reportImplicitOverride = true
 reportPrivateUsage = "warning"
 

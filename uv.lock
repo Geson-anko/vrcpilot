@@ -475,7 +475,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
-    { name = "types-python-xlib", marker = "sys_platform == 'linux'" },
+    { name = "types-python-xlib" },
     { name = "types-pywin32", marker = "sys_platform == 'win32'" },
 ]
 
@@ -497,7 +497,7 @@ dev = [
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-cov", specifier = ">=6.1.1" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
-    { name = "types-python-xlib", marker = "sys_platform == 'linux'", specifier = ">=0.33" },
+    { name = "types-python-xlib", specifier = ">=0.33" },
     { name = "types-pywin32", marker = "sys_platform == 'win32'", specifier = ">=311.0.0.20260408" },
 ]
 
