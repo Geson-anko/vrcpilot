@@ -109,18 +109,18 @@ class TestUnfocus:
 
 
 class TestPlatformGuard:
-    def test_focus_raises_not_implemented_on_non_win32(
+    def test_focus_raises_not_implemented_on_unsupported_platform(
         self, monkeypatch: pytest.MonkeyPatch
     ):
-        monkeypatch.setattr("vrcpilot.window.sys.platform", "linux")
+        monkeypatch.setattr("vrcpilot.window.sys.platform", "darwin")
 
         with pytest.raises(NotImplementedError):
             vrcpilot.window.focus()
 
-    def test_unfocus_raises_not_implemented_on_non_win32(
+    def test_unfocus_raises_not_implemented_on_unsupported_platform(
         self, monkeypatch: pytest.MonkeyPatch
     ):
-        monkeypatch.setattr("vrcpilot.window.sys.platform", "linux")
+        monkeypatch.setattr("vrcpilot.window.sys.platform", "darwin")
 
         with pytest.raises(NotImplementedError):
             vrcpilot.window.unfocus()
