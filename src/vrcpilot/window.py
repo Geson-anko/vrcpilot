@@ -61,16 +61,21 @@ def _find_vrchat_hwnd(pid: int) -> int | None:
 def focus() -> bool:
     """Bring the running VRChat window to the foreground.
 
-    Restores the window if it is currently minimized. Assumes Desktop
-    mode — has no visible effect when VRChat is in VR exclusive mode.
+    Use this when an automation step needs the VRChat window to be the
+    active, visible window — for example, before sending input. The
+    window is restored first if it is currently minimized.
+
+    Only meaningful in Desktop mode. When VRChat is running in VR
+    exclusive mode there is no desktop window to surface, so the call
+    has no visible effect even though it may still report success.
 
     Raises:
         NotImplementedError: When called on a non-Windows platform.
 
     Returns:
-        ``True`` on success, ``False`` when VRChat is not running, no
-        matching window can be located, or the underlying Win32 call
-        fails.
+        ``True`` on success. ``False`` when VRChat is not running, its
+        top-level window cannot be located (e.g. still starting up), or
+        the underlying Win32 call fails.
     """
     if sys.platform != "win32":
         # TODO: Linux 対応 (X11/Wayland)
@@ -110,17 +115,21 @@ def focus() -> bool:
 def unfocus() -> bool:
     """Send the running VRChat window to the bottom of the z-order.
 
-    Removes the window from the foreground without minimizing it or
-    activating another window. Useful for hiding VRChat behind other
-    applications while keeping it running and rendering.
+    Use this to step VRChat out of the way without disturbing it: the
+    window stays open and keeps rendering, but other applications cover
+    it. Unlike minimizing, no other window is activated, so input focus
+    is left wherever the caller had it.
+
+    Pairs with :func:`focus` for automation that briefly surfaces VRChat
+    and then returns to a background workflow.
 
     Raises:
         NotImplementedError: When called on a non-Windows platform.
 
     Returns:
-        ``True`` on success, ``False`` when VRChat is not running, no
-        matching window can be located, or the underlying Win32 call
-        fails.
+        ``True`` on success. ``False`` when VRChat is not running, its
+        top-level window cannot be located (e.g. still starting up), or
+        the underlying Win32 call fails.
     """
     if sys.platform != "win32":
         # TODO: Linux 対応 (X11/Wayland)

@@ -91,9 +91,19 @@ def warmup(seconds: float = WARMUP_SECONDS) -> None:
 def take_screenshot(scenario: str, label: str) -> Path:
     """Capture all monitors and save under ``_manual_artifacts/``.
 
-    Returns the absolute :class:`~pathlib.Path` to the saved PNG. The
-    filename pattern is ``{scenario}_{label}_{YYYYMMDD_HHMMSS}.png``.
+    Use this in manual scenarios to leave a visual record at key steps
+    so a human can review what VRChat looked like after the action ran.
     The save location is also emitted via :func:`log`.
+
+    Args:
+        scenario: Scenario identifier used as a filename prefix to keep
+            artifacts grouped per script (e.g. ``"focus_unfocus"``).
+        label: Step name within the scenario (e.g. ``"focus"``,
+            ``"unfocus"``); becomes the second filename segment.
+
+    Returns:
+        Absolute :class:`~pathlib.Path` to the saved PNG. The filename
+        pattern is ``{scenario}_{label}_{YYYYMMDD_HHMMSS}.png``.
     """
     _ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
