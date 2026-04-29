@@ -1,22 +1,22 @@
 """VRChat window capture API.
 
 Public entry point for grabbing a screenshot of the running VRChat
-window as a :class:`PIL.Image.Image`. On Linux the X11 Composite
-extension is used to read the window's off-screen pixmap directly, so
-the window can be captured **without being raised to the foreground**
-and even when it is fully occluded by other windows. This avoids the
-side effect (and the settle delay) of having to call :func:`focus`
-before each capture.
+window as a :class:`PIL.Image.Image`. Capture is **focus-free** on both
+platforms: Linux reads the off-screen pixmap via the X11 Composite
+extension, and Windows uses the Windows.Graphics.Capture API (the same
+backend OBS's "Window Capture (Windows 10 1903+)" mode is built on).
+The window is not raised to the foreground, so callers avoid the side
+effect (and settle delay) of invoking :func:`focus` before each shot.
 
 Companion to :mod:`vrcpilot.window` (z-order control) and
-:mod:`vrcpilot.process` (lifecycle). Wayland native sessions are not
-supported (warns and returns ``None``); Windows support is not yet
-implemented.
+:mod:`vrcpilot.process` (lifecycle). Native Wayland sessions are not
+supported (warns and returns ``None``).
 """
 
 from __future__ import annotations
 
 import sys
+import threading
 import warnings
 
 from PIL import Image
@@ -29,14 +29,89 @@ if sys.platform == "linux":
     from Xlib import X
     from Xlib.ext import composite
 
+if sys.platform == "win32":
+    # ``windows_capture`` ships no type stubs (it's a thin wrapper over a
+    # PyO3 native module), so the import trips ``reportMissingTypeStubs``
+    # and downstream attribute reads come back as ``Unknown``. We narrow
+    # with isinstance / asserts at use sites.
+    from windows_capture import (  # pyright: ignore[reportMissingTypeStubs]
+        WindowsCapture,
+    )
+
+    from vrcpilot._win32 import find_vrchat_hwnd
+
+#: Maximum seconds to wait for the first WGC frame before giving up.
+#: WGC normally delivers a frame within ~33 ms; 2 s is a generous
+#: watchdog for cases where the HWND vanishes between lookup and
+#: capture, or the session never delivers a frame.
+_WIN32_FRAME_TIMEOUT_SEC: float = 2.0
+
 
 def _take_screenshot_win32() -> Image.Image | None:
-    """Win32 implementation of :func:`take_screenshot` (not yet
-    implemented)."""
-    # TODO: Win32 サポートを実装する。`PrintWindow(hwnd, hdc,
-    # PW_RENDERFULLCONTENT)` で hidden / occluded window でも撮れる
-    # ため、Linux Composite 同様 focus 不要で実装可能。
-    raise NotImplementedError("take_screenshot() on Windows is not implemented yet")
+    """Win32 implementation of :func:`take_screenshot`.
+
+    Captures the VRChat window via the same WGC API that OBS's
+    "Window Capture (Windows 10 1903+)" mode uses, so the window
+    can be captured without being raised to the foreground and even
+    when occluded. Returns ``None`` for any recoverable failure mode.
+    """
+    if sys.platform != "win32":
+        # Defensive narrow for pyright on non-Windows runs.
+        raise RuntimeError("unreachable")
+
+    pid = find_pid()
+    if pid is None:
+        return None
+
+    hwnd = find_vrchat_hwnd(pid)
+    if hwnd is None:
+        return None
+
+    captured_data: list[bytes] = []
+    captured_size: list[tuple[int, int]] = []
+
+    capture = WindowsCapture(  # pyright: ignore[reportUnknownVariableType]
+        cursor_capture=False,
+        draw_border=False,
+        window_hwnd=hwnd,
+    )
+
+    @capture.event  # pyright: ignore[reportUnknownMemberType, reportUntypedFunctionDecorator, reportArgumentType]
+    def on_frame_arrived(frame: object, control: object) -> None:  # pyright: ignore[reportUnusedFunction]
+        # ``frame.frame_buffer`` is a row-tight ``(H, W, 4)`` BGRA ndarray;
+        # the library has already collapsed the GPU stride for us. Copy
+        # out as bytes so the buffer is safe to use after capture stops.
+        buf = frame.frame_buffer.tobytes()  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
+        width = int(frame.width)  # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
+        height = int(frame.height)  # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
+        assert isinstance(buf, bytes)
+        captured_data.append(buf)
+        captured_size.append((width, height))
+        control.stop()  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+
+    @capture.event  # pyright: ignore[reportUnknownMemberType, reportUntypedFunctionDecorator, reportArgumentType]
+    def on_closed() -> None:  # pyright: ignore[reportUnusedFunction]
+        pass
+
+    try:
+        control = capture.start_free_threaded()  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    except OSError:
+        return None
+
+    watchdog = threading.Timer(_WIN32_FRAME_TIMEOUT_SEC, control.stop)  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+    watchdog.start()
+    try:
+        control.wait()  # pyright: ignore[reportUnknownMemberType]
+    finally:
+        watchdog.cancel()
+
+    if not captured_data:
+        return None
+
+    width, height = captured_size[0]
+    if width <= 0 or height <= 0:
+        return None
+    return Image.frombytes("RGB", (width, height), captured_data[0], "raw", "BGRX")
 
 
 def _take_screenshot_x11() -> Image.Image | None:
@@ -97,28 +172,28 @@ def _take_screenshot_x11() -> Image.Image | None:
 def take_screenshot() -> Image.Image | None:
     """Capture the running VRChat window and return it as a PIL image.
 
-    On Linux the X11 Composite extension is used to read the window's
-    off-screen pixmap, so the capture works even when the VRChat window
-    is occluded or running in VR exclusive mode. The window is **not**
-    raised to the foreground, so calling this from automation does not
-    disturb the user's z-order.
+    Use this from automation to read VRChat's pixels without disturbing
+    the user. The capture is **focus-free**: the window is not raised
+    to the foreground and the call succeeds even when VRChat is fully
+    occluded by other windows. On Linux this is done via the X11
+    Composite extension; on Windows via the Windows.Graphics.Capture
+    API (the same backend OBS's "Window Capture (Windows 10 1903+)"
+    mode uses).
 
     Failure is signalled by returning ``None`` rather than by raising —
     automation callers that poll for VRChat readiness can simply retry.
-    Conditions that yield ``None`` include: VRChat is not running, its
-    top-level window cannot be located yet, the window is minimized
-    (zero-size geometry), the X11 display cannot be opened, the server
-    does not speak the Composite extension, an X11 request fails, or
-    the session is native Wayland (a ``RuntimeWarning`` is also
-    emitted in that case).
+    ``None`` is returned when VRChat is not running, its top-level
+    window cannot be located yet, the window is minimized, the
+    underlying capture path fails, or the session is native Wayland (a
+    ``RuntimeWarning`` is also emitted in that case).
 
-    Currently implemented for Linux (X11 / XWayland). Calling on
-    Windows raises ``NotImplementedError`` until the Win32 backend is
-    written.
+    Supported on Windows 10 1903+ and Linux (X11 / XWayland). Native
+    Wayland sessions are not supported because neither capture path
+    can reach the compositor's surface.
 
     Raises:
-        NotImplementedError: When called on Windows (not yet
-            implemented) or any platform other than Windows or Linux.
+        NotImplementedError: When called on a platform other than
+            Windows or Linux.
 
     Returns:
         A ``PIL.Image.Image`` of the VRChat window's contents in RGB
