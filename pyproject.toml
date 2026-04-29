@@ -25,6 +25,7 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "opencv-python>=4.10",
     "pre-commit>=4.2.0",
     "pyright>=1.1.398",
     "pytest>=8.3.5",
