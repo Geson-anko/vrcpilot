@@ -26,6 +26,7 @@ from vrcpilot.process import (
     launch,
     terminate,
 )
+from vrcpilot.window import focus, unfocus
 
 #: Installed package version, resolved from distribution metadata so it stays
 #: in sync with ``pyproject.toml`` without being hard-coded here.
@@ -36,10 +37,12 @@ __all__ = [
     "build_launch_command",
     "build_vrchat_launch_args",
     "find_pid",
+    "focus",
     "launch",
     "OscConfig",
     "SteamNotFoundError",
     "terminate",
+    "unfocus",
     "VRCHAT_PROCESS_NAME",
     "VRCHAT_STEAM_APP_ID",
 ]

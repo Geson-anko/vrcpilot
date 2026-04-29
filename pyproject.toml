@@ -8,6 +8,8 @@ requires-python = ">=3.12"
 dependencies = [
     "argcomplete>=3.5,<4",
     "psutil>=7.2.2",
+    "python-xlib>=0.33 ; sys_platform == 'linux'",
+    "pywin32>=306 ; sys_platform == 'win32'",
 ]
 
 [project.scripts]
@@ -19,11 +21,14 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
+    "mss>=9.0.1",
     "pre-commit>=4.2.0",
     "pyright>=1.1.398",
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
+    "types-python-xlib>=0.33 ; sys_platform == 'linux'",
+    "types-pywin32>=311.0.0.20260408 ; sys_platform == 'win32'",
 ]
 
 

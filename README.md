@@ -17,6 +17,31 @@ uv sync --all-extras
 uv tool install vrcpilot
 ```
 
+## プラットフォーム別前提条件
+
+### Windows
+
+追加インストールは不要。`pywin32` が依存として自動で入る。
+
+### Linux (X11 / XWayland)
+
+`vrcpilot.focus()` / `vrcpilot.unfocus()` は X11 EWMH 経由で VRChat ウィンドウの z-order を操作する。`python-xlib` は依存として自動で入るので、Linux パッケージを別途インストールする必要はないが、X11 が動作するセッションが必要。
+
+- **X11 セッション**: そのまま動作する。
+- **XWayland**: Wayland コンポジタ上でも `DISPLAY` が設定されていれば X11 アプリ（VRChat / Proton）として動作する。GNOME / KDE / Sway 等の主要コンポジタはデフォルトで XWayland 有効。
+- **Wayland ネイティブ（XWayland 無効）**: 非対応。`focus()` / `unfocus()` は `RuntimeWarning` を出して `False` を返す。XWayland を有効にするか X11 セッションでログインし直すこと。
+
+セッション種別の確認:
+
+```bash
+echo $XDG_SESSION_TYPE   # x11 または wayland
+echo $DISPLAY            # XWayland 経由時もセットされていれば OK
+```
+
+### macOS
+
+サポート対象外。
+
 ## Shell completion
 
 `vrcpilot` は [`argcomplete`](https://pypi.org/project/argcomplete/) を利用して、サブコマンド (`launch` / `status` / `terminate`)、オプション (`--steam-path` など)、および `--steam-path` に渡す `.exe` ファイルパスの Tab 補完を提供する。
