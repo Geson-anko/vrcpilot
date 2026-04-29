@@ -15,6 +15,8 @@ from __future__ import annotations
 import os
 import sys
 import warnings
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from vrcpilot.process import find_pid
 
@@ -143,6 +145,35 @@ def _is_wayland_native() -> bool:
     )
 
 
+@contextmanager
+def _x11_display() -> Iterator[Xlib.display.Display | None]:
+    """Open an X11 display for the duration of a ``with`` block.
+
+    Yields ``None`` when the connection fails — typical when the X
+    server is unreachable, ``DISPLAY`` is unset, or the X authority
+    file (``XAUTHORITY``) is missing or stale (common SSH symptoms
+    documented in CLAUDE.md). The display is always closed on exit.
+    """
+    if sys.platform != "linux":
+        # Defensive narrow for pyright on non-Linux runs.
+        raise RuntimeError("unreachable")
+
+    try:
+        display = Xlib.display.Display()
+    except (
+        Xlib.error.DisplayError,
+        Xlib.error.XauthError,
+        Xlib.error.ConnectionClosedError,
+        OSError,
+    ):
+        yield None
+        return
+    try:
+        yield display
+    finally:
+        display.close()
+
+
 def _find_vrchat_window_x11(display: Xlib.display.Display, pid: int) -> _XWindow | None:
     """Return the X11 window owned by *pid*, or ``None`` if not found.
 
@@ -206,12 +237,9 @@ def _focus_x11() -> bool:
     if pid is None:
         return False
 
-    try:
-        display = Xlib.display.Display()
-    except (Xlib.error.DisplayError, OSError):
-        return False
-
-    try:
+    with _x11_display() as display:
+        if display is None:
+            return False
         window = _find_vrchat_window_x11(display, pid)
         if window is None:
             return False
@@ -232,8 +260,6 @@ def _focus_x11() -> bool:
         except Xlib.error.XError:
             return False
         return True
-    finally:
-        display.close()
 
 
 def _unfocus_x11() -> bool:
@@ -255,12 +281,9 @@ def _unfocus_x11() -> bool:
     if pid is None:
         return False
 
-    try:
-        display = Xlib.display.Display()
-    except (Xlib.error.DisplayError, OSError):
-        return False
-
-    try:
+    with _x11_display() as display:
+        if display is None:
+            return False
         window = _find_vrchat_window_x11(display, pid)
         if window is None:
             return False
@@ -273,8 +296,6 @@ def _unfocus_x11() -> bool:
         except Xlib.error.XError:
             return False
         return True
-    finally:
-        display.close()
 
 
 def focus() -> bool:
