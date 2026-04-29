@@ -27,9 +27,9 @@ from pathlib import Path
 
 import argcomplete
 from argcomplete.completers import FilesCompleter
+from PIL import Image
 
 from vrcpilot._steam import SteamNotFoundError
-from vrcpilot.capture import take_screenshot
 from vrcpilot.process import (
     VRCHAT_STEAM_APP_ID,
     OscConfig,
@@ -37,6 +37,7 @@ from vrcpilot.process import (
     launch,
     terminate,
 )
+from vrcpilot.screenshot import take_screenshot
 from vrcpilot.window import focus, unfocus
 
 
@@ -348,13 +349,14 @@ def _run_screenshot(*, output: Path | None) -> int:
     """Execute the ``screenshot`` subcommand.
 
     Bridges :func:`take_screenshot` to the file system: when capture
-    succeeds the returned :class:`PIL.Image.Image` is written via
-    ``Image.save`` (the format is inferred from the path's extension)
-    and the destination is reported on stdout. When the underlying API
-    returns ``None`` — VRChat not running, window not yet available,
-    native Wayland session, screen grabber failure — a generic message
-    is emitted on stderr and the CLI exits non-zero so shell callers
-    can branch on it.
+    succeeds the returned :class:`vrcpilot.Screenshot`'s ``image``
+    ndarray is converted to a :class:`PIL.Image.Image` via
+    :func:`PIL.Image.fromarray` and written with ``Image.save`` (the
+    format is inferred from the path's extension). When the underlying
+    API returns ``None`` — VRChat not running, window not yet
+    available, native Wayland session, screen grabber failure — a
+    generic message is emitted on stderr and the CLI exits non-zero so
+    shell callers can branch on it.
 
     Args:
         output: Destination path for the captured image. When ``None``
@@ -367,13 +369,13 @@ def _run_screenshot(*, output: Path | None) -> int:
         ``0`` if the screenshot was captured and saved, ``1`` if the
         capture failed.
     """
-    image = take_screenshot()
-    if image is None:
+    shot = take_screenshot()
+    if shot is None:
         print("Could not capture VRChat screenshot.", file=sys.stderr)
         return 1
     if output is None:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output = Path.cwd() / f"vrcpilot_screenshot_{stamp}.png"
-    image.save(output)
+    Image.fromarray(shot.image).save(output)
     print(f"Saved screenshot to {output}.")
     return 0
