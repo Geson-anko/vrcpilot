@@ -58,7 +58,7 @@
 
 ### Linux で SSH 越しに manual シナリオを動かす
 
-同一ユーザーでローカルにデスクトップセッション（X11）が出ている前提なら、SSH からでも `just manual <NAME>` でそのデスクトップに VRChat を出して検証できる。`justfile` の `manual` レシピは `DISPLAY` 未設定時に `:0` / `~/.Xauthority` にフォールバックする。Wayland セッションの場合はこの fallback では繋がらないので、明示的に `WAYLAND_DISPLAY` を渡すこと。
+同一ユーザーでローカルにデスクトップセッション（X11）が出ている前提なら、SSH からでも `just manual <NAME>` でそのデスクトップに VRChat を出して検証できる。`justfile` は `set dotenv-load := true` を有効化済みで、`.env`（gitignore 済み・`.env.example` をコピーして作る）から `DISPLAY` / `XAUTHORITY` を読む。`.env` も既存のシェル env も無い場合は、`manual` レシピが `DISPLAY` 未設定時に `:0` / `~/.Xauthority` にフォールバックする。Wayland セッションの場合はこの fallback では繋がらないので、明示的に `WAYLAND_DISPLAY` を渡すこと。
 
 - **Steam を先に起動しておく**: `vrcpilot.launch()` は Steam が落ちている状態だと裏で Steam 本体の起動から始まり、`_helpers.wait_for_pid` の 30 秒タイムアウトを超えて `VRChat PID was not observed before timeout` で落ちる。SSH から manual を流す前にデスクトップ側で Steam を起動して常駐させておく
 - 画面ロック中は window 操作系（`focus_unfocus` 等）の挙動が安定しないので、検証中は lock を外しておく

@@ -1,5 +1,11 @@
 set windows-shell := ["C:/Program Files/Git/bin/bash.exe", "-c"]
 
+# Auto-load `.env` (gitignored) for per-developer overrides such as
+# DISPLAY / XAUTHORITY consumed by `just manual` on Linux SSH sessions.
+# `.env.example` documents the defaults; existing shell environment
+# variables take precedence over `.env` (dotenv-override = false).
+set dotenv-load := true
+
 # Default recipe (shows help)
 default:
     @just --list
