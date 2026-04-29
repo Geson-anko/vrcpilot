@@ -15,6 +15,7 @@ from pathlib import Path
 
 import mss
 import mss.tools
+from PIL import Image
 
 import vrcpilot
 
@@ -24,7 +25,14 @@ WARMUP_SECONDS: float = 15.0
 _PID_WAIT_TIMEOUT: float = 30.0
 _PID_WAIT_INTERVAL: float = 1.0
 
-_ARTIFACT_DIR: Path = Path(__file__).resolve().parents[2] / "_manual_artifacts"
+#: Directory used by manual scenarios to drop visual artifacts (PNGs).
+#:
+#: Located at ``<repo>/_manual_artifacts/`` and gitignored. Scenarios may
+#: write directly with :func:`save_monitor_screenshot` /
+#: :func:`save_image`, or read this constant when they need a custom
+#: filename pattern. The directory is created lazily by the helpers
+#: themselves, so callers do not need to ensure existence first.
+ARTIFACT_DIR: Path = Path(__file__).resolve().parents[2] / "_manual_artifacts"
 
 
 def log(msg: str) -> None:
@@ -108,14 +116,44 @@ def save_monitor_screenshot(scenario: str, label: str) -> Path:
         Absolute :class:`~pathlib.Path` to the saved PNG. The filename
         pattern is ``{scenario}_{label}_{YYYYMMDD_HHMMSS}.png``.
     """
-    _ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = _ARTIFACT_DIR / f"{scenario}_{label}_{stamp}.png"
+    path = ARTIFACT_DIR / f"{scenario}_{label}_{stamp}.png"
     with mss.mss() as sct:
         img = sct.grab(sct.monitors[0])
     mss.tools.to_png(img.rgb, img.size, output=str(path))
     log(f"screenshot saved: {path}")
     return path
+
+
+def save_image(scenario: str, label: str, image: Image.Image) -> Path:
+    """Save a :class:`PIL.Image.Image` under :data:`ARTIFACT_DIR`.
+
+    Companion to :func:`save_monitor_screenshot`: the latter grabs the
+    whole desktop with mss, while this one persists an image the
+    scenario already has in hand (e.g. a ``vrcpilot.Capture`` frame
+    converted via ``Image.fromarray``, or a
+    ``vrcpilot.take_screenshot()`` result). Both share the same naming
+    convention so artifacts from a single scenario sort together
+    chronologically.
+
+    Args:
+        scenario: Scenario identifier used as filename prefix
+            (e.g. ``"capture"``).
+        label: Step name within the scenario
+            (e.g. ``"first"``, ``"last"``).
+        image: Image to save. Format is inferred from the ``.png``
+            suffix.
+
+    Returns:
+        Absolute :class:`~pathlib.Path` to the saved PNG. The pattern
+        is ``{scenario}_{label}_{YYYYMMDD_HHMMSS}.png``.
+    """
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out = ARTIFACT_DIR / f"{scenario}_{label}_{stamp}.png"
+    image.save(out)
+    return out
 
 
 def run_scenario(name: str, body: Callable[[], None]) -> int:

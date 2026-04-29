@@ -25,7 +25,6 @@ captured-at timestamp are also logged.
 from __future__ import annotations
 
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
@@ -35,8 +34,6 @@ from vrcpilot.screenshot import take_screenshot
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _helpers  # noqa: E402
-
-_ARTIFACTS = Path(__file__).resolve().parents[2] / "_manual_artifacts"
 
 
 def _scenario() -> None:
@@ -81,10 +78,7 @@ def _scenario() -> None:
     )
     assert shot.image.dtype.name == "uint8", f"unexpected dtype: {shot.image.dtype}"
 
-    _ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = _ARTIFACTS / f"screenshot_vrchat_{stamp}.png"
-    Image.fromarray(shot.image).save(out)
+    out = _helpers.save_image("screenshot", "vrchat", Image.fromarray(shot.image))
     _helpers.log(f"VRChat screenshot saved: {out}")
 
 

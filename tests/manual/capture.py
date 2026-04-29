@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 from PIL import Image
@@ -35,24 +34,10 @@ import vrcpilot
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _helpers  # noqa: E402
 
-_ARTIFACTS = Path(__file__).resolve().parents[2] / "_manual_artifacts"
-
 #: Number of frames to capture in a single run. ~30 frames at 30 fps is
 #: about 1 s of content -- long enough to see the cadence, short enough
 #: that the manual scenario stays brisk.
 _FRAME_COUNT: int = 30
-
-
-def _save_frame(scenario: str, label: str, image: Image.Image) -> Path:
-    """Save *image* under ``_manual_artifacts/`` with a timestamped name.
-
-    Returns the destination path so the caller can log it.
-    """
-    _ARTIFACTS.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = _ARTIFACTS / f"{scenario}_{label}_{stamp}.png"
-    image.save(out)
-    return out
 
 
 def _scenario() -> None:
@@ -93,9 +78,9 @@ def _scenario() -> None:
     assert first_frame is not None
     assert last_frame is not None
 
-    out_first = _save_frame("capture", "first", first_frame)
+    out_first = _helpers.save_image("capture", "first", first_frame)
     _helpers.log(f"saved first frame: {out_first}")
-    out_last = _save_frame("capture", "last", last_frame)
+    out_last = _helpers.save_image("capture", "last", last_frame)
     _helpers.log(f"saved last frame: {out_last}")
 
     if intervals:
