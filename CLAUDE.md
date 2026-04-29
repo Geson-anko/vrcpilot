@@ -46,6 +46,16 @@
 
 `asyncio_default_fixture_loop_scope = "function"` は `pytest-asyncio` 想定で設定されているが、当該プラグインは現状 `dev` deps に含まれていない。async テストを書く前に追加すること。
 
+## 実行環境の注意点
+
+### Windows 日本語環境（cp932）の非 ASCII 出力
+
+開発環境（Windows + 日本語ロケール）では Python の `print` がデフォルトで `cp932` (Shift-JIS) で encode される。`—`（em-dash, U+2014）など cp932 範囲外の文字を含む文字列を `print` すると `UnicodeEncodeError` で実行時に落ちる。
+
+- stdout に出力されうる文字列（`print` / `_helpers.log` / `assert` のメッセージ）は ASCII で代替する: `—` → `-`、`→` → `->`、`…` → `...`
+- docstring / コメント / 日本語本文の cp932 範囲文字は問題ない
+- pre-commit や pyright では検出できない（実機 print で初めて死ぬ）。`tests/manual/` のシナリオで実機実行して気付くタイプの罠
+
 ## テスト方針
 
 ### 基本原則
@@ -82,6 +92,15 @@
 
 - 内部実装の詳細（例: 特定のメソッドが呼ばれたか）
 - 初期化時のプロパティ設定などの内部動作
+
+### 手動検証シナリオ（tests/manual/）
+
+実 VRChat を起動して end-to-end で振る舞いを確認するスクリプト群。`pytest --ignore=tests/manual` で自動収集対象外。`just manual <NAME>` で実行する。
+
+- 各シナリオは `_helpers.run_scenario(name, body)` でラップし、`PASS:` / `FAIL:` の 1 行で成否を出す
+- 起動 → `_helpers.warmup()` で安定待ち → 検証 → `_helpers.run_scenario` 側が pre/post で VRChat を terminate
+- 状態を変える対称 API（focus/unfocus, show/hide 等）を検証する場合は、起動直後の自然な状態から本命操作を呼んでも no-op と区別できないため、**逆操作 → 本操作 → 逆 → 本** の 4 step で書く。同じペアを 2 回繰り返すことで idempotence も確認できる。`tests/manual/focus_unfocus.py` がこのパターンの例
+- スクリーンショットを残す場合は `_helpers.take_screenshot(scenario, label)` を使い、`_manual_artifacts/`（gitignore 済み）に PNG が保存される。Claude Code はその PNG を Read で開いて目視確認できる
 
 ## コーディング規約
 
