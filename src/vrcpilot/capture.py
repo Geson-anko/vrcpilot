@@ -240,7 +240,7 @@ class Capture:
 
         if is_wayland_native():
             raise RuntimeError(
-                "Capture requires X11 or XWayland; " "native Wayland is not supported",
+                "Capture requires X11 or XWayland; native Wayland is not supported",
             )
 
         pid = find_pid()

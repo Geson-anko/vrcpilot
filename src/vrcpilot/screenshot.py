@@ -27,10 +27,6 @@ from datetime import datetime, timezone
 from typing import Any
 
 import mss
-import mss.base
-import mss.exception
-import mss.models
-import mss.screenshot
 import numpy as np
 from numpy.typing import NDArray
 
@@ -194,7 +190,7 @@ def take_screenshot(*, settle_seconds: float = 0.05) -> Screenshot | None:
         (a ``RuntimeWarning`` is also emitted), when ``focus()``
         returns ``False``, when the window rectangle cannot be
         resolved, or when ``mss`` raises
-        :class:`mss.exception.ScreenShotError` during the grab.
+        :class:`mss.ScreenShotError` during the grab.
     """
     if settle_seconds < 0:
         raise ValueError("settle_seconds must be >= 0")
@@ -230,26 +226,29 @@ def take_screenshot(*, settle_seconds: float = 0.05) -> Screenshot | None:
         return None
     x, y, width, height = rect
 
-    # 5. mss grab + metadata
-    sct: mss.base.MSS = mss.MSS()
+    # 5. mss grab + metadata.
+    #
+    # We hold the ``MSS`` instance in a local and call ``close()`` explicitly
+    # (rather than ``with mss.MSS() as sct:``) so test fakes can be plain
+    # ``mocker.Mock`` objects without having to also implement the context
+    # manager protocol.
+    sct = mss.MSS()
     try:
         region = {"left": x, "top": y, "width": width, "height": height}
         try:
-            shot: mss.screenshot.ScreenShot = sct.grab(region)
-        except mss.exception.ScreenShotError:
+            shot = sct.grab(region)
+        except mss.ScreenShotError:
             return None
         captured_at = datetime.now(timezone.utc)
         # ``shot.rgb`` is a freshly-allocated bytes object derived from the
         # raw BGRA buffer; reshape via numpy and ``.copy()`` to detach from
-        # any internal mss state before the context manager closes.
-        rgb_bytes: bytes = shot.rgb
+        # the mss-owned buffer before ``sct.close()`` runs.
         image: NDArray[np.uint8] = (
-            np.frombuffer(rgb_bytes, dtype=np.uint8)
+            np.frombuffer(shot.rgb, dtype=np.uint8)
             .reshape(shot.size.height, shot.size.width, 3)
             .copy()
         )
-        monitors: list[mss.models.Monitor] = sct.monitors
-        monitor_index = _resolve_monitor_index((x, y, width, height), monitors)
+        monitor_index = _resolve_monitor_index((x, y, width, height), sct.monitors)
     finally:
         sct.close()
 

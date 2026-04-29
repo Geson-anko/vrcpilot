@@ -6,7 +6,7 @@ from dataclasses import FrozenInstanceError
 from datetime import datetime, timezone
 from typing import Any
 
-import mss.exception
+import mss
 import numpy as np
 import pytest
 from pytest_mock import MockerFixture
@@ -204,7 +204,7 @@ class TestTakeScreenshot:
             mocker,
             width=800,
             height=600,
-            grab_side_effect=mss.exception.ScreenShotError("simulated"),
+            grab_side_effect=mss.ScreenShotError("simulated"),
         )
         mocker.patch("vrcpilot.screenshot.mss.MSS", return_value=fake_sct)
 
