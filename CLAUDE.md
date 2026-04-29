@@ -107,7 +107,7 @@
 - 各シナリオは `_helpers.run_scenario(name, body)` でラップし、`PASS:` / `FAIL:` の 1 行で成否を出す
 - 起動 → `_helpers.warmup()` で安定待ち → 検証 → `_helpers.run_scenario` 側が pre/post で VRChat を terminate
 - 状態を変える対称 API（focus/unfocus, show/hide 等）を検証する場合は、起動直後の自然な状態から本命操作を呼んでも no-op と区別できないため、**逆操作 → 本操作 → 逆 → 本** の 4 step で書く。同じペアを 2 回繰り返すことで idempotence も確認できる。`tests/manual/focus_unfocus.py` がこのパターンの例
-- スクリーンショットを残す場合は `_helpers.take_screenshot(scenario, label)` を使い、`_manual_artifacts/`（gitignore 済み）に PNG が保存される。Claude Code はその PNG を Read で開いて目視確認できる
+- スクリーンショットを残す場合は `_helpers.save_monitor_screenshot(scenario, label)` を使い、`_manual_artifacts/`（gitignore 済み）に PNG が保存される。Claude Code はその PNG を Read で開いて目視確認できる
 
 ## コーディング規約
 
