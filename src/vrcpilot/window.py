@@ -517,14 +517,13 @@ def take_screenshot() -> Image.Image | None:
         A ``PIL.Image.Image`` cropped to the VRChat window's screen
         rectangle, or ``None`` when the window could not be captured.
     """
+    # Raise the VRChat window first so other windows that overlap its
+    # rectangle don't bleed into the capture. ``focus`` is best-effort:
+    # if it fails we still try (the rectangle may already be visible).
+    focus()
+    time.sleep(_FOCUS_SETTLE_SECONDS)
     if sys.platform == "win32":
         return _take_screenshot_win32()
     if sys.platform == "linux":
-        # Raise the VRChat window first so other windows that overlap
-        # its rectangle don't bleed into the capture. ``focus`` is
-        # best-effort: if it fails we still try (the rectangle may
-        # already be visible).
-        focus()
-        time.sleep(_FOCUS_SETTLE_SECONDS)
         return _take_screenshot_x11()
     raise NotImplementedError(f"take_screenshot() is not supported on {sys.platform}")
