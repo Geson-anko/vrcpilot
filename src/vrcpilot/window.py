@@ -48,10 +48,13 @@ def _find_vrchat_hwnd(pid: int) -> int | None:
     result: list[int] = []
 
     def _callback(hwnd: int, _lparam: int) -> bool:
+        # Always continue enumeration. Returning False to stop early
+        # makes pywin32 raise a spurious ``EnumWindows`` access-denied
+        # error (Win32 interprets False as a callback failure and
+        # surfaces GetLastError); enumerating fully is cheap enough.
         _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
         if found_pid == pid and win32gui.IsWindowVisible(hwnd):
             result.append(hwnd)
-            return False
         return True
 
     win32gui.EnumWindows(_callback, 0)
