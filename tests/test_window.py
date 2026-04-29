@@ -8,7 +8,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 import vrcpilot.window
-from tests.helpers import only_windows
+from tests.helpers import only_linux, only_windows
 from vrcpilot.window import focus, unfocus
 
 if sys.platform == "win32":
@@ -124,3 +124,123 @@ class TestPlatformGuard:
 
         with pytest.raises(NotImplementedError):
             vrcpilot.window.unfocus()
+
+
+class TestFocusX11:
+    @only_linux
+    def test_returns_false_on_wayland_native(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+        monkeypatch.delenv("DISPLAY", raising=False)
+
+        with pytest.warns(RuntimeWarning, match="Wayland native"):
+            assert vrcpilot.window.focus() is False
+
+    @only_linux
+    def test_returns_false_when_not_running(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=None)
+
+        assert vrcpilot.window.focus() is False
+
+    @only_linux
+    def test_returns_false_when_window_not_found(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.Xlib.display.Display")
+        mocker.patch("vrcpilot.window._find_vrchat_window_x11", return_value=None)
+
+        assert vrcpilot.window.focus() is False
+
+    @only_linux
+    def test_returns_false_on_display_error(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch(
+            "vrcpilot.window.Xlib.display.Display",
+            side_effect=vrcpilot.window.Xlib.error.DisplayError(":0"),
+        )
+
+        assert vrcpilot.window.focus() is False
+
+    @only_linux
+    def test_success_sends_active_window_message(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+
+        fake_window = mocker.Mock()
+        fake_root = mocker.Mock()
+        fake_screen = mocker.Mock(root=fake_root)
+        fake_display = mocker.Mock()
+        fake_display.screen.return_value = fake_screen
+        mocker.patch("vrcpilot.window.Xlib.display.Display", return_value=fake_display)
+        mocker.patch(
+            "vrcpilot.window._find_vrchat_window_x11", return_value=fake_window
+        )
+        # ``ClientMessage`` packs its arguments into a struct on
+        # construction; the mocked window cannot satisfy that, so we
+        # stub the event class out entirely.
+        mocker.patch("vrcpilot.window.Xlib.protocol.event.ClientMessage")
+
+        assert vrcpilot.window.focus() is True
+        assert fake_root.send_event.called
+        assert fake_display.flush.called
+        assert fake_display.close.called
+
+
+class TestUnfocusX11:
+    @only_linux
+    def test_returns_false_on_wayland_native(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+        monkeypatch.delenv("DISPLAY", raising=False)
+
+        with pytest.warns(RuntimeWarning, match="Wayland native"):
+            assert vrcpilot.window.unfocus() is False
+
+    @only_linux
+    def test_returns_false_when_not_running(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=None)
+
+        assert vrcpilot.window.unfocus() is False
+
+    @only_linux
+    def test_returns_false_when_window_not_found(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.Xlib.display.Display")
+        mocker.patch("vrcpilot.window._find_vrchat_window_x11", return_value=None)
+
+        assert vrcpilot.window.unfocus() is False
+
+    @only_linux
+    def test_success_lowers_window(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+
+        fake_window = mocker.Mock()
+        fake_display = mocker.Mock()
+        mocker.patch("vrcpilot.window.Xlib.display.Display", return_value=fake_display)
+        mocker.patch(
+            "vrcpilot.window._find_vrchat_window_x11", return_value=fake_window
+        )
+
+        assert vrcpilot.window.unfocus() is True
+        assert fake_window.configure.called
+        kwargs = fake_window.configure.call_args.kwargs
+        assert "stack_mode" in kwargs
+        assert fake_display.flush.called
+        assert fake_display.close.called
