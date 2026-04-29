@@ -2,9 +2,15 @@
 
 Drives ``vrcpilot.focus()`` and ``vrcpilot.unfocus()`` against a real
 running VRChat client to confirm that the window can be brought to the
-foreground and sent to the bottom of the z-order. Each operation is
-followed by a screenshot saved under ``_manual_artifacts/`` for visual
-inspection.
+foreground and sent to the bottom of the z-order.
+
+The operations are interleaved as ``unfocus -> focus -> unfocus -> focus``
+so each call causes an observable state change. Right after launch
+VRChat is naturally in the foreground, so calling ``focus()`` first
+would not prove anything; starting with ``unfocus()`` makes the very
+first transition meaningful, and repeating the pair verifies the calls
+are idempotent. A screenshot is saved after each step under
+``_manual_artifacts/`` for visual inspection.
 
 Run with::
 
@@ -37,15 +43,27 @@ def _scenario() -> None:
 
     _helpers.warmup()
 
-    _helpers.log("calling vrcpilot.focus()")
-    assert vrcpilot.focus(), "vrcpilot.focus() returned False"
-    time.sleep(0.5)
-    _helpers.take_screenshot("focus_unfocus", "focus")
-
-    _helpers.log("calling vrcpilot.unfocus()")
+    # Step from the natural post-launch foreground state through an
+    # alternating sequence so each call has an observable effect.
+    _helpers.log("calling vrcpilot.unfocus() (1/4: leave initial foreground)")
     assert vrcpilot.unfocus(), "vrcpilot.unfocus() returned False"
     time.sleep(0.5)
-    _helpers.take_screenshot("focus_unfocus", "unfocus")
+    _helpers.take_screenshot("focus_unfocus", "1_unfocus")
+
+    _helpers.log("calling vrcpilot.focus() (2/4: return to foreground)")
+    assert vrcpilot.focus(), "vrcpilot.focus() returned False"
+    time.sleep(0.5)
+    _helpers.take_screenshot("focus_unfocus", "2_focus")
+
+    _helpers.log("calling vrcpilot.unfocus() (3/4: repeat for idempotence)")
+    assert vrcpilot.unfocus(), "vrcpilot.unfocus() returned False"
+    time.sleep(0.5)
+    _helpers.take_screenshot("focus_unfocus", "3_unfocus")
+
+    _helpers.log("calling vrcpilot.focus() (4/4: repeat for idempotence)")
+    assert vrcpilot.focus(), "vrcpilot.focus() returned False"
+    time.sleep(0.5)
+    _helpers.take_screenshot("focus_unfocus", "4_focus")
 
 
 def main() -> int:
