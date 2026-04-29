@@ -6,12 +6,26 @@ both platforms: Linux reads the off-screen pixmap via the X11 Composite
 extension, and Windows uses the Windows.Graphics.Capture API (the same
 backend OBS's "Window Capture (Windows 10 1903+)" mode is built on).
 The window is not raised to the foreground, so callers avoid the side
-effect (and settle delay) of invoking :func:`focus` before each shot.
+effect (and the settle delay) of focusing the window before each frame.
 
-Companion to :mod:`vrcpilot.window` (z-order control),
-:mod:`vrcpilot.process` (lifecycle), and :mod:`vrcpilot.screenshot`
-(single-shot capture with metadata for GUI automation). Native Wayland
-sessions are not supported (raises :class:`RuntimeError`).
+Choose between the two capture entry points based on workload:
+
+- :class:`Capture` (this module) — keep one session open and pull
+  many frames from it. Right when latency and "what's on screen *now*"
+  matter (video, ML inference, screen recording).
+- :func:`vrcpilot.screenshot.take_screenshot` — one focused shot
+  with on-screen geometry attached. Right when an automation step
+  needs to know *where* on the desktop the window is to compute
+  click coordinates, run OCR, or diff a region.
+
+Companion to :mod:`vrcpilot.window` (z-order control) and
+:mod:`vrcpilot.process` (lifecycle).
+
+Native Wayland sessions are not supported. ``Capture`` raises
+:class:`RuntimeError` on Wayland because a streaming session cannot
+function at all without X11 / XWayland; :func:`take_screenshot` instead
+emits a :class:`RuntimeWarning` and returns ``None`` so that polling
+callers can recover gracefully.
 """
 
 from __future__ import annotations
@@ -57,18 +71,22 @@ class Capture:
     backend (WGC on Windows, X11 Composite on Linux) and keeps it alive
     until :meth:`close` is called, so subsequent :meth:`read` calls reuse
     the same connection rather than paying setup cost per frame. Use
-    :class:`Capture` for video / frame-stream workloads. For one-shot
-    GUI-automation captures (with focus + window metadata) use
+    :class:`Capture` for video / frame-stream workloads; for one-shot
+    GUI-automation captures (with focus + window geometry) use
     :func:`vrcpilot.screenshot.take_screenshot` instead.
 
     The capture is **focus-free**: the window is not raised to the
     foreground and frames are produced even when VRChat is fully occluded
     by other windows.
 
-    Each :meth:`read` returns the **latest** unread frame as an ``(H, W,
-    3)`` ``uint8`` RGB :class:`numpy.ndarray`. Old frames buffered while
-    the caller was busy are dropped, so the call always returns the most
-    recent frame and never builds up FIFO lag.
+    :meth:`read` is **latest-only**, not FIFO. Each call returns the most
+    recent frame the backend has produced and discards anything older
+    that was waiting. This is intentional for video workloads: when a
+    consumer falls behind, a FIFO queue would let lag accumulate
+    indefinitely; latest-only caps the worst-case staleness at a single
+    frame interval. Callers that genuinely need every frame (e.g. lossy
+    recording at a fixed rate) must drive :meth:`read` faster than the
+    producer.
 
     Use as a context manager (recommended)::
 

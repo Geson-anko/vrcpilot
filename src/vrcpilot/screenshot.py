@@ -1,19 +1,29 @@
 """Single-shot VRChat screenshot API for GUI automation.
 
-Companion to :mod:`vrcpilot.capture` (continuous frames for video
-recording). Where ``Capture`` is built for streaming frames at high rate
-and tolerates occluded windows, ``take_screenshot`` is the right tool
-when an automation step needs **one** accurate snapshot together with
-the on-screen geometry — for instance, to compute click coordinates or
-diff a UI region across frames.
+Companion to :mod:`vrcpilot.capture` (continuous frames for video).
+Where :class:`vrcpilot.capture.Capture` is built for streaming frames at
+high rate and tolerates occluded windows, :func:`take_screenshot` is the
+right tool when an automation step needs **one** snapshot together with
+the on-screen geometry — for instance, to compute click coordinates,
+hand a region to OCR, or diff a static UI state across runs.
 
 The implementation deliberately differs from the streaming path: it
 calls :func:`vrcpilot.window.focus`, waits a short settle interval for
 the compositor to finish raising the window, then grabs the pixels via
 :mod:`mss`. The same code path is used on Windows and Linux for parity.
 
-Native Wayland sessions are not supported (a ``RuntimeWarning`` is
-emitted and ``None`` is returned).
+Failures along the way (VRChat not running, focus refused by the OS,
+window not yet mapped, transient ``mss`` errors) are surfaced as
+``None`` rather than raised, so polling callers — for example, a loop
+waiting for VRChat to finish loading — can simply retry without having
+to special-case every failure mode. Programming errors such as
+unsupported platforms or invalid arguments still raise.
+
+Native Wayland sessions are also returned as ``None`` (with a
+``RuntimeWarning``). This is asymmetric with :class:`Capture`, which
+raises on Wayland: a one-shot polling caller is happy to retry until
+the user moves to an X11 session, but a streaming session has no
+useful behaviour to fall back to.
 """
 
 from __future__ import annotations
@@ -51,33 +61,47 @@ class Screenshot:
     """A single VRChat screenshot together with its on-screen geometry.
 
     Returned by :func:`take_screenshot`. The ``image`` field is the raw
-    pixel data; the rest describe **where** on the user's desktop those
-    pixels were captured from, which is what makes this API useful for
-    GUI automation (click-coordinate calculation, region diffing, etc.).
+    pixel data; the geometry fields describe **where** on the user's
+    desktop those pixels live, which is what lets callers translate
+    in-image coordinates to absolute desktop coordinates — for clicking
+    a button found via template matching, for example, or to feed
+    consistent crops to OCR across calls.
 
-    Equality is disabled (``eq=False``) because numpy arrays use
-    element-wise ``__eq__`` semantics that interact poorly with frozen
-    dataclasses' synthesized ``__hash__``. Identity comparison still
-    works.
+    A typical click-coordinate calculation looks like::
+
+        shot = vrcpilot.take_screenshot()
+        # ``cx_in_image, cy_in_image`` come from CV / template matching
+        screen_x = shot.x + cx_in_image
+        screen_y = shot.y + cy_in_image
+
+    The instance is frozen (use :func:`dataclasses.replace` to derive a
+    modified copy). Equality is disabled (``eq=False``) because numpy's
+    element-wise ``__eq__`` does not return a bool and so cannot back
+    a dataclass-synthesised ``__eq__``; identity comparison still works.
 
     Attributes:
-        image: ``(H, W, 3)`` ``uint8`` ndarray in RGB order. Independent
-            of any internal mss buffer — safe to keep, mutate, or pass
-            to PIL via ``Image.fromarray``.
-        x: Window-frame left edge in physical screen pixels. May be
+        image: ``(H, W, 3)`` ``uint8`` ndarray in RGB order. Detached
+            from any internal mss buffer — safe to retain, mutate in
+            place, or hand to ``PIL.Image.fromarray``.
+        x: Window-frame left edge in absolute desktop pixels. May be
             negative on multi-monitor layouts where VRChat lives on a
             monitor placed left of (or above) the primary.
-        y: Window-frame top edge in physical screen pixels. May be
+        y: Window-frame top edge in absolute desktop pixels. May be
             negative for the same reason.
-        width: Window-frame width in physical pixels.
-        height: Window-frame height in physical pixels.
+        width: Window-frame width in physical pixels. Matches
+            ``image.shape[1]`` under normal conditions.
+        height: Window-frame height in physical pixels. Matches
+            ``image.shape[0]`` under normal conditions.
         monitor_index: Index into ``mss.MSS().monitors`` of the monitor
-            whose region contains the window's center point. ``0`` is
-            the synthetic "all monitors" entry; ``1..N`` are the
-            individual monitors. Falls back to ``0`` if the center
-            point lies outside every individual monitor.
+            whose rectangle contains the window's centre point. ``0``
+            is the synthetic "all monitors" composite; ``1..N`` are the
+            individual monitors in mss enumeration order. Falls back
+            to ``0`` only if the centre point lies outside every
+            individual monitor (defensive — should not occur in
+            practice once the window is focused).
         captured_at: UTC timestamp recorded immediately after the
-            ``mss`` grab returned. Use ``.astimezone()`` to convert.
+            ``mss`` grab returned. Use ``.astimezone()`` to convert
+            to local time.
     """
 
     image: NDArray[np.uint8]
@@ -159,26 +183,27 @@ def _get_vrchat_rect_x11() -> tuple[int, int, int, int] | None:
 def take_screenshot(*, settle_seconds: float = 0.05) -> Screenshot | None:
     """Focus VRChat, wait briefly, then grab a single window-only screenshot.
 
-    The call performs five steps in order:
+    Use this when a workflow needs **one** snapshot together with the
+    window's on-screen position — most GUI automation falls into this
+    category. For continuous frame streaming use
+    :class:`vrcpilot.capture.Capture` instead, which avoids the focus
+    step entirely.
 
-    1. Validate the platform (Windows or Linux only; native Wayland is
-       rejected).
-    2. Call :func:`vrcpilot.window.focus` to raise the VRChat window.
-    3. Sleep ``settle_seconds`` so the compositor has time to draw.
-    4. Read the window's current screen rectangle via the platform
-       helper in :mod:`vrcpilot._win32` / :mod:`vrcpilot._x11`.
-    5. Grab the pixels with :mod:`mss`, time-stamp the capture, and
-       resolve which monitor the window is on.
-
-    Failures along the way are reported as ``None`` rather than raised
-    so polling automation (waiting for VRChat to finish loading, for
-    instance) can simply retry.
+    The call performs five steps in order: platform check, focus
+    (raising VRChat), short settle sleep, window-rectangle lookup, and
+    finally an :mod:`mss` grab over that rectangle. The focus step is
+    what makes this API distinct from ``Capture`` — bringing the window
+    to the foreground guarantees that the captured pixels match what
+    the user sees, which is the right trade-off for click-coordinate
+    workflows but the wrong one for long-running observation.
 
     Args:
-        settle_seconds: Seconds to wait between focusing and grabbing.
-            The default (50 ms) covers typical compositor redraw
-            latency. Pass ``0`` to skip the wait when you know the
-            window is already on top. Must be ``>= 0``.
+        settle_seconds: Seconds to wait between focusing and grabbing,
+            giving the compositor time to finish drawing the raised
+            window. The 50 ms default is a generous margin for typical
+            desktops; pass ``0`` to skip the wait when the window is
+            already known to be on top, or raise it for sluggish remote
+            sessions. Must be ``>= 0``.
 
     Raises:
         NotImplementedError: When called on a platform other than
@@ -186,11 +211,23 @@ def take_screenshot(*, settle_seconds: float = 0.05) -> Screenshot | None:
         ValueError: When ``settle_seconds`` is negative.
 
     Returns:
-        A :class:`Screenshot` on success. ``None`` on Wayland native
-        (a ``RuntimeWarning`` is also emitted), when ``focus()``
-        returns ``False``, when the window rectangle cannot be
-        resolved, or when ``mss`` raises
-        :class:`mss.ScreenShotError` during the grab.
+        A :class:`Screenshot` on success, or ``None`` on any of the
+        recoverable failure modes below — ``None`` rather than an
+        exception so that polling callers (e.g. waiting for VRChat to
+        finish loading) can retry without catching.
+
+        ``None`` is returned when:
+
+        - The session is native Wayland (a ``RuntimeWarning`` is also
+          emitted; see the module docstring for why this asymmetry
+          with :class:`Capture` exists).
+        - :func:`vrcpilot.window.focus` returns ``False`` (VRChat not
+          running, window not yet mapped, or OS refused the focus
+          request).
+        - The window rectangle cannot be resolved (the window
+          disappeared between focus and the geometry query).
+        - :mod:`mss` raises :class:`mss.ScreenShotError` during the
+          grab (transient X / GDI failure).
     """
     if settle_seconds < 0:
         raise ValueError("settle_seconds must be >= 0")
