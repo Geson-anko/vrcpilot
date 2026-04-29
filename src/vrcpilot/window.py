@@ -32,7 +32,7 @@ from vrcpilot.process import find_pid
 #: path is asynchronous on X11 (``_NET_ACTIVE_WINDOW`` is a request,
 #: not an immediate state change), so without a short settle the
 #: capture may still include whatever was in front before.
-_FOCUS_SETTLE_SECONDS: float = 0.2
+_FOCUS_SETTLE_SECONDS: float = 0.01
 
 if sys.platform == "win32":
     import pywintypes
