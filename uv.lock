@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -247,6 +247,18 @@ wheels = [
 ]
 
 [[package]]
+name = "python-xlib"
+version = "0.33"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/86/f5/8c0653e5bb54e0cbdfe27bf32d41f27bc4e12faa8742778c17f2a71be2c0/python-xlib-0.33.tar.gz", hash = "sha256:55af7906a2c75ce6cb280a584776080602444f75815a7aff4d287bb2d7018b32", size = 269068, upload-time = "2022-12-25T18:53:00.824Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/b8/ff33610932e0ee81ae7f1269c890f697d56ff74b9f5b2ee5d9b7fa2c5355/python_xlib-0.33-py2.py3-none-any.whl", hash = "sha256:c3534038d42e0df2f1392a1b30a15a4ff5fdc2b86cfa94f072bf11b10a164398", size = 182185, upload-time = "2022-12-25T18:52:58.662Z" },
+]
+
+[[package]]
 name = "pywin32"
 version = "311"
 source = { registry = "https://pypi.org/simple" }
@@ -289,6 +301,24 @@ wheels = [
 ]
 
 [[package]]
+name = "six"
+version = "1.17.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "types-python-xlib"
+version = "0.33.0.20260408"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/9a/0d73d2453b8ae30ad29d8f3eece0a1259449cbcb87890c3ca82eab7a76b8/types_python_xlib-0.33.0.20260408.tar.gz", hash = "sha256:679a252ab879d0e6b9ccf835ddd5b29519a1123ac1277ed1b60d6876a010dbbd", size = 54239, upload-time = "2026-04-08T04:29:16.337Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e2/2d/f9488983aa5ca18062ed0acb26f62691596810978792701250e16bc7fed3/types_python_xlib-0.33.0.20260408-py3-none-any.whl", hash = "sha256:bcf894449cb5b5b6a068b6e5b7e82a1f2c909b9b83edb8470cc55f09f0f63907", size = 67558, upload-time = "2026-04-08T04:29:15.357Z" },
+]
+
+[[package]]
 name = "types-pywin32"
 version = "311.0.0.20260408"
 source = { registry = "https://pypi.org/simple" }
@@ -327,6 +357,7 @@ source = { editable = "." }
 dependencies = [
     { name = "argcomplete" },
     { name = "psutil" },
+    { name = "python-xlib", marker = "sys_platform == 'linux'" },
     { name = "pywin32", marker = "sys_platform == 'win32'" },
 ]
 
@@ -338,6 +369,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
+    { name = "types-python-xlib", marker = "sys_platform == 'linux'" },
     { name = "types-pywin32", marker = "sys_platform == 'win32'" },
 ]
 
@@ -345,6 +377,7 @@ dev = [
 requires-dist = [
     { name = "argcomplete", specifier = ">=3.5,<4" },
     { name = "psutil", specifier = ">=7.2.2" },
+    { name = "python-xlib", marker = "sys_platform == 'linux'", specifier = ">=0.33" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=306" },
 ]
 
@@ -356,5 +389,6 @@ dev = [
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-cov", specifier = ">=6.1.1" },
     { name = "pytest-mock", specifier = ">=3.14.0" },
+    { name = "types-python-xlib", marker = "sys_platform == 'linux'", specifier = ">=0.33" },
     { name = "types-pywin32", marker = "sys_platform == 'win32'", specifier = ">=311.0.0.20260408" },
 ]
