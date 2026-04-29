@@ -41,7 +41,8 @@
       "WebFetch",
       "Bash(git fetch *)",
       "Bash(git pull *)",
-      "Bash(uv run vrcpilot:*)"
+      "Bash(uv run vrcpilot:*)",
+      "Bash(uv run pyright:*)"
     ],
     "deny": [
       "Bash(git push:*)",
