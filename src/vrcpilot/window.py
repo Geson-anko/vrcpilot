@@ -17,6 +17,7 @@ from __future__ import annotations
 import sys
 import warnings
 
+from vrcpilot._win32 import find_vrchat_hwnd
 from vrcpilot._x11 import find_vrchat_window, is_wayland_native, x11_display
 from vrcpilot.process import find_pid
 
@@ -25,50 +26,11 @@ if sys.platform == "win32":
     import win32api
     import win32con
     import win32gui
-    import win32process
 
 if sys.platform == "linux":
     import Xlib.error
     import Xlib.protocol.event
     from Xlib import X
-
-
-def _find_vrchat_hwnd_win32(pid: int) -> int | None:
-    """Return the visible top-level HWND owned by *pid*.
-
-    Walks every top-level window via :func:`win32gui.EnumWindows` and
-    returns the first one whose owning process id matches *pid* and
-    which is currently visible (``IsWindowVisible``). Returns ``None``
-    when no matching visible window is found — for example, when the
-    process has been spawned but its main window has not yet been
-    created, or when the window is hidden.
-
-    Args:
-        pid: Process id to match against the window's owning process.
-
-    Returns:
-        The HWND of the first matching visible top-level window, or
-        ``None`` if no such window exists.
-    """
-    if sys.platform != "win32":
-        # Defensive: callers gate on ``sys.platform`` before invoking. This
-        # branch also narrows the win32* names for pyright on POSIX runs.
-        raise RuntimeError("unreachable")
-
-    result: list[int] = []
-
-    def _callback(hwnd: int, _lparam: int) -> bool:
-        # Always continue enumeration. Returning False to stop early
-        # makes pywin32 raise a spurious ``EnumWindows`` access-denied
-        # error (Win32 interprets False as a callback failure and
-        # surfaces GetLastError); enumerating fully is cheap enough.
-        _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
-        if found_pid == pid and win32gui.IsWindowVisible(hwnd):
-            result.append(hwnd)
-        return True
-
-    win32gui.EnumWindows(_callback, 0)
-    return result[0] if result else None
 
 
 def _focus_win32() -> bool:
@@ -81,7 +43,7 @@ def _focus_win32() -> bool:
     if pid is None:
         return False
 
-    hwnd = _find_vrchat_hwnd_win32(pid)
+    hwnd = find_vrchat_hwnd(pid)
     if hwnd is None:
         return False
 
@@ -118,7 +80,7 @@ def _unfocus_win32() -> bool:
     if pid is None:
         return False
 
-    hwnd = _find_vrchat_hwnd_win32(pid)
+    hwnd = find_vrchat_hwnd(pid)
     if hwnd is None:
         return False
 
