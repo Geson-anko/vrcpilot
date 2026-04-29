@@ -15,13 +15,14 @@ Invocation::
     python -m vrcpilot terminate
     python -m vrcpilot focus
     python -m vrcpilot unfocus
-    python -m vrcpilot screenshot --output PATH
+    python -m vrcpilot screenshot [-o PATH | --output PATH]
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import argcomplete
@@ -136,10 +137,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Capture a screenshot of the running VRChat window.",
     )
     output_action = screenshot_parser.add_argument(
+        "-o",
         "--output",
         type=Path,
-        required=True,
-        help="Path where the PNG screenshot is written.",
+        default=None,
+        help=(
+            "Path where the PNG screenshot is written. Defaults to "
+            "./vrcpilot_screenshot_<YYYYMMDD_HHMMSS>.png in the current "
+            "directory."
+        ),
     )
     output_action.completer = FilesCompleter(  # type: ignore[attr-defined]
         allowednames=("png",), directories=True
@@ -337,20 +343,22 @@ def _run_unfocus() -> int:
     return 1
 
 
-def _run_screenshot(*, output: Path) -> int:
+def _run_screenshot(*, output: Path | None) -> int:
     """Execute the ``screenshot`` subcommand.
 
     Bridges :func:`take_screenshot` to the file system: when capture
-    succeeds the returned :class:`PIL.Image.Image` is written to *output*
-    via ``Image.save`` (the format is inferred from the path's
-    extension), and the destination is reported on stdout. When the
-    underlying API returns ``None`` — VRChat not running, window not yet
-    available, native Wayland session, screen grabber failure — a
-    generic message is emitted on stderr and the CLI exits non-zero so
-    shell callers can branch on it.
+    succeeds the returned :class:`PIL.Image.Image` is written via
+    ``Image.save`` (the format is inferred from the path's extension)
+    and the destination is reported on stdout. When the underlying API
+    returns ``None`` — VRChat not running, window not yet available,
+    native Wayland session, screen grabber failure — a generic message
+    is emitted on stderr and the CLI exits non-zero so shell callers
+    can branch on it.
 
     Args:
-        output: Destination path for the captured image. The extension
+        output: Destination path for the captured image. When ``None``
+            the file is written to the current working directory as
+            ``vrcpilot_screenshot_<YYYYMMDD_HHMMSS>.png``. The extension
             determines the on-disk format (use ``.png`` for the
             documented PNG behaviour).
 
@@ -362,6 +370,9 @@ def _run_screenshot(*, output: Path) -> int:
     if image is None:
         print("Could not capture VRChat screenshot.", file=sys.stderr)
         return 1
+    if output is None:
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output = Path.cwd() / f"vrcpilot_screenshot_{stamp}.png"
     image.save(output)
     print(f"Saved screenshot to {output}.")
     return 0
