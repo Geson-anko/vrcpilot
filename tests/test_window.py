@@ -264,6 +264,17 @@ class TestUnfocusX11:
 
 
 class TestTakeScreenshot:
+    @pytest.fixture(autouse=True)
+    def _stub_focus_and_sleep(self, mocker: MockerFixture):
+        # ``_take_screenshot_x11`` raises the window before grabbing
+        # via ``_focus_x11`` and waits ``time.sleep``. The real
+        # ``_focus_x11`` builds an Xlib ClientMessage that can't be
+        # populated from Mock attributes, and the sleep would slow the
+        # suite down — stub both so each test only exercises the
+        # capture path it cares about.
+        mocker.patch("vrcpilot.window.focus", return_value=True)
+        mocker.patch("vrcpilot.window.time.sleep")
+
     @only_linux
     def test_returns_none_on_wayland_native(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
@@ -332,6 +343,7 @@ class TestTakeScreenshot:
         mocker.patch(
             "vrcpilot.window._get_vrchat_rect_x11", return_value=(0, 0, 100, 50)
         )
+        mocker.patch("vrcpilot.window.time.sleep")
 
         fake_shot = mocker.Mock()
         fake_shot.size = (100, 50)
@@ -344,6 +356,39 @@ class TestTakeScreenshot:
 
         assert isinstance(result, Image.Image)
         assert result.size == (100, 50)
+
+    @only_linux
+    def test_focuses_window_before_capture(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        # The capture path raises the VRChat window first so other
+        # windows that overlap its rectangle do not bleed into the
+        # image. Verify that contract by spying on ``_focus_x11`` and
+        # ``time.sleep``.
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.Xlib.display.Display")
+        mocker.patch(
+            "vrcpilot.window._find_vrchat_window_x11", return_value=mocker.Mock()
+        )
+        mocker.patch(
+            "vrcpilot.window._get_vrchat_rect_x11", return_value=(0, 0, 100, 50)
+        )
+        focus_spy = mocker.patch("vrcpilot.window.focus", return_value=True)
+        sleep_spy = mocker.patch("vrcpilot.window.time.sleep")
+
+        fake_shot = mocker.Mock()
+        fake_shot.size = (100, 50)
+        fake_shot.bgra = bytes(100 * 50 * 4)
+        fake_sct = mocker.Mock()
+        fake_sct.grab.return_value = fake_shot
+        mocker.patch("vrcpilot.window.mss.MSS", return_value=fake_sct)
+
+        take_screenshot()
+
+        focus_spy.assert_called_once()
+        sleep_spy.assert_called_once()
+        assert sleep_spy.call_args.args[0] > 0
 
 
 class TestGetVrchatRectX11:

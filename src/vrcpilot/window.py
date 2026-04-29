@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -25,6 +26,13 @@ import mss.exception
 from PIL import Image
 
 from vrcpilot.process import find_pid
+
+#: Delay between issuing the focus request and grabbing the screen, to
+#: let the window manager finish raising the VRChat window. The focus
+#: path is asynchronous on X11 (``_NET_ACTIVE_WINDOW`` is a request,
+#: not an immediate state change), so without a short settle the
+#: capture may still include whatever was in front before.
+_FOCUS_SETTLE_SECONDS: float = 0.2
 
 if sys.platform == "win32":
     import pywintypes
@@ -484,6 +492,11 @@ def take_screenshot() -> Image.Image | None:
     are converted to a ``PIL.Image.Image`` in RGB mode so callers can
     save, transform, or feed it to downstream image processing.
 
+    The window is brought to the foreground before the capture so other
+    windows that happen to overlap its rectangle do not bleed into the
+    image. The focus step is best-effort and a brief settle delay is
+    used to let the window manager finish raising the window.
+
     Failure is signalled by returning ``None`` rather than by raising —
     automation callers that poll for VRChat readiness can simply retry.
     Conditions that yield ``None`` include: VRChat is not running, its
@@ -507,5 +520,11 @@ def take_screenshot() -> Image.Image | None:
     if sys.platform == "win32":
         return _take_screenshot_win32()
     if sys.platform == "linux":
+        # Raise the VRChat window first so other windows that overlap
+        # its rectangle don't bleed into the capture. ``focus`` is
+        # best-effort: if it fails we still try (the rectangle may
+        # already be visible).
+        focus()
+        time.sleep(_FOCUS_SETTLE_SECONDS)
         return _take_screenshot_x11()
     raise NotImplementedError(f"take_screenshot() is not supported on {sys.platform}")
