@@ -35,6 +35,37 @@ def is_wayland_native() -> bool:
     )
 
 
+def open_x11_display() -> Xlib.display.Display | None:
+    """Open an X11 display without wrapping it in a context manager.
+
+    Use this for long-lived connections that span many operations — for
+    instance :class:`vrcpilot.capture.Capture` keeps a single connection
+    alive for the whole capture session. The caller MUST eventually call
+    :meth:`Xlib.display.Display.close` (typically from a ``close()`` /
+    ``__exit__`` path).
+
+    For one-shot scripts that only need the connection inside a single
+    block, prefer :func:`x11_display` — it handles cleanup automatically.
+
+    Returns ``None`` on connection failure (X server unreachable,
+    ``DISPLAY`` unset, missing or stale ``XAUTHORITY``, etc.); see
+    :func:`x11_display` for the same failure surface.
+    """
+    if sys.platform != "linux":
+        # Defensive narrow for pyright on non-Linux runs.
+        raise RuntimeError("unreachable")
+
+    try:
+        return Xlib.display.Display()
+    except (
+        Xlib.error.DisplayError,
+        Xlib.error.XauthError,
+        Xlib.error.ConnectionClosedError,
+        OSError,
+    ):
+        return None
+
+
 @contextmanager
 def x11_display() -> Iterator[Xlib.display.Display | None]:
     """Open an X11 display for the duration of a ``with`` block.
@@ -48,14 +79,8 @@ def x11_display() -> Iterator[Xlib.display.Display | None]:
         # Defensive narrow for pyright on non-Linux runs.
         raise RuntimeError("unreachable")
 
-    try:
-        display = Xlib.display.Display()
-    except (
-        Xlib.error.DisplayError,
-        Xlib.error.XauthError,
-        Xlib.error.ConnectionClosedError,
-        OSError,
-    ):
+    display = open_x11_display()
+    if display is None:
         yield None
         return
     try:
@@ -106,3 +131,40 @@ def find_vrchat_window(display: Xlib.display.Display, pid: int) -> _XWindow | No
         if len(values) > 0 and int(values[0]) == pid:
             return window
     return None
+
+
+def get_window_rect(
+    display: Xlib.display.Display, window: _XWindow
+) -> tuple[int, int, int, int] | None:
+    """Return ``(x, y, width, height)`` of *window* in root screen coords.
+
+    Combines ``window.translate_coords(root, 0, 0)`` for the origin with
+    ``window.get_geometry()`` for the size. Empirically the
+    ``translate_coords`` reply's ``x`` / ``y`` are the negative of the
+    window's screen-space origin under python-xlib, so the sign is
+    inverted here — this mirrors the behaviour confirmed in the prior
+    mss-based implementation (see commit ``77a6422``).
+
+    Args:
+        display: Open X11 display connection.
+        window: Target X11 window resource.
+
+    Returns:
+        ``(x, y, width, height)`` on success, or ``None`` when the
+        window has disappeared (``XError``) or has degenerate geometry
+        (non-positive width or height).
+    """
+    if sys.platform != "linux":
+        # Defensive narrow for pyright on non-Linux runs.
+        raise RuntimeError("unreachable")
+
+    try:
+        coords = window.translate_coords(display.screen().root, 0, 0)
+        geom = window.get_geometry()
+    except Xlib.error.XError:
+        return None
+    width = int(geom.width)
+    height = int(geom.height)
+    if width <= 0 or height <= 0:
+        return None
+    return (-int(coords.x), -int(coords.y), width, height)

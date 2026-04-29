@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 
 if sys.platform == "win32":
+    import pywintypes
     import win32gui
     import win32process
 
@@ -51,3 +52,37 @@ def find_vrchat_hwnd(pid: int) -> int | None:
 
     win32gui.EnumWindows(_callback, 0)
     return result[0] if result else None
+
+
+def get_window_rect(hwnd: int) -> tuple[int, int, int, int] | None:
+    """Return ``(x, y, width, height)`` of *hwnd* in physical screen pixels.
+
+    Wraps :func:`win32gui.GetWindowRect`, which yields ``(left, top,
+    right, bottom)`` for the outer window frame. The result is converted
+    to origin + size form for parity with :func:`vrcpilot._x11.get_window_rect`.
+
+    VRChat (Unity) is per-monitor DPI aware, so the rect is already in
+    physical pixels and matches what :mod:`mss` grabs without any scaling
+    correction.
+
+    Args:
+        hwnd: Window handle to query.
+
+    Returns:
+        ``(x, y, width, height)`` on success, or ``None`` when the HWND
+        has been destroyed (``pywintypes.error``) or the rectangle is
+        degenerate (non-positive width or height).
+    """
+    if sys.platform != "win32":
+        # Defensive narrow for pyright on POSIX runs.
+        raise RuntimeError("unreachable")
+
+    try:
+        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+    except pywintypes.error:
+        return None
+    width = right - left
+    height = bottom - top
+    if width <= 0 or height <= 0:
+        return None
+    return (int(left), int(top), int(width), int(height))
