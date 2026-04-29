@@ -41,6 +41,7 @@ just manual launch_terminate      # 単一シナリオを指定
 just manual cli_launch_terminate
 just manual launch_no_vr
 just manual focus_unfocus
+just manual screenshot
 ```
 
 直接実行も可能。
@@ -52,13 +53,14 @@ uv run python tests/manual/launch_terminate.py
 
 ## シナリオ一覧
 
-| 名前                   | 内容                                                                                                                                                                 |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `all`                  | 同ディレクトリ内の全シナリオを subprocess で順に実行し、PASS/FAIL を集約する。                                                                                       |
-| `launch_terminate`     | API (`vrcpilot.launch` / `find_pid` / `terminate`) のハッピーパス。                                                                                                  |
-| `cli_launch_terminate` | `uv run vrcpilot` の `launch` / `status` / `terminate` を subprocess で叩く CLI 経路の検証。                                                                         |
-| `launch_no_vr`         | `vrcpilot.launch(no_vr=True)` でデスクトップモード起動を確認。HMD 非装着のマシンでも動く想定。                                                                       |
-| `focus_unfocus`        | `vrcpilot.focus()` で最前面化、`vrcpilot.unfocus()` で z-order 最下層化。各操作後に `_manual_artifacts/` へスクリーンショットを保存し、Claude / 人間が目視確認する。 |
+| 名前                   | 内容                                                                                                                                                                                                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `all`                  | 同ディレクトリ内の全シナリオを subprocess で順に実行し、PASS/FAIL を集約する。                                                                                                                                                                                                              |
+| `launch_terminate`     | API (`vrcpilot.launch` / `find_pid` / `terminate`) のハッピーパス。                                                                                                                                                                                                                         |
+| `cli_launch_terminate` | `uv run vrcpilot` の `launch` / `status` / `terminate` を subprocess で叩く CLI 経路の検証。                                                                                                                                                                                                |
+| `launch_no_vr`         | `vrcpilot.launch(no_vr=True)` でデスクトップモード起動を確認。HMD 非装着のマシンでも動く想定。                                                                                                                                                                                              |
+| `focus_unfocus`        | `vrcpilot.focus()` で最前面化、`vrcpilot.unfocus()` で z-order 最下層化。各操作後に `_manual_artifacts/` へスクリーンショットを保存し、Claude / 人間が目視確認する。                                                                                                                        |
+| `screenshot`           | `vrcpilot.take_screenshot()` で VRChat ウィンドウだけのスクリーンショットが取れることを確認。1280x720 で起動した VRChat に対して撮影し、`_manual_artifacts/screenshot_vrchat_<timestamp>.png` にウィンドウのみが写った PNG が保存される（デスクトップ背景や他アプリが混入していないこと）。 |
 
 ## 実行時間の目安
 

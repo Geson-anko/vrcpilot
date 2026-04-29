@@ -88,8 +88,11 @@ def warmup(seconds: float = WARMUP_SECONDS) -> None:
     time.sleep(seconds)
 
 
-def take_screenshot(scenario: str, label: str) -> Path:
+def save_monitor_screenshot(scenario: str, label: str) -> Path:
     """Capture all monitors and save under ``_manual_artifacts/``.
+
+    For a VRChat-window-only screenshot, use :func:`vrcpilot.take_screenshot`
+    instead; this helper is for whole-desktop visual records.
 
     Use this in manual scenarios to leave a visual record at key steps
     so a human can review what VRChat looked like after the action ran.
