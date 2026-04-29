@@ -224,6 +224,54 @@ class TestTerminateCommand:
         assert "not running" in captured.out
 
 
+class TestFocusCommand:
+    def test_reports_focused(
+        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    ):
+        mocker.patch("vrcpilot.cli.focus", return_value=True)
+
+        exit_code = main(["focus"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Focused" in captured.out
+
+    def test_reports_failure(
+        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    ):
+        mocker.patch("vrcpilot.cli.focus", return_value=False)
+
+        exit_code = main(["focus"])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Could not" in captured.out
+
+
+class TestUnfocusCommand:
+    def test_reports_unfocused(
+        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    ):
+        mocker.patch("vrcpilot.cli.unfocus", return_value=True)
+
+        exit_code = main(["unfocus"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Unfocused" in captured.out
+
+    def test_reports_failure(
+        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+    ):
+        mocker.patch("vrcpilot.cli.unfocus", return_value=False)
+
+        exit_code = main(["unfocus"])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Could not" in captured.out
+
+
 class TestMain:
     def test_missing_subcommand_exits(self):
         with pytest.raises(SystemExit):
