@@ -193,7 +193,10 @@ def _make_xerror_subclass() -> type[BaseException]:
     The real ``XError`` requires a ``display`` and a parsed protocol
     reply -- inconvenient in pure-unit tests. A subclass with an empty
     ``__init__`` keeps the type identity that the implementation
-    catches without needing a real reply payload.
+    catches without needing a real reply payload. ``__str__`` is also
+    overridden because the parent reads ``self._data`` which is left
+    unset by the empty ``__init__`` -- the f-string in capture.py would
+    otherwise recurse forever in ``GetAttrData.__getattr__``.
     """
     real_xerror = vrcpilot.capture.Xlib.error.XError
 
@@ -201,6 +204,10 @@ def _make_xerror_subclass() -> type[BaseException]:
         @override
         def __init__(self) -> None:  # noqa: D401
             pass
+
+        @override
+        def __str__(self) -> str:
+            return "_NoArgXError"
 
     return _NoArgXError
 
