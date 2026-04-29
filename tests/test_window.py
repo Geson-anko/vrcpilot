@@ -336,9 +336,9 @@ class TestTakeScreenshot:
         fake_shot = mocker.Mock()
         fake_shot.size = (100, 50)
         fake_shot.bgra = bytes(100 * 50 * 4)
-        fake_sct = mocker.MagicMock()
-        fake_sct.__enter__.return_value.grab.return_value = fake_shot
-        mocker.patch("vrcpilot.window.mss.mss", return_value=fake_sct)
+        fake_sct = mocker.Mock()
+        fake_sct.grab.return_value = fake_shot
+        mocker.patch("vrcpilot.window.mss.MSS", return_value=fake_sct)
 
         result = take_screenshot()
 

@@ -368,22 +368,14 @@ def _grab_with_mss(rect: tuple[int, int, int, int]) -> Image.Image | None:
     """
     left, top, width, height = rect
     region = {"left": left, "top": top, "width": width, "height": height}
+    sct = mss.MSS()
     try:
-        # ``mss`` is py.typed but its ``Self`` annotation on ``__enter__``
-        # falls back to ``Any`` through a guarded import, so pyright treats
-        # the context-manager binding as Unknown. Suppress those locally —
-        # the public return type (PIL Image) stays strictly typed.
-        with mss.mss() as sct:  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
-            shot = sct.grab(region)  # pyright: ignore[reportUnknownVariableType, reportUnknownMemberType]
+        shot = sct.grab(region)
     except (mss.exception.ScreenShotError, OSError):
         return None
-    return Image.frombytes(
-        "RGB",
-        shot.size,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
-        shot.bgra,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
-        "raw",
-        "BGRX",
-    )
+    finally:
+        sct.close()
+    return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
 
 def _take_screenshot_x11() -> Image.Image | None:
