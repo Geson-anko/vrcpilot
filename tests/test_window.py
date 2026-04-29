@@ -168,7 +168,7 @@ class TestFocusX11:
         monkeypatch.setenv("DISPLAY", ":0")
         mocker.patch("vrcpilot.window.find_pid", return_value=4242)
         mocker.patch("vrcpilot.window.Xlib.display.Display")
-        mocker.patch("vrcpilot.window._find_vrchat_window_x11", return_value=None)
+        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=None)
 
         assert vrcpilot.window.focus() is False
 
@@ -198,9 +198,7 @@ class TestFocusX11:
         fake_display = mocker.Mock()
         fake_display.screen.return_value = fake_screen
         mocker.patch("vrcpilot.window.Xlib.display.Display", return_value=fake_display)
-        mocker.patch(
-            "vrcpilot.window._find_vrchat_window_x11", return_value=fake_window
-        )
+        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=fake_window)
         # ``ClientMessage`` packs its arguments into a struct on
         # construction; the mocked window cannot satisfy that, so we
         # stub the event class out entirely.
@@ -237,7 +235,7 @@ class TestUnfocusX11:
         monkeypatch.setenv("DISPLAY", ":0")
         mocker.patch("vrcpilot.window.find_pid", return_value=4242)
         mocker.patch("vrcpilot.window.Xlib.display.Display")
-        mocker.patch("vrcpilot.window._find_vrchat_window_x11", return_value=None)
+        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=None)
 
         assert vrcpilot.window.unfocus() is False
 
@@ -251,9 +249,7 @@ class TestUnfocusX11:
         fake_window = mocker.Mock()
         fake_display = mocker.Mock()
         mocker.patch("vrcpilot.window.Xlib.display.Display", return_value=fake_display)
-        mocker.patch(
-            "vrcpilot.window._find_vrchat_window_x11", return_value=fake_window
-        )
+        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=fake_window)
 
         assert vrcpilot.window.unfocus() is True
         assert fake_window.configure.called
@@ -299,7 +295,7 @@ class TestTakeScreenshot:
         monkeypatch.setenv("DISPLAY", ":0")
         mocker.patch("vrcpilot.window.find_pid", return_value=4242)
         mocker.patch("vrcpilot.window.Xlib.display.Display")
-        mocker.patch("vrcpilot.window._find_vrchat_window_x11", return_value=None)
+        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=None)
 
         assert take_screenshot() is None
 
@@ -310,9 +306,7 @@ class TestTakeScreenshot:
         monkeypatch.setenv("DISPLAY", ":0")
         mocker.patch("vrcpilot.window.find_pid", return_value=4242)
         mocker.patch("vrcpilot.window.Xlib.display.Display")
-        mocker.patch(
-            "vrcpilot.window._find_vrchat_window_x11", return_value=mocker.Mock()
-        )
+        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=mocker.Mock())
         mocker.patch("vrcpilot.window._get_vrchat_rect_x11", return_value=None)
 
         assert take_screenshot() is None
@@ -337,9 +331,7 @@ class TestTakeScreenshot:
         monkeypatch.setenv("DISPLAY", ":0")
         mocker.patch("vrcpilot.window.find_pid", return_value=4242)
         mocker.patch("vrcpilot.window.Xlib.display.Display")
-        mocker.patch(
-            "vrcpilot.window._find_vrchat_window_x11", return_value=mocker.Mock()
-        )
+        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=mocker.Mock())
         mocker.patch(
             "vrcpilot.window._get_vrchat_rect_x11", return_value=(0, 0, 100, 50)
         )
@@ -368,9 +360,7 @@ class TestTakeScreenshot:
         monkeypatch.setenv("DISPLAY", ":0")
         mocker.patch("vrcpilot.window.find_pid", return_value=4242)
         mocker.patch("vrcpilot.window.Xlib.display.Display")
-        mocker.patch(
-            "vrcpilot.window._find_vrchat_window_x11", return_value=mocker.Mock()
-        )
+        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=mocker.Mock())
         mocker.patch(
             "vrcpilot.window._get_vrchat_rect_x11", return_value=(0, 0, 100, 50)
         )
