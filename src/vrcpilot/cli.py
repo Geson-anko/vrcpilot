@@ -15,6 +15,7 @@ Invocation::
     python -m vrcpilot terminate
     python -m vrcpilot focus
     python -m vrcpilot unfocus
+    python -m vrcpilot screenshot --output PATH
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ from vrcpilot.process import (
     launch,
     terminate,
 )
-from vrcpilot.window import focus, unfocus
+from vrcpilot.window import focus, take_screenshot, unfocus
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -130,6 +131,20 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Send the running VRChat window to the bottom of the z-order.",
     )
 
+    screenshot_parser = subparsers.add_parser(
+        "screenshot",
+        help="Capture a screenshot of the running VRChat window.",
+    )
+    output_action = screenshot_parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Path where the PNG screenshot is written.",
+    )
+    output_action.completer = FilesCompleter(  # type: ignore[attr-defined]
+        allowednames=("png",), directories=True
+    )
+
     return parser
 
 
@@ -175,6 +190,8 @@ def main(argv: list[str] | None = None) -> int:
             return _run_focus()
         case "unfocus":
             return _run_unfocus()
+        case "screenshot":
+            return _run_screenshot(output=args.output)
         case _:
             parser.error(f"Unknown command: {args.command}")
 
@@ -318,3 +335,33 @@ def _run_unfocus() -> int:
         return 0
     print("Could not unfocus VRChat.")
     return 1
+
+
+def _run_screenshot(*, output: Path) -> int:
+    """Execute the ``screenshot`` subcommand.
+
+    Bridges :func:`take_screenshot` to the file system: when capture
+    succeeds the returned :class:`PIL.Image.Image` is written to *output*
+    via ``Image.save`` (the format is inferred from the path's
+    extension), and the destination is reported on stdout. When the
+    underlying API returns ``None`` — VRChat not running, window not yet
+    available, native Wayland session, screen grabber failure — a
+    generic message is emitted on stderr and the CLI exits non-zero so
+    shell callers can branch on it.
+
+    Args:
+        output: Destination path for the captured image. The extension
+            determines the on-disk format (use ``.png`` for the
+            documented PNG behaviour).
+
+    Returns:
+        ``0`` if the screenshot was captured and saved, ``1`` if the
+        capture failed.
+    """
+    image = take_screenshot()
+    if image is None:
+        print("Could not capture VRChat screenshot.", file=sys.stderr)
+        return 1
+    image.save(output)
+    print(f"Saved screenshot to {output}.")
+    return 0

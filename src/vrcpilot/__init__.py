@@ -26,7 +26,7 @@ from vrcpilot.process import (
     launch,
     terminate,
 )
-from vrcpilot.window import focus, unfocus
+from vrcpilot.window import focus, take_screenshot, unfocus
 
 #: Installed package version, resolved from distribution metadata so it stays
 #: in sync with ``pyproject.toml`` without being hard-coded here.
@@ -41,6 +41,7 @@ __all__ = [
     "launch",
     "OscConfig",
     "SteamNotFoundError",
+    "take_screenshot",
     "terminate",
     "unfocus",
     "VRCHAT_PROCESS_NAME",

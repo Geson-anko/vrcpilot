@@ -272,6 +272,43 @@ class TestUnfocusCommand:
         assert "Could not" in captured.out
 
 
+class TestScreenshotCommand:
+    def test_reports_saved_on_success(
+        self,
+        mocker: MockerFixture,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ):
+        fake_image = mocker.Mock()
+        mocker.patch("vrcpilot.cli.take_screenshot", return_value=fake_image)
+        output = tmp_path / "shot.png"
+
+        exit_code = main(["screenshot", "--output", str(output)])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert "Saved screenshot to" in captured.out
+        fake_image.save.assert_called_once_with(output)
+
+    def test_reports_failure(
+        self,
+        mocker: MockerFixture,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ):
+        mocker.patch("vrcpilot.cli.take_screenshot", return_value=None)
+
+        exit_code = main(["screenshot", "--output", str(tmp_path / "shot.png")])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "Could not" in captured.err
+
+    def test_output_required(self):
+        with pytest.raises(SystemExit):
+            main(["screenshot"])
+
+
 class TestMain:
     def test_missing_subcommand_exits(self):
         with pytest.raises(SystemExit):
