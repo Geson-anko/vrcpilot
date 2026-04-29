@@ -5,11 +5,12 @@ from __future__ import annotations
 import sys
 
 import pytest
+from PIL import Image
 from pytest_mock import MockerFixture
 
 import vrcpilot.window
 from tests.helpers import only_linux, only_windows
-from vrcpilot.window import focus, unfocus
+from vrcpilot.window import focus, take_screenshot, unfocus
 
 if sys.platform == "win32":
     import pywintypes
@@ -124,6 +125,22 @@ class TestPlatformGuard:
 
         with pytest.raises(NotImplementedError):
             vrcpilot.window.unfocus()
+
+    def test_take_screenshot_raises_not_implemented_on_unsupported_platform(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr("vrcpilot.window.sys.platform", "darwin")
+
+        with pytest.raises(NotImplementedError):
+            vrcpilot.window.take_screenshot()
+
+    def test_take_screenshot_raises_not_implemented_on_win32(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setattr("vrcpilot.window.sys.platform", "win32")
+
+        with pytest.raises(NotImplementedError):
+            vrcpilot.window.take_screenshot()
 
 
 class TestFocusX11:
@@ -244,3 +261,147 @@ class TestUnfocusX11:
         assert "stack_mode" in kwargs
         assert fake_display.flush.called
         assert fake_display.close.called
+
+
+class TestTakeScreenshot:
+    @only_linux
+    def test_returns_none_on_wayland_native(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+        monkeypatch.delenv("DISPLAY", raising=False)
+
+        with pytest.warns(RuntimeWarning, match="Wayland native"):
+            assert take_screenshot() is None
+
+    @only_linux
+    def test_returns_none_when_not_running(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=None)
+
+        assert take_screenshot() is None
+
+    @only_linux
+    def test_returns_none_when_window_not_found(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.Xlib.display.Display")
+        mocker.patch("vrcpilot.window._find_vrchat_window_x11", return_value=None)
+
+        assert take_screenshot() is None
+
+    @only_linux
+    def test_returns_none_when_rect_unavailable(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.Xlib.display.Display")
+        mocker.patch(
+            "vrcpilot.window._find_vrchat_window_x11", return_value=mocker.Mock()
+        )
+        mocker.patch("vrcpilot.window._get_vrchat_rect_x11", return_value=None)
+
+        assert take_screenshot() is None
+
+    @only_linux
+    def test_returns_none_on_display_error(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch(
+            "vrcpilot.window.Xlib.display.Display",
+            side_effect=vrcpilot.window.Xlib.error.DisplayError(":0"),
+        )
+
+        assert take_screenshot() is None
+
+    @only_linux
+    def test_returns_pil_image_on_success(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setenv("DISPLAY", ":0")
+        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.Xlib.display.Display")
+        mocker.patch(
+            "vrcpilot.window._find_vrchat_window_x11", return_value=mocker.Mock()
+        )
+        mocker.patch(
+            "vrcpilot.window._get_vrchat_rect_x11", return_value=(0, 0, 100, 50)
+        )
+
+        fake_shot = mocker.Mock()
+        fake_shot.size = (100, 50)
+        fake_shot.bgra = bytes(100 * 50 * 4)
+        fake_sct = mocker.MagicMock()
+        fake_sct.__enter__.return_value.grab.return_value = fake_shot
+        mocker.patch("vrcpilot.window.mss.mss", return_value=fake_sct)
+
+        result = take_screenshot()
+
+        assert isinstance(result, Image.Image)
+        assert result.size == (100, 50)
+
+
+class TestGetVrchatRectX11:
+    @only_linux
+    def test_translates_relative_to_screen(self, mocker: MockerFixture):
+        # window.get_geometry() yields parent-relative origin + size; the
+        # absolute screen position is recovered via translate_coords(root,
+        # 0, 0). Pass a translation of (-200, -100) and assert the helper
+        # negates it back to (200, 100).
+        fake_geom = mocker.Mock(width=100, height=50)
+        fake_coords = mocker.Mock(x=-200, y=-100)
+        fake_window = mocker.Mock()
+        fake_window.get_geometry.return_value = fake_geom
+        fake_window.translate_coords.return_value = fake_coords
+
+        fake_root = mocker.Mock()
+        fake_screen = mocker.Mock(root=fake_root)
+        fake_display = mocker.Mock()
+        fake_display.screen.return_value = fake_screen
+
+        result = vrcpilot.window._get_vrchat_rect_x11(fake_display, fake_window)
+
+        assert result == (200, 100, 100, 50)
+
+    @only_linux
+    @pytest.mark.parametrize(
+        ("width", "height"),
+        [(0, 50), (100, 0), (0, 0), (-1, 50), (100, -1)],
+    )
+    def test_returns_none_when_zero_size(
+        self, mocker: MockerFixture, width: int, height: int
+    ):
+        fake_geom = mocker.Mock(width=width, height=height)
+        fake_coords = mocker.Mock(x=0, y=0)
+        fake_window = mocker.Mock()
+        fake_window.get_geometry.return_value = fake_geom
+        fake_window.translate_coords.return_value = fake_coords
+
+        fake_display = mocker.Mock()
+        fake_display.screen.return_value = mocker.Mock(root=mocker.Mock())
+
+        assert vrcpilot.window._get_vrchat_rect_x11(fake_display, fake_window) is None
+
+    @only_linux
+    def test_returns_none_on_xerror(self, mocker: MockerFixture):
+        # ``Xlib.error.XError`` requires positional ``display`` and ``data``
+        # arguments (the latter is normally a parsed protocol reply).
+        # Defining a tiny subclass lets us raise it without fabricating a
+        # protocol payload — only the type matters for the except clause.
+        class _FakeXError(vrcpilot.window.Xlib.error.XError):
+            def __init__(self):
+                pass
+
+        fake_window = mocker.Mock()
+        fake_window.get_geometry.return_value = mocker.Mock(width=100, height=50)
+        fake_window.translate_coords.side_effect = _FakeXError()
+
+        fake_display = mocker.Mock()
+        fake_display.screen.return_value = mocker.Mock(root=mocker.Mock())
+
+        assert vrcpilot.window._get_vrchat_rect_x11(fake_display, fake_window) is None
