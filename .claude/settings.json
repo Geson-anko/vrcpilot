@@ -41,6 +41,7 @@
       "WebFetch",
       "Bash(git fetch *)",
       "Bash(git pull *)",
+      "Bash(git switch: *)",
       "Bash(uv run vrcpilot:*)",
       "Bash(uv run pyright:*)"
     ],
