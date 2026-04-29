@@ -11,6 +11,10 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
+
+import mss
+import mss.tools
 
 import vrcpilot
 
@@ -19,6 +23,8 @@ WARMUP_SECONDS: float = 15.0
 
 _PID_WAIT_TIMEOUT: float = 30.0
 _PID_WAIT_INTERVAL: float = 1.0
+
+_ARTIFACT_DIR: Path = Path(__file__).resolve().parents[2] / "_manual_artifacts"
 
 
 def log(msg: str) -> None:
@@ -80,6 +86,23 @@ def warmup(seconds: float = WARMUP_SECONDS) -> None:
     """Sleep *seconds* to let VRChat settle after launch."""
     log(f"warming up for {seconds:.0f}s")
     time.sleep(seconds)
+
+
+def take_screenshot(scenario: str, label: str) -> Path:
+    """Capture all monitors and save under ``_manual_artifacts/``.
+
+    Returns the absolute :class:`~pathlib.Path` to the saved PNG. The
+    filename pattern is ``{scenario}_{label}_{YYYYMMDD_HHMMSS}.png``.
+    The save location is also emitted via :func:`log`.
+    """
+    _ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = _ARTIFACT_DIR / f"{scenario}_{label}_{stamp}.png"
+    with mss.mss() as sct:
+        img = sct.grab(sct.monitors[0])
+    mss.tools.to_png(img.rgb, img.size, output=str(path))
+    log(f"screenshot saved: {path}")
+    return path
 
 
 def run_scenario(name: str, body: Callable[[], None]) -> int:
