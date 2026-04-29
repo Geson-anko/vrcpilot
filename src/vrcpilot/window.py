@@ -23,7 +23,7 @@ if sys.platform == "win32":
     import win32process
 
 
-def _find_vrchat_hwnd(pid: int) -> int | None:
+def _find_vrchat_hwnd_win32(pid: int) -> int | None:
     """Return the visible top-level HWND owned by *pid*.
 
     Walks every top-level window via :func:`win32gui.EnumWindows` and
@@ -61,34 +61,17 @@ def _find_vrchat_hwnd(pid: int) -> int | None:
     return result[0] if result else None
 
 
-def focus() -> bool:
-    """Bring the running VRChat window to the foreground.
-
-    Use this when an automation step needs the VRChat window to be the
-    active, visible window — for example, before sending input. The
-    window is restored first if it is currently minimized.
-
-    Only meaningful in Desktop mode. When VRChat is running in VR
-    exclusive mode there is no desktop window to surface, so the call
-    has no visible effect even though it may still report success.
-
-    Raises:
-        NotImplementedError: When called on a non-Windows platform.
-
-    Returns:
-        ``True`` on success. ``False`` when VRChat is not running, its
-        top-level window cannot be located (e.g. still starting up), or
-        the underlying Win32 call fails.
-    """
+def _focus_win32() -> bool:
+    """Win32 implementation of :func:`focus`."""
     if sys.platform != "win32":
-        # TODO: Linux 対応 (X11/Wayland)
-        raise NotImplementedError("focus() is only supported on Windows")
+        # Defensive narrow for pyright on POSIX runs.
+        raise RuntimeError("unreachable")
 
     pid = find_pid()
     if pid is None:
         return False
 
-    hwnd = _find_vrchat_hwnd(pid)
+    hwnd = _find_vrchat_hwnd_win32(pid)
     if hwnd is None:
         return False
 
@@ -115,6 +98,52 @@ def focus() -> bool:
     return True
 
 
+def _unfocus_win32() -> bool:
+    """Win32 implementation of :func:`unfocus`."""
+    if sys.platform != "win32":
+        # Defensive narrow for pyright on POSIX runs.
+        raise RuntimeError("unreachable")
+
+    pid = find_pid()
+    if pid is None:
+        return False
+
+    hwnd = _find_vrchat_hwnd_win32(pid)
+    if hwnd is None:
+        return False
+
+    flags = win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE
+    try:
+        win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM, 0, 0, 0, 0, flags)
+    except pywintypes.error:
+        return False
+    return True
+
+
+def focus() -> bool:
+    """Bring the running VRChat window to the foreground.
+
+    Use this when an automation step needs the VRChat window to be the
+    active, visible window — for example, before sending input. The
+    window is restored first if it is currently minimized.
+
+    Only meaningful in Desktop mode. When VRChat is running in VR
+    exclusive mode there is no desktop window to surface, so the call
+    has no visible effect even though it may still report success.
+
+    Raises:
+        NotImplementedError: When called on a non-Windows platform.
+
+    Returns:
+        ``True`` on success. ``False`` when VRChat is not running, its
+        top-level window cannot be located (e.g. still starting up), or
+        the underlying Win32 call fails.
+    """
+    if sys.platform == "win32":
+        return _focus_win32()
+    raise NotImplementedError(f"focus() is not supported on {sys.platform}")
+
+
 def unfocus() -> bool:
     """Send the running VRChat window to the bottom of the z-order.
 
@@ -134,21 +163,6 @@ def unfocus() -> bool:
         top-level window cannot be located (e.g. still starting up), or
         the underlying Win32 call fails.
     """
-    if sys.platform != "win32":
-        # TODO: Linux 対応 (X11/Wayland)
-        raise NotImplementedError("unfocus() is only supported on Windows")
-
-    pid = find_pid()
-    if pid is None:
-        return False
-
-    hwnd = _find_vrchat_hwnd(pid)
-    if hwnd is None:
-        return False
-
-    flags = win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE
-    try:
-        win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM, 0, 0, 0, 0, flags)
-    except pywintypes.error:
-        return False
-    return True
+    if sys.platform == "win32":
+        return _unfocus_win32()
+    raise NotImplementedError(f"unfocus() is not supported on {sys.platform}")
