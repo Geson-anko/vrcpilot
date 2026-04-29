@@ -16,6 +16,7 @@ Typical use::
 from importlib import metadata
 
 from vrcpilot._steam import SteamNotFoundError
+from vrcpilot.capture import take_screenshot
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
@@ -26,7 +27,7 @@ from vrcpilot.process import (
     launch,
     terminate,
 )
-from vrcpilot.window import focus, take_screenshot, unfocus
+from vrcpilot.window import focus, unfocus
 
 #: Installed package version, resolved from distribution metadata so it stays
 #: in sync with ``pyproject.toml`` without being hard-coded here.

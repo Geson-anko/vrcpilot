@@ -1,36 +1,24 @@
 """VRChat window control API.
 
 Public entry points for focusing and unfocusing the running VRChat
-client window, plus :func:`take_screenshot` for capturing its visible
-area. Companion to :mod:`vrcpilot.process` — once VRChat is launched
-and observed (via :func:`vrcpilot.find_pid`), use :func:`focus` /
-:func:`unfocus` to drive its z-order from automation, or
-:func:`take_screenshot` to grab a PIL image of the window.
+client window. Companion to :mod:`vrcpilot.process` — once VRChat is
+launched and observed (via :func:`vrcpilot.find_pid`), use
+:func:`focus` / :func:`unfocus` to drive its z-order from automation.
+Capturing the window's contents is handled separately in
+:mod:`vrcpilot.capture`.
 
 Supports Windows and Linux (X11 / XWayland). Wayland native sessions
 are not supported (``focus()`` / ``unfocus()`` warn and return
-``False``; ``take_screenshot()`` warns and returns ``None``).
+``False``).
 """
 
 from __future__ import annotations
 
 import sys
-import time
 import warnings
-
-import mss
-import mss.exception
-from PIL import Image
 
 from vrcpilot._x11 import find_vrchat_window, is_wayland_native, x11_display
 from vrcpilot.process import find_pid
-
-#: Delay between issuing the focus request and grabbing the screen, to
-#: let the window manager finish raising the VRChat window. The focus
-#: path is asynchronous on X11 (``_NET_ACTIVE_WINDOW`` is a request,
-#: not an immediate state change), so without a short settle the
-#: capture may still include whatever was in front before.
-_FOCUS_SETTLE_SECONDS: float = 0.01
 
 if sys.platform == "win32":
     import pywintypes
@@ -40,11 +28,9 @@ if sys.platform == "win32":
     import win32process
 
 if sys.platform == "linux":
-    import Xlib.display
     import Xlib.error
     import Xlib.protocol.event
     from Xlib import X
-    from Xlib.xobject.drawable import Window as _XWindow
 
 
 def _find_vrchat_hwnd_win32(pid: int) -> int | None:
@@ -224,111 +210,6 @@ def _unfocus_x11() -> bool:
         return True
 
 
-def _take_screenshot_win32() -> Image.Image | None:
-    """Win32 implementation of :func:`take_screenshot` (not yet
-    implemented)."""
-    # TODO: Win32 サポートを実装する。`_find_vrchat_hwnd_win32` と
-    # `win32gui.GetWindowRect` で矩形取得 -> mss.grab -> PIL Image 変換
-    # を、`_take_screenshot_x11` と同じ責務分担で書く想定。
-    raise NotImplementedError("take_screenshot() on Windows is not implemented yet")
-
-
-def _get_vrchat_rect_x11(
-    display: Xlib.display.Display, window: _XWindow
-) -> tuple[int, int, int, int] | None:
-    """Return ``(screen_x, screen_y, width, height)`` of *window* on screen.
-
-    Combines ``window.get_geometry()`` (which yields width/height plus a
-    parent-relative origin) with ``window.translate_coords(root, 0, 0)``
-    to recover the window's absolute screen coordinates. python-xlib's
-    ``translate_coords(src, src_x, src_y)`` translates ``(src_x, src_y)``
-    expressed in *src*'s coordinate system into *window*'s coordinate
-    system. Passing ``root`` and ``(0, 0)`` therefore returns the root
-    origin expressed in window coordinates; the window's top-left in
-    root coordinates is the negation of that vector.
-
-    Args:
-        display: Open X11 display connection.
-        window: Target X11 window resource.
-
-    Returns:
-        ``(screen_x, screen_y, width, height)`` for the window, or
-        ``None`` when the window has zero size (e.g. minimized) or the
-        underlying X requests fail.
-    """
-    if sys.platform != "linux":
-        # Defensive narrow for pyright on non-Linux runs.
-        raise RuntimeError("unreachable")
-
-    try:
-        geom = window.get_geometry()
-        coords = window.translate_coords(display.screen().root, 0, 0)
-    except Xlib.error.XError:
-        return None
-
-    width = int(geom.width)
-    height = int(geom.height)
-    if width <= 0 or height <= 0:
-        return None
-
-    return (-int(coords.x), -int(coords.y), width, height)
-
-
-def _grab_with_mss(rect: tuple[int, int, int, int]) -> Image.Image | None:
-    """Capture *rect* via :mod:`mss` and convert to a PIL image.
-
-    Args:
-        rect: ``(left, top, width, height)`` region in screen
-            coordinates.
-
-    Returns:
-        A PIL ``Image`` in RGB mode, or ``None`` when the underlying
-        screen grabber fails (``mss.exception.ScreenShotError``,
-        ``OSError``).
-    """
-    left, top, width, height = rect
-    region = {"left": left, "top": top, "width": width, "height": height}
-    sct = mss.MSS()
-    try:
-        shot = sct.grab(region)
-    except (mss.exception.ScreenShotError, OSError):
-        return None
-    finally:
-        sct.close()
-    return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
-
-
-def _take_screenshot_x11() -> Image.Image | None:
-    """X11/XWayland implementation of :func:`take_screenshot`."""
-    if sys.platform != "linux":
-        # Defensive narrow for pyright on non-Linux runs.
-        raise RuntimeError("unreachable")
-
-    if is_wayland_native():
-        warnings.warn(
-            "Wayland native session detected; "
-            "take_screenshot() requires X11 or XWayland.",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-        return None
-
-    pid = find_pid()
-    if pid is None:
-        return None
-
-    with x11_display() as display:
-        if display is None:
-            return None
-        window = find_vrchat_window(display, pid)
-        if window is None:
-            return None
-        rect = _get_vrchat_rect_x11(display, window)
-        if rect is None:
-            return None
-        return _grab_with_mss(rect)
-
-
 def focus() -> bool:
     """Bring the running VRChat window to the foreground.
 
@@ -393,49 +274,3 @@ def unfocus() -> bool:
     if sys.platform == "linux":
         return _unfocus_x11()
     raise NotImplementedError(f"unfocus() is not supported on {sys.platform}")
-
-
-def take_screenshot() -> Image.Image | None:
-    """Capture the running VRChat window and return it as a PIL image.
-
-    Locates the VRChat window (via :func:`vrcpilot.find_pid` plus the
-    platform's window-manager APIs), computes its absolute screen
-    rectangle, and grabs that region with :mod:`mss`. The grabbed pixels
-    are converted to a ``PIL.Image.Image`` in RGB mode so callers can
-    save, transform, or feed it to downstream image processing.
-
-    The window is brought to the foreground before the capture so other
-    windows that happen to overlap its rectangle do not bleed into the
-    image. The focus step is best-effort and a brief settle delay is
-    used to let the window manager finish raising the window.
-
-    Failure is signalled by returning ``None`` rather than by raising —
-    automation callers that poll for VRChat readiness can simply retry.
-    Conditions that yield ``None`` include: VRChat is not running, its
-    top-level window cannot be located yet, the window is minimized
-    (zero-size geometry), the X11 display cannot be opened, an X11
-    request fails, the underlying screen grabber fails, or the session
-    is native Wayland (a ``RuntimeWarning`` is also emitted).
-
-    Currently implemented for Linux (X11 / XWayland). Calling on
-    Windows raises ``NotImplementedError`` until the Win32 backend is
-    written.
-
-    Raises:
-        NotImplementedError: When called on Windows (not yet
-            implemented) or any platform other than Windows or Linux.
-
-    Returns:
-        A ``PIL.Image.Image`` cropped to the VRChat window's screen
-        rectangle, or ``None`` when the window could not be captured.
-    """
-    # Raise the VRChat window first so other windows that overlap its
-    # rectangle don't bleed into the capture. ``focus`` is best-effort:
-    # if it fails we still try (the rectangle may already be visible).
-    focus()
-    time.sleep(_FOCUS_SETTLE_SECONDS)
-    if sys.platform == "win32":
-        return _take_screenshot_win32()
-    if sys.platform == "linux":
-        return _take_screenshot_x11()
-    raise NotImplementedError(f"take_screenshot() is not supported on {sys.platform}")

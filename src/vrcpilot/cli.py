@@ -29,6 +29,7 @@ import argcomplete
 from argcomplete.completers import FilesCompleter
 
 from vrcpilot._steam import SteamNotFoundError
+from vrcpilot.capture import take_screenshot
 from vrcpilot.process import (
     VRCHAT_STEAM_APP_ID,
     OscConfig,
@@ -36,7 +37,7 @@ from vrcpilot.process import (
     launch,
     terminate,
 )
-from vrcpilot.window import focus, take_screenshot, unfocus
+from vrcpilot.window import focus, unfocus
 
 
 def _build_parser() -> argparse.ArgumentParser:
