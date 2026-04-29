@@ -39,5 +39,6 @@ type:
 run: format test type
 
 # Run a manual end-to-end scenario script (default: all scenarios; e.g. `just manual launch_terminate`)
+# On Linux SSH sessions, falls back to the active local X11 display so GUI apps render on the desktop.
 manual NAME="all":
-    uv run python tests/manual/{{NAME}}.py
+    DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" uv run python tests/manual/{{NAME}}.py
