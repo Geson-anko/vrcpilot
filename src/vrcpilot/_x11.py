@@ -13,8 +13,9 @@ import os
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
 
-if sys.platform == "linux":
+if TYPE_CHECKING or sys.platform == "linux":
     import Xlib.display
     import Xlib.error
     from Xlib import X
