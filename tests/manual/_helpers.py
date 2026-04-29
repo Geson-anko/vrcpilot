@@ -1,0 +1,106 @@
+"""Shared utilities for the manual end-to-end VRChat scenarios.
+
+Each script in ``tests/manual/`` follows the same pattern: ensure no
+VRChat is running, drive the API or CLI, verify, and always clean up.
+The helpers here keep that boilerplate in one place so individual
+scenarios stay readable.
+"""
+
+from __future__ import annotations
+
+import time
+from collections.abc import Callable
+from datetime import datetime
+
+import vrcpilot
+
+# Fixed wait after a PID first appears, to let VRChat finish initializing.
+WARMUP_SECONDS: float = 15.0
+
+_PID_WAIT_TIMEOUT: float = 30.0
+_PID_WAIT_INTERVAL: float = 1.0
+
+
+def log(msg: str) -> None:
+    stamp = datetime.now().strftime("%H:%M:%S")
+    print(f"[{stamp}] {msg}", flush=True)
+
+
+def wait_for_pid(
+    timeout: float = _PID_WAIT_TIMEOUT,
+    interval: float = _PID_WAIT_INTERVAL,
+) -> int | None:
+    """Poll :func:`vrcpilot.find_pid` until a PID appears or *timeout*
+    elapses."""
+    deadline = time.monotonic() + timeout
+    while True:
+        pid = vrcpilot.find_pid()
+        if pid is not None:
+            return pid
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(interval)
+
+
+def wait_for_no_pid(
+    timeout: float = _PID_WAIT_TIMEOUT,
+    interval: float = _PID_WAIT_INTERVAL,
+) -> bool:
+    """Poll until :func:`vrcpilot.find_pid` returns ``None`` or *timeout*
+    elapses."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if vrcpilot.find_pid() is None:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(interval)
+
+
+def ensure_no_vrchat() -> None:
+    """Terminate any running VRChat and wait for it to disappear.
+
+    Used as both pre- and post-condition by every scenario so a stray
+    process from a prior failed run cannot pollute the test, and so the
+    user's environment is left clean even on failure.
+    """
+    pid = vrcpilot.find_pid()
+    if pid is None:
+        log("no existing VRChat process")
+        return
+    log(f"existing VRChat detected (pid={pid}); terminating")
+    vrcpilot.terminate()
+    if wait_for_no_pid():
+        log("existing VRChat terminated")
+    else:
+        log("WARNING: VRChat still present after terminate()")
+
+
+def warmup(seconds: float = WARMUP_SECONDS) -> None:
+    """Sleep *seconds* to let VRChat settle after launch."""
+    log(f"warming up for {seconds:.0f}s")
+    time.sleep(seconds)
+
+
+def run_scenario(name: str, body: Callable[[], None]) -> int:
+    """Run *body* with pre/post cleanup and convert the outcome to an exit
+    code.
+
+    *body* may return normally for success, or raise to signal failure.
+    Either way :func:`ensure_no_vrchat` runs both before and after, and a
+    final ``PASS:`` / ``FAIL:`` line is emitted.
+    """
+    log(f"=== scenario: {name} ===")
+    log("pre-cleanup")
+    ensure_no_vrchat()
+    try:
+        body()
+    except Exception as exc:
+        log(f"scenario raised: {exc!r}")
+        print(f"FAIL: {name}: {exc}", flush=True)
+        return 1
+    finally:
+        log("post-cleanup")
+        ensure_no_vrchat()
+    print(f"PASS: {name}", flush=True)
+    return 0

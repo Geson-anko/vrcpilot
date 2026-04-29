@@ -38,7 +38,10 @@
       "Bash(uv lock:*)",
       "Bash(git checkout:*)",
       "WebSearch",
-      "WebFetch"
+      "WebFetch",
+      "Bash(git fetch *)",
+      "Bash(git pull *)",
+      "Bash(uv run vrcpilot:*)"
     ],
     "deny": [
       "Bash(git push:*)",

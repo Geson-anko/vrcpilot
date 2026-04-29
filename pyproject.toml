@@ -33,6 +33,7 @@ addopts = [
   "--durations=0",
   "--strict-markers",
   "--doctest-modules",
+  "--ignore=tests/manual",
 ]
 filterwarnings = [
   "ignore::DeprecationWarning",
