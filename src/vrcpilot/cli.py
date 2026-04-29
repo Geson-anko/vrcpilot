@@ -13,6 +13,8 @@ Invocation::
         [--osc-in-port N [--osc-out-ip IP] [--osc-out-port N]]
     python -m vrcpilot status
     python -m vrcpilot terminate
+    python -m vrcpilot focus
+    python -m vrcpilot unfocus
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from vrcpilot.process import (
     launch,
     terminate,
 )
+from vrcpilot.window import focus, unfocus
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -117,6 +120,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Forcefully terminate any running VRChat process.",
     )
 
+    subparsers.add_parser(
+        "focus",
+        help="Bring the running VRChat window to the foreground.",
+    )
+
+    subparsers.add_parser(
+        "unfocus",
+        help="Send the running VRChat window to the bottom of the z-order.",
+    )
+
     return parser
 
 
@@ -158,6 +171,10 @@ def main(argv: list[str] | None = None) -> int:
             return _run_status()
         case "terminate":
             return _run_terminate()
+        case "focus":
+            return _run_focus()
+        case "unfocus":
+            return _run_unfocus()
         case _:
             parser.error(f"Unknown command: {args.command}")
 
@@ -261,3 +278,43 @@ def _run_terminate() -> int:
     else:
         print("VRChat is not running.")
     return 0
+
+
+def _run_focus() -> int:
+    """Execute the ``focus`` subcommand.
+
+    Thin wrapper around :func:`focus`. The boolean return value is
+    translated into an exit code so shell callers can branch on it; the
+    CLI does not try to attribute *why* a failure occurred (the
+    underlying API does not surface that), so a single generic message
+    is emitted on failure.
+
+    Returns:
+        ``0`` if VRChat was brought to the foreground, ``1`` if the
+        operation failed (VRChat not running, window not yet available,
+        or unsupported session such as native Wayland).
+    """
+    if focus():
+        print("Focused VRChat.")
+        return 0
+    print("Could not focus VRChat.")
+    return 1
+
+
+def _run_unfocus() -> int:
+    """Execute the ``unfocus`` subcommand.
+
+    Counterpart of :func:`_run_focus` for sending VRChat to the bottom
+    of the z-order. Same exit-code contract: ``0`` on success, ``1`` on
+    any failure mode reported by :func:`unfocus`.
+
+    Returns:
+        ``0`` if VRChat was sent to the bottom of the z-order, ``1`` if
+        the operation failed (VRChat not running, window not yet
+        available, or unsupported session such as native Wayland).
+    """
+    if unfocus():
+        print("Unfocused VRChat.")
+        return 0
+    print("Could not unfocus VRChat.")
+    return 1
