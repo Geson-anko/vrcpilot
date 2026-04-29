@@ -2,3 +2,4 @@
 - [Boundary-call assertions in tests](feedback_boundary_assertions.md) — asserting OS/external call args (e.g. `SetForegroundWindow(hwnd)`) is OK; it tests the contract, not the implementation
 - [Docstring Returns redundancy](feedback_docstring_returns.md) — keep return-value contract in `Returns:` block only; don't restate it in the summary paragraph
 - [Test class organization](feedback_test_classes.md) — tests live under `class Test<Target>:` with no return-type annotations; `mocker` fixture from `pytest_mock`
+- [Avoid object-typed fixture parameters](feedback_fixture_typing.md) — don't annotate mock-fixture params as `: object`; leave unannotated to keep tests free of pyright-ignore noise

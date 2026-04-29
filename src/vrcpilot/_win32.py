@@ -8,12 +8,28 @@ two modules from duplicating the ``EnumWindows`` boilerplate.
 
 from __future__ import annotations
 
+import ctypes
 import sys
 
 if sys.platform == "win32":
     import pywintypes
     import win32gui
     import win32process
+
+    # Configure ``SetThreadDpiAwarenessContext`` once at import time so we do
+    # not repeat the assignment on every ``get_window_rect`` call. Explicit
+    # argtypes / restype are required so that the 64-bit
+    # ``DPI_AWARENESS_CONTEXT`` handle is not truncated to 32 bits when
+    # ctypes marshals the Python int via the default ``c_int`` rule.
+    ctypes.windll.user32.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+    ctypes.windll.user32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+
+
+# DPI awareness context handle for ``SetThreadDpiAwarenessContext``.
+#
+# ``-4`` is the documented pseudo-handle for ``PER_MONITOR_AWARE_V2``.
+# See: https://learn.microsoft.com/en-us/windows/win32/api/windef/ne-windef-dpi_awareness_context
+_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
 
 
 def find_vrchat_hwnd(pid: int) -> int | None:
@@ -61,9 +77,13 @@ def get_window_rect(hwnd: int) -> tuple[int, int, int, int] | None:
     right, bottom)`` for the outer window frame. The result is converted
     to origin + size form for parity with :func:`vrcpilot._x11.get_window_rect`.
 
-    VRChat (Unity) is per-monitor DPI aware, so the rect is already in
-    physical pixels and matches what :mod:`mss` grabs without any scaling
-    correction.
+    The current thread is switched to per-monitor DPI aware (V2) for the
+    duration of the call via ``SetThreadDpiAwarenessContext`` so that
+    ``GetWindowRect`` returns physical pixel coordinates that match what
+    :mod:`mss` grabs. The previous context is restored in ``finally`` to
+    keep the change scoped to this call. A thread-local toggle is used
+    rather than process-wide DPI awareness so that no other code in the
+    process is affected.
 
     Args:
         hwnd: Window handle to query.
@@ -77,10 +97,16 @@ def get_window_rect(hwnd: int) -> tuple[int, int, int, int] | None:
         # Defensive narrow for pyright on POSIX runs.
         raise RuntimeError("unreachable")
 
+    set_thread_dpi = ctypes.windll.user32.SetThreadDpiAwarenessContext
+    old_ctx = set_thread_dpi(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
     try:
-        left, top, right, bottom = win32gui.GetWindowRect(hwnd)
-    except pywintypes.error:
-        return None
+        try:
+            left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+        except pywintypes.error:
+            return None
+    finally:
+        set_thread_dpi(old_ctx)
+
     width = right - left
     height = bottom - top
     if width <= 0 or height <= 0:
