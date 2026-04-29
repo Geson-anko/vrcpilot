@@ -1,1 +1,0 @@
-- [Pyright baseline tracking](pyright_baseline.md) — pre-existing strict-mode errors in this repo; don't add to them
