@@ -226,7 +226,7 @@ class TestCapture:
     ):
         # The class must refuse unsupported platforms outright -- there
         # is no fallback backend, so silently degrading would mislead.
-        monkeypatch.setattr("vrcpilot.capture.sys.platform", "darwin")
+        monkeypatch.setattr("vrcpilot.capture.session.sys.platform", "darwin")
 
         with pytest.raises(NotImplementedError):
             Capture()

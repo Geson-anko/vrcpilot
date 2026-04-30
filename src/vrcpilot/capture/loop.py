@@ -15,7 +15,7 @@ from typing import Self
 
 import numpy as np
 
-from vrcpilot.capture import Capture
+from .session import Capture
 
 FrameCallback = Callable[[np.ndarray], None]
 
