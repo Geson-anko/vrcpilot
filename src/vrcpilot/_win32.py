@@ -4,19 +4,26 @@ from __future__ import annotations
 
 import ctypes
 import sys
+from typing import TYPE_CHECKING
 
-if sys.platform == "win32":
-    import pywintypes
-    import win32gui
-    import win32process
+# ``TYPE_CHECKING`` is False at runtime — the raise fires on non-Windows hosts
+# so importers fail loudly. Under pyright (which treats ``TYPE_CHECKING`` as
+# True) the raise is skipped, letting the type checker see the win32 symbols
+# below regardless of the host platform.
+if not TYPE_CHECKING and sys.platform != "win32":
+    raise ImportError
 
-    # Configure ``SetThreadDpiAwarenessContext`` once at import time so we do
-    # not repeat the assignment on every ``get_window_rect`` call. Explicit
-    # argtypes / restype are required so that the 64-bit
-    # ``DPI_AWARENESS_CONTEXT`` handle is not truncated to 32 bits when
-    # ctypes marshals the Python int via the default ``c_int`` rule.
-    ctypes.windll.user32.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_void_p]
-    ctypes.windll.user32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
+import pywintypes
+import win32gui
+import win32process
+
+# Configure ``SetThreadDpiAwarenessContext`` once at import time so we do
+# not repeat the assignment on every ``get_window_rect`` call. Explicit
+# argtypes / restype are required so that the 64-bit
+# ``DPI_AWARENESS_CONTEXT`` handle is not truncated to 32 bits when
+# ctypes marshals the Python int via the default ``c_int`` rule.
+ctypes.windll.user32.SetThreadDpiAwarenessContext.argtypes = [ctypes.c_void_p]
+ctypes.windll.user32.SetThreadDpiAwarenessContext.restype = ctypes.c_void_p
 
 
 # DPI awareness context handle for ``SetThreadDpiAwarenessContext``.
@@ -28,11 +35,6 @@ _DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
 
 def find_vrchat_hwnd(pid: int) -> int | None:
     """Return the visible top-level HWND owned by *pid*, or ``None``."""
-    if sys.platform != "win32":
-        # Defensive: callers gate on ``sys.platform`` before invoking. This
-        # branch also narrows the win32* names for pyright on POSIX runs.
-        raise RuntimeError("unreachable")
-
     result: list[int] = []
 
     def _callback(hwnd: int, _lparam: int) -> bool:
@@ -58,10 +60,6 @@ def get_window_rect(hwnd: int) -> tuple[int, int, int, int] | None:
     wide so no other code is affected. Returns ``None`` when the HWND
     has been destroyed or the rectangle is degenerate.
     """
-    if sys.platform != "win32":
-        # Defensive narrow for pyright on POSIX runs.
-        raise RuntimeError("unreachable")
-
     set_thread_dpi = ctypes.windll.user32.SetThreadDpiAwarenessContext
     old_ctx = set_thread_dpi(_DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
     try:
