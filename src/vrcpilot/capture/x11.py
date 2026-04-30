@@ -7,23 +7,29 @@ frame reflects the window's current state even when occluded.
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
+
+# ``TYPE_CHECKING`` is False at runtime — the raise fires on non-Linux hosts.
+# Under pyright (which treats ``TYPE_CHECKING`` as True) the raise is skipped,
+# letting the type checker see the Xlib-typed symbols below.
+if not TYPE_CHECKING and sys.platform != "linux":
+    raise ImportError
+
 import warnings
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import Any, cast, override
 
 import numpy as np
+import Xlib.display
+import Xlib.error
+from Xlib import X
+from Xlib.ext import composite
+from Xlib.xobject.drawable import Window as _XWindow
 
 from vrcpilot._session import is_wayland_native
 from vrcpilot._x11 import find_vrchat_window, open_x11_display
 from vrcpilot.process import find_pid
 
 from .base import CaptureBackend
-
-if TYPE_CHECKING or sys.platform == "linux":
-    import Xlib.display
-    import Xlib.error
-    from Xlib import X
-    from Xlib.ext import composite
-    from Xlib.xobject.drawable import Window as _XWindow
 
 
 class X11CaptureBackend(CaptureBackend):
@@ -33,10 +39,6 @@ class X11CaptureBackend(CaptureBackend):
     _window: _XWindow
 
     def __init__(self) -> None:
-        if sys.platform != "linux":
-            # Defensive narrow for pyright on non-Linux runs.
-            raise RuntimeError("unreachable")
-
         if is_wayland_native():
             raise RuntimeError(
                 "Capture requires X11 or XWayland; native Wayland is not supported",
@@ -94,10 +96,6 @@ class X11CaptureBackend(CaptureBackend):
     def read(self) -> np.ndarray:
         """Re-grab the window pixmap through Composite and return RGB
         ndarray."""
-        if sys.platform != "linux":
-            # Defensive narrow for pyright on non-Linux runs.
-            raise RuntimeError("unreachable")
-
         try:
             geom = self._window.get_geometry()
             width = int(geom.width)
