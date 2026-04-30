@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 import warnings
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import numpy as np
 
@@ -79,10 +79,13 @@ class X11CaptureBackend(CaptureBackend):
                 # Redirect the window to off-screen storage so we can read
                 # its pixels regardless of stacking order. Idempotent when
                 # a compositor (picom, mutter, kwin...) already redirects.
-                # python-xlib stubs declare ``update`` as a callable but
-                # the protocol value is the int constant
-                # ``RedirectAutomatic``.
-                composite.redirect_window(window, composite.RedirectAutomatic)  # pyright: ignore[reportArgumentType]
+                # python-xlib stubs declare the ``update`` parameter as a
+                # callable, but the protocol value is the int constant
+                # ``RedirectAutomatic`` -- launder through ``Any`` rather
+                # than fight the upstream stub error.
+                composite.redirect_window(
+                    window, cast(Any, composite.RedirectAutomatic)
+                )
             except Xlib.error.XError as exc:
                 raise RuntimeError(f"Failed to redirect window: {exc}") from exc
         except BaseException:

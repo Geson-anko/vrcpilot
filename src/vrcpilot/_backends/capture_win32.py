@@ -14,7 +14,7 @@ from __future__ import annotations
 import sys
 import threading
 import warnings
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import numpy as np
 
@@ -22,12 +22,17 @@ from vrcpilot._backends.capture_base import CaptureBackend
 
 if TYPE_CHECKING or sys.platform == "win32":
     # ``windows_capture`` ships no type stubs (it's a thin wrapper over a
-    # PyO3 native module), so the import trips ``reportMissingTypeStubs``
-    # and downstream attribute reads come back as ``Unknown``. We narrow
-    # with isinstance / asserts at use sites.
+    # PyO3 native module). The import itself trips ``reportMissingTypeStubs``,
+    # which we silence explicitly here. We then re-bind the symbol with an
+    # ``Any`` annotation so every downstream attribute read, decorator use,
+    # and constructor call inherits ``Any`` instead of needing its own
+    # ``reportUnknown*`` suppression. The public name ``WindowsCapture`` is
+    # preserved because tests patch the module attribute by that name.
     from windows_capture import (  # pyright: ignore[reportMissingTypeStubs]
-        WindowsCapture,
+        WindowsCapture as _WindowsCaptureRaw,
     )
+
+    WindowsCapture: Any = _WindowsCaptureRaw
 
     from vrcpilot._win32 import find_vrchat_hwnd
 
@@ -71,22 +76,22 @@ class Win32CaptureBackend(CaptureBackend):
         self._frame_lock = threading.Lock()
         self._frame_event = threading.Event()
 
-        capture = WindowsCapture(  # pyright: ignore[reportUnknownVariableType]
+        capture = WindowsCapture(
             cursor_capture=False,
             draw_border=False,
             window_hwnd=hwnd,
         )
 
-        @capture.event  # pyright: ignore[reportUnknownMemberType, reportUntypedFunctionDecorator, reportArgumentType]
-        def on_frame_arrived(frame: object, control: object) -> None:  # pyright: ignore[reportUnusedFunction]
+        @capture.event
+        def on_frame_arrived(frame: Any, control: Any) -> None:
             del control  # We never stop from inside the handler.
             # ``frame.frame_buffer`` is a row-tight ``(H, W, 4)`` BGRA ndarray;
             # the library has already collapsed the GPU stride for us. Convert
             # BGRA -> RGB and copy out so the buffer is safe to keep after the
             # handler returns (the underlying ctypes memory is reused).
-            buf = frame.frame_buffer.tobytes()  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
-            width = int(frame.width)  # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
-            height = int(frame.height)  # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
+            buf = frame.frame_buffer.tobytes()
+            width = int(frame.width)
+            height = int(frame.height)
             assert isinstance(buf, bytes)
             if width <= 0 or height <= 0:
                 # Spurious frame; ignore. ``read`` will keep waiting.
@@ -97,12 +102,19 @@ class Win32CaptureBackend(CaptureBackend):
                 self._latest_frame = (rgb, width, height)
                 self._frame_event.set()
 
-        @capture.event  # pyright: ignore[reportUnknownMemberType, reportUntypedFunctionDecorator, reportArgumentType]
-        def on_closed() -> None:  # pyright: ignore[reportUnusedFunction]
+        # Keep references so pyright doesn't flag the locally-defined event
+        # handlers as unused; ``windows_capture`` keeps them alive via the
+        # decorator side effect.
+        _ = on_frame_arrived
+
+        @capture.event
+        def on_closed() -> None:
             pass
 
+        _ = on_closed
+
         try:
-            self._control = capture.start_free_threaded()  # pyright: ignore[reportUnknownMemberType]
+            self._control = capture.start_free_threaded()
         except OSError as exc:
             raise RuntimeError(f"Failed to start WGC session: {exc}") from exc
 
@@ -139,7 +151,9 @@ class Win32CaptureBackend(CaptureBackend):
             return
         self._closed = True
         try:
-            self._control.stop()  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+            # ``self._control`` is typed as ``object`` (no stubs for the
+            # CaptureControl class); reach for ``.stop()`` via Any.
+            cast(Any, self._control).stop()
         except Exception as exc:  # noqa: BLE001 - close() must not raise
             warnings.warn(
                 f"WGC stop() failed: {exc}",

@@ -71,8 +71,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override the auto-detected Steam executable path.",
     )
-    steam_path_action.completer = FilesCompleter(  # type: ignore[attr-defined]
-        allowednames=("exe",), directories=True
+    _attach_completer(
+        steam_path_action, FilesCompleter(allowednames=("exe",), directories=True)
     )
     launch_parser.add_argument(
         "--no-vr",
@@ -149,11 +149,23 @@ def _build_parser() -> argparse.ArgumentParser:
             "directory."
         ),
     )
-    output_action.completer = FilesCompleter(  # type: ignore[attr-defined]
-        allowednames=("png",), directories=True
+    _attach_completer(
+        output_action, FilesCompleter(allowednames=("png",), directories=True)
     )
 
     return parser
+
+
+def _attach_completer(action: argparse.Action, completer: object) -> None:
+    """Attach an ``argcomplete`` completer to an argparse ``Action``.
+
+    ``argcomplete`` reads ``action.completer`` at shell-completion time but
+    argparse itself does not declare the attribute, so a direct assignment
+    trips ``reportAttributeAccessIssue`` under pyright strict. This helper
+    routes the assignment through ``setattr`` (which is unchecked) and
+    keeps the type-system noise out of :func:`_build_parser`.
+    """
+    setattr(action, "completer", completer)  # noqa: B010 - argcomplete's documented hook
 
 
 def main(argv: list[str] | None = None) -> int:

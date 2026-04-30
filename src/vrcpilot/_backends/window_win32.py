@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from vrcpilot._win32 import find_vrchat_hwnd
 from vrcpilot.process import find_pid
@@ -29,24 +29,22 @@ def focus_window() -> bool:
     if hwnd is None:
         return False
 
+    # Press/release Alt to defeat Windows' SetForegroundWindow lock --
+    # without an active input event from this process the OS may refuse
+    # to change the foreground window. types-pywin32 stubs leave
+    # ``keybd_event``'s positional args partially typed
+    # (``reportUnknownMemberType``), so we widen to ``Any`` once here
+    # instead of suppressing each of the two call sites.
+    keybd_event = cast(Any, win32api).keybd_event
     try:
         if win32gui.IsIconic(hwnd):
             win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-        # Press/release Alt to defeat Windows' SetForegroundWindow lock —
-        # without an active input event from this process the OS may refuse
-        # to change the foreground window. types-pywin32 stubs leave the
-        # first two positional args untyped, so silence the unknown-arg
-        # warning rather than weakening the rest of the module.
-        win32api.keybd_event(  # pyright: ignore[reportUnknownMemberType]
-            win32con.VK_MENU, 0, 0, 0
-        )
+        keybd_event(win32con.VK_MENU, 0, 0, 0)
         try:
             win32gui.SetForegroundWindow(hwnd)
             win32gui.BringWindowToTop(hwnd)
         finally:
-            win32api.keybd_event(  # pyright: ignore[reportUnknownMemberType]
-                win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0
-            )
+            keybd_event(win32con.VK_MENU, 0, win32con.KEYEVENTF_KEYUP, 0)
     except pywintypes.error:
         return False
     return True
