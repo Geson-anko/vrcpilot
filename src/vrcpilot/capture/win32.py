@@ -8,6 +8,9 @@ stashed in a single-slot, lock-protected buffer.
 from __future__ import annotations
 
 import sys
+
+if sys.platform != "win32":
+    raise ImportError
 import threading
 import warnings
 from typing import TYPE_CHECKING, Any, cast, override
