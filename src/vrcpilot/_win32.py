@@ -4,13 +4,8 @@ from __future__ import annotations
 
 import ctypes
 import sys
-from typing import TYPE_CHECKING
 
-# ``TYPE_CHECKING`` is False at runtime — the raise fires on non-Windows hosts
-# so importers fail loudly. Under pyright (which treats ``TYPE_CHECKING`` as
-# True) the raise is skipped, letting the type checker see the win32 symbols
-# below regardless of the host platform.
-if not TYPE_CHECKING and sys.platform != "win32":
+if sys.platform != "win32":
     raise ImportError
 
 import pywintypes

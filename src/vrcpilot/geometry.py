@@ -11,37 +11,40 @@ import sys
 
 from vrcpilot.process import find_pid
 
+if sys.platform == "win32":
 
-def _get_vrchat_rect_win32() -> tuple[int, int, int, int] | None:
-    """Win32 path: ``find_pid`` -> ``find_vrchat_hwnd`` -> ``get_window_rect``."""
-    from vrcpilot._win32 import find_vrchat_hwnd, get_window_rect
+    def _get_vrchat_rect_win32() -> tuple[int, int, int, int] | None:
+        """Win32 path: ``find_pid`` -> ``find_vrchat_hwnd`` -> ``get_window_rect``."""
+        from vrcpilot._win32 import find_vrchat_hwnd, get_window_rect
 
-    pid = find_pid()
-    if pid is None:
-        return None
-    hwnd = find_vrchat_hwnd(pid)
-    if hwnd is None:
-        return None
-    return get_window_rect(hwnd)
-
-
-def _get_vrchat_rect_x11() -> tuple[int, int, int, int] | None:
-    """X11 path: open display, locate the VRChat window, query geometry."""
-    from vrcpilot._x11 import find_vrchat_window, get_window_rect, open_x11_display
-
-    pid = find_pid()
-    if pid is None:
-        return None
-    display = open_x11_display()
-    if display is None:
-        return None
-    try:
-        window = find_vrchat_window(display, pid)
-        if window is None:
+        pid = find_pid()
+        if pid is None:
             return None
-        return get_window_rect(display, window)
-    finally:
-        display.close()
+        hwnd = find_vrchat_hwnd(pid)
+        if hwnd is None:
+            return None
+        return get_window_rect(hwnd)
+
+
+if sys.platform == "linux":
+
+    def _get_vrchat_rect_x11() -> tuple[int, int, int, int] | None:
+        """X11 path: open display, locate the VRChat window, query geometry."""
+        from vrcpilot._x11 import find_vrchat_window, get_window_rect, open_x11_display
+
+        pid = find_pid()
+        if pid is None:
+            return None
+        display = open_x11_display()
+        if display is None:
+            return None
+        try:
+            window = find_vrchat_window(display, pid)
+            if window is None:
+                return None
+            return get_window_rect(display, window)
+        finally:
+            display.close()
 
 
 def get_vrchat_window_rect() -> tuple[int, int, int, int] | None:

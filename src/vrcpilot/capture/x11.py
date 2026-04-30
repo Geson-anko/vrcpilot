@@ -7,12 +7,8 @@ frame reflects the window's current state even when occluded.
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
 
-# ``TYPE_CHECKING`` is False at runtime — the raise fires on non-Linux hosts.
-# Under pyright (which treats ``TYPE_CHECKING`` as True) the raise is skipped,
-# letting the type checker see the Xlib-typed symbols below.
-if not TYPE_CHECKING and sys.platform != "linux":
+if sys.platform != "linux":
     raise ImportError
 
 import warnings

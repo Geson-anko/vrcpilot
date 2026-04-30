@@ -3,13 +3,8 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
 
-# ``TYPE_CHECKING`` is False at runtime — the raise fires on non-Linux hosts so
-# importers fail loudly. Under pyright (which treats ``TYPE_CHECKING`` as True)
-# the raise is skipped, letting the type checker see the Xlib-typed symbols
-# below regardless of the host platform.
-if not TYPE_CHECKING and sys.platform != "linux":
+if sys.platform != "linux":
     raise ImportError
 
 from collections.abc import Iterator

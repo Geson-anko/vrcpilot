@@ -5,6 +5,10 @@ from __future__ import annotations
 import sys
 
 import pytest
+
+if sys.platform != "win32":
+    pytest.skip("Only windows.", allow_module_level=True)
+
 from pytest_mock import MockerFixture
 
 from tests.helpers import only_windows
