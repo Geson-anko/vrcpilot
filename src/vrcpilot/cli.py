@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -16,7 +17,9 @@ import argcomplete
 from argcomplete.completers import FilesCompleter
 from PIL import Image
 
+from vrcpilot import CaptureLoop
 from vrcpilot._steam import SteamNotFoundError
+from vrcpilot.capture._sinks import Mp4FrameSink
 from vrcpilot.process import (
     VRCHAT_STEAM_APP_ID,
     OscConfig,
@@ -138,6 +141,41 @@ def _build_parser() -> argparse.ArgumentParser:
         output_action, FilesCompleter(allowednames=("png",), directories=True)
     )
 
+    capture_parser = subparsers.add_parser(
+        "capture",
+        help="Record VRChat at a fixed FPS and save as mp4.",
+    )
+    capture_output_action = capture_parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help=(
+            "Path where the mp4 video is written. Defaults to "
+            "./vrcpilot_capture_<YYYYMMDD_HHMMSS>.mp4 in the current "
+            "directory."
+        ),
+    )
+    _attach_completer(
+        capture_output_action,
+        FilesCompleter(allowednames=("mp4",), directories=True),
+    )
+    capture_parser.add_argument(
+        "--fps",
+        type=float,
+        default=30.0,
+        help="Target frames per second (default: 30).",
+    )
+    capture_parser.add_argument(
+        "--duration",
+        type=float,
+        default=None,
+        help=(
+            "Stop after this many seconds. When unset, recording "
+            "continues until Ctrl+C."
+        ),
+    )
+
     return parser
 
 
@@ -193,6 +231,12 @@ def main(argv: list[str] | None = None) -> int:
             return _run_unfocus()
         case "screenshot":
             return _run_screenshot(output=args.output)
+        case "capture":
+            return _run_capture(
+                output=args.output,
+                fps=args.fps,
+                duration=args.duration,
+            )
         case _:
             parser.error(f"Unknown command: {args.command}")
 
@@ -321,4 +365,53 @@ def _run_screenshot(*, output: Path | None) -> int:
         output = Path.cwd() / f"vrcpilot_screenshot_{stamp}.png"
     Image.fromarray(shot.image).save(output)
     print(f"Saved screenshot to {output}.")
+    return 0
+
+
+def _run_capture(
+    *,
+    output: Path | None,
+    fps: float,
+    duration: float | None,
+) -> int:
+    """Execute the ``capture`` subcommand.
+
+    Args:
+        output: Destination ``.mp4`` path. ``None`` writes
+            ``./vrcpilot_capture_<YYYYMMDD_HHMMSS>.mp4``.
+        fps: Target frames per second; passed to both
+            :class:`CaptureLoop` and the mp4 container.
+        duration: Stop after this many seconds. ``None`` waits for
+            ``Ctrl+C`` (KeyboardInterrupt).
+
+    Returns:
+        ``0`` on success, ``1`` if recording failed or no frames were
+        captured.
+    """
+    if output is None:
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output = Path.cwd() / f"vrcpilot_capture_{stamp}.mp4"
+
+    try:
+        with Mp4FrameSink(output, fps) as sink:
+            with CaptureLoop(sink.write, fps=fps) as loop:
+                loop.start()
+                print(f"Recording to {output} (fps={fps}). Press Ctrl+C to stop.")
+                try:
+                    if duration is not None:
+                        time.sleep(duration)
+                    else:
+                        while True:
+                            time.sleep(3600)
+                except KeyboardInterrupt:
+                    pass
+            saved_frames = sink.frame_count
+    except RuntimeError as exc:
+        print(f"vrcpilot: {exc}", file=sys.stderr)
+        return 1
+
+    if saved_frames == 0:
+        print("vrcpilot: no frames captured.", file=sys.stderr)
+        return 1
+    print(f"Saved capture to {output} (frames={saved_frames}).")
     return 0

@@ -8,7 +8,7 @@ geometry, for GUI automation).
 from importlib import metadata
 
 from vrcpilot._steam import SteamNotFoundError
-from vrcpilot.capture import Capture
+from vrcpilot.capture import Capture, CaptureLoop
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
@@ -31,6 +31,7 @@ __all__ = [
     "build_launch_command",
     "build_vrchat_launch_args",
     "Capture",
+    "CaptureLoop",
     "find_pid",
     "focus",
     "launch",
