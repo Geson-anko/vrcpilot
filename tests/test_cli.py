@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from types import TracebackType
 from typing import Self
@@ -12,7 +12,7 @@ from typing import Self
 import numpy as np
 import pytest
 from argcomplete.completers import FilesCompleter
-from pytest_mock import MockerFixture
+from pytest_mock import MockerFixture, MockType
 
 from vrcpilot._steam import SteamNotFoundError
 from vrcpilot.cli import _build_parser, main
@@ -429,7 +429,7 @@ class _FakeMp4FrameSink:
 class _CaptureFakes:
     loop: type[_FakeCaptureLoop]
     sink: type[_FakeMp4FrameSink]
-    sleep: object = field(default=None)
+    sleep: MockType
 
 
 @pytest.fixture
@@ -528,7 +528,7 @@ class TestCaptureCommand:
         # `else` 分岐に入って sleep が 1 度だけ呼ばれて抜けたことを確認。
         # ここを忘れると Mock.call_args_list が無限蓄積する罠を踏むため
         # その契約をテストでロックしておく。
-        assert capture_fakes.sleep.call_count == 1  # type: ignore[attr-defined]
+        assert capture_fakes.sleep.call_count == 1
 
     def test_zero_frames_returns_error(
         self,
