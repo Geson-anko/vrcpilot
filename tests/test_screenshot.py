@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from pytest_mock import MockerFixture
 
+from tests.helpers import only_linux
 from vrcpilot.screenshot import Screenshot, _resolve_monitor_index, take_screenshot
 
 # Three-monitor layout used by most tests:
@@ -159,9 +160,14 @@ class TestTakeScreenshot:
         # Center is at (500, 500), inside the left monitor (1920x1080).
         assert result.monitor_index == 1
 
+    @only_linux
     def test_uses_x11_rect_helper_on_linux(
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
+        # Linux-only because ``_patch_happy_path(platform="linux")`` eagerly
+        # imports ``vrcpilot.window.x11``, which now raises ``ImportError``
+        # on non-Linux hosts (the module is strictly Linux-gated at import
+        # time).
         _patch_happy_path(
             mocker, monkeypatch, platform="linux", rect=(50, 60, 800, 600)
         )

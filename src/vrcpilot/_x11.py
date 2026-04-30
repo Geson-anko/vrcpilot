@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING or sys.platform == "linux":
-    import Xlib.display
-    import Xlib.error
-    from Xlib import X
-    from Xlib.xobject.drawable import Window as _XWindow
+# ``TYPE_CHECKING`` is False at runtime — the raise fires on non-Linux hosts so
+# importers fail loudly. Under pyright (which treats ``TYPE_CHECKING`` as True)
+# the raise is skipped, letting the type checker see the Xlib-typed symbols
+# below regardless of the host platform.
+if not TYPE_CHECKING and sys.platform != "linux":
+    raise ImportError
+
+from collections.abc import Iterator
+from contextlib import contextmanager
+
+import Xlib.display
+import Xlib.error
+from Xlib import X
+from Xlib.xobject.drawable import Window as _XWindow
 
 
 def open_x11_display() -> Xlib.display.Display | None:
@@ -23,10 +30,6 @@ def open_x11_display() -> Xlib.display.Display | None:
     server unreachable, ``DISPLAY`` unset, missing/stale
     ``XAUTHORITY``).
     """
-    if sys.platform != "linux":
-        # Defensive narrow for pyright on non-Linux runs.
-        raise RuntimeError("unreachable")
-
     try:
         return Xlib.display.Display()
     except (
@@ -46,10 +49,6 @@ def x11_display() -> Iterator[Xlib.display.Display | None]:
     for the failure surface — common SSH symptom is a stale
     ``XAUTHORITY``).
     """
-    if sys.platform != "linux":
-        # Defensive narrow for pyright on non-Linux runs.
-        raise RuntimeError("unreachable")
-
     display = open_x11_display()
     if display is None:
         yield None
@@ -66,10 +65,6 @@ def find_vrchat_window(display: Xlib.display.Display, pid: int) -> _XWindow | No
     Scans ``_NET_CLIENT_LIST`` and matches each entry's ``_NET_WM_PID``;
     windows that disappear mid-iteration (``BadWindow``) are skipped.
     """
-    if sys.platform != "linux":
-        # Defensive narrow for pyright on non-Linux runs.
-        raise RuntimeError("unreachable")
-
     root = display.screen().root
     net_client_list = display.intern_atom("_NET_CLIENT_LIST")
     net_wm_pid = display.intern_atom("_NET_WM_PID")
@@ -105,10 +100,6 @@ def get_window_rect(
     see commit ``77a6422``). Returns ``None`` when the window has
     disappeared or has degenerate geometry.
     """
-    if sys.platform != "linux":
-        # Defensive narrow for pyright on non-Linux runs.
-        raise RuntimeError("unreachable")
-
     try:
         coords = window.translate_coords(display.screen().root, 0, 0)
         geom = window.get_geometry()
