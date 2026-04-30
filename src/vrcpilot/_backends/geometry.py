@@ -1,16 +1,8 @@
 """Platform-agnostic VRChat window geometry lookup.
 
-Wraps the Win32 (:mod:`vrcpilot._win32`) and X11 (:mod:`vrcpilot._x11`)
-helpers behind a single :func:`get_vrchat_window_rect` entry point so
-callers (e.g. :mod:`vrcpilot.screenshot`) do not have to branch on
-``sys.platform`` themselves.
-
-The function is intentionally narrow: it returns the VRChat window's
-``(x, y, width, height)`` rectangle on success, or ``None`` for any
-recoverable failure (VRChat not running, window not yet mapped, X11
-display unavailable). Wayland detection is **not** performed here -
-that is a screenshot/capture-level concern, since Wayland still allows
-process and window discovery; it just blocks pixel grabs.
+Wayland detection is intentionally **not** done here — Wayland still
+allows process and window discovery, only pixel grabs are blocked, so
+the check belongs at the screenshot/capture layer.
 """
 
 from __future__ import annotations
@@ -46,12 +38,7 @@ def _get_vrchat_rect_win32() -> tuple[int, int, int, int] | None:
 
 
 def _get_vrchat_rect_x11() -> tuple[int, int, int, int] | None:
-    """X11 path: open display, locate the VRChat window, query geometry.
-
-    The display is opened locally and closed before returning so the
-    function leaves no X resources behind - callers that need a single
-    geometry lookup pay only for the connection's lifetime.
-    """
+    """X11 path: open display, locate the VRChat window, query geometry."""
     if sys.platform != "linux":
         # Defensive narrow for pyright on non-Linux runs.
         raise RuntimeError("unreachable")
@@ -71,20 +58,15 @@ def _get_vrchat_rect_x11() -> tuple[int, int, int, int] | None:
 
 
 def get_vrchat_window_rect() -> tuple[int, int, int, int] | None:
-    """Return the VRChat window rectangle for the current platform.
+    """Return the VRChat window ``(x, y, width, height)`` in desktop pixels.
 
-    Dispatches to the Win32 helper on Windows and the X11 helper on
-    Linux, returning ``(x, y, width, height)`` in absolute desktop
-    pixels. Returns ``None`` when VRChat is not running, the window
-    cannot be located, or the platform-specific geometry query fails.
+    ``None`` when VRChat is not running, the window cannot be located,
+    or the geometry query fails.
 
     Raises:
-        NotImplementedError: When invoked on a platform other than
-            Windows or Linux. Callers that already perform their own
-            platform guard (e.g. :func:`vrcpilot.take_screenshot`) will
-            never reach this branch, but the exception is still raised
-            here so direct callers fail loudly instead of silently
-            returning ``None``.
+        NotImplementedError: Platform other than Windows or Linux.
+            Raised (rather than returning ``None``) so direct callers
+            without their own platform guard fail loudly.
     """
     if sys.platform == "win32":
         return _get_vrchat_rect_win32()

@@ -10,21 +10,16 @@ import numpy as np
 class CaptureBackend(ABC):
     """Platform-specific frame source for :class:`vrcpilot.Capture`.
 
-    Implementations own a single open session against the platform's
-    window-capture API (WGC on Windows, X11 Composite on Linux). They
-    must be safe to construct in ``__init__`` and tear down in
-    :meth:`close`; the public :class:`vrcpilot.Capture` wrapper handles
-    closed-state checks and context-manager protocol.
+    The public :class:`vrcpilot.Capture` wrapper owns closed-state
+    checks and the context-manager protocol; backends only need to
+    open in ``__init__`` and release in :meth:`close`.
     """
 
     @abstractmethod
     def read(self) -> np.ndarray:
-        """Return the latest captured frame as an ``(H, W, 3)`` uint8 RGB
-        ndarray.
+        """Return the latest frame as an ``(H, W, 3)`` uint8 RGB ndarray.
 
-        Implementations may block (Win32 / WGC delivers asynchronously)
-        or be synchronous (X11 / Composite re-reads the pixmap on
-        demand).
+        May block or be synchronous depending on backend.
         """
 
     @abstractmethod

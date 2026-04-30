@@ -1,12 +1,8 @@
-"""Win32 / Windows.Graphics.Capture backend for :class:`vrcpilot.Capture`.
+"""Windows.Graphics.Capture backend for :class:`vrcpilot.Capture`.
 
-Wraps the ``windows_capture`` PyO3 module behind a
-:class:`~vrcpilot._backends.capture_base.CaptureBackend` so the public
-:class:`vrcpilot.Capture` wrapper does not have to know anything about
-WGC. The session is free-threaded: the underlying library spawns a
-worker that fires ``on_frame_arrived`` independently of the calling
-thread, and frames are stashed in a single-slot, lock-protected buffer
-so :meth:`read` always returns the most recent frame.
+The ``windows_capture`` library is free-threaded: it fires
+``on_frame_arrived`` from a worker thread, so the latest frame is
+stashed in a single-slot, lock-protected buffer.
 """
 
 from __future__ import annotations
@@ -40,12 +36,11 @@ from vrcpilot.process import find_pid
 
 
 class Win32CaptureBackend(CaptureBackend):
-    """WGC-backed capture session for the VRChat window.
+    """WGC-backed capture session.
 
-    Owns a single :class:`windows_capture.WindowsCapture` session plus
-    the latest-only frame slot. The latest-only buffer is what makes
-    :meth:`read` cap worst-case staleness at one frame interval - a
-    FIFO would let lag accumulate when consumers fall behind.
+    The single-slot latest-only buffer caps worst-case staleness at one
+    frame interval — a FIFO would let lag accumulate when consumers fall
+    behind.
     """
 
     _frame_timeout: float

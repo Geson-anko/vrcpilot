@@ -1,33 +1,8 @@
 """Automation toolkit for VRChat.
 
-``vrcpilot`` exposes building blocks for driving VRChat from Python: from
-launching the client through Steam to higher-level UI / in-game automation
-layered on top. The top-level namespace re-exports the stable entry points;
-lower-level helpers live under private submodules and are not part of the
-public API.
-
-The pixel-capture surface is split into two complementary entry points; pick
-based on workload:
-
-- :class:`Capture` — long-lived session that yields successive frames as
-  RGB ``ndarray`` instances. Focus-free (the window is not raised) and
-  designed for video-rate streaming where the latest frame matters more
-  than every frame. Use this for recording, ML inference loops, or any
-  consumer that calls into the capture in a tight loop.
-- :func:`take_screenshot` — single-shot grab that focuses the window
-  first and returns a :class:`Screenshot` carrying both the pixels and
-  the on-screen geometry. Use this for GUI automation steps that need
-  to compute click coordinates, drive OCR over a region, or diff a
-  static UI state.
-
-Typical use::
-
-    import vrcpilot
-
-    vrcpilot.launch()
-    shot = vrcpilot.take_screenshot()  # one-shot + metadata
-    with vrcpilot.Capture() as cap:    # streaming frames
-        frame = cap.read()
+Pixel capture is split between :class:`Capture` (focus-free streaming for
+video / ML) and :func:`take_screenshot` (one focused shot with on-screen
+geometry, for GUI automation).
 """
 
 from importlib import metadata
@@ -47,8 +22,8 @@ from vrcpilot.process import (
 from vrcpilot.screenshot import Screenshot, take_screenshot
 from vrcpilot.window import focus, unfocus
 
-#: Installed package version, resolved from distribution metadata so it stays
-#: in sync with ``pyproject.toml`` without being hard-coded here.
+#: Resolved from distribution metadata so it stays in sync with
+#: ``pyproject.toml`` without being hard-coded here.
 __version__ = metadata.version(__name__.replace("_", "-"))
 
 __all__ = [

@@ -1,31 +1,9 @@
-"""VRChat window capture API for continuous-frame (video) workloads.
+"""Continuous-frame capture API for the VRChat window.
 
-Public entry point for grabbing successive frames of the running VRChat
-window as :class:`numpy.ndarray` instances. Capture is **focus-free** on
-both platforms: Linux reads the off-screen pixmap via the X11 Composite
-extension, and Windows uses the Windows.Graphics.Capture API (the same
-backend OBS's "Window Capture (Windows 10 1903+)" mode is built on).
-The window is not raised to the foreground, so callers avoid the side
-effect (and the settle delay) of focusing the window before each frame.
-
-Choose between the two capture entry points based on workload:
-
-- :class:`Capture` (this module) — keep one session open and pull
-  many frames from it. Right when latency and "what's on screen *now*"
-  matter (video, ML inference, screen recording).
-- :func:`vrcpilot.screenshot.take_screenshot` — one focused shot
-  with on-screen geometry attached. Right when an automation step
-  needs to know *where* on the desktop the window is to compute
-  click coordinates, run OCR, or diff a region.
-
-Companion to :mod:`vrcpilot.window` (z-order control) and
-:mod:`vrcpilot.process` (lifecycle).
-
-Native Wayland sessions are not supported. ``Capture`` raises
-:class:`RuntimeError` on Wayland because a streaming session cannot
-function at all without X11 / XWayland; :func:`take_screenshot` instead
-emits a :class:`RuntimeWarning` and returns ``None`` so that polling
-callers can recover gracefully.
+Focus-free on both platforms: Linux reads the off-screen pixmap via the
+X11 Composite extension and Windows uses Windows.Graphics.Capture, so
+the window is never raised. For one-shot grabs paired with on-screen
+geometry use :func:`vrcpilot.screenshot.take_screenshot` instead.
 """
 
 from __future__ import annotations
@@ -60,59 +38,24 @@ def _select_capture_backend(*, frame_timeout: float) -> CaptureBackend:
 class Capture:
     """Continuous-frame capture session for the VRChat window.
 
-    Constructed once and reused: a single session opens the platform
-    backend (WGC on Windows, X11 Composite on Linux) and keeps it alive
-    until :meth:`close` is called, so subsequent :meth:`read` calls reuse
-    the same connection rather than paying setup cost per frame. Use
-    :class:`Capture` for video / frame-stream workloads; for one-shot
-    GUI-automation captures (with focus + window geometry) use
-    :func:`vrcpilot.screenshot.take_screenshot` instead.
-
-    The capture is **focus-free**: the window is not raised to the
-    foreground and frames are produced even when VRChat is fully occluded
-    by other windows.
-
-    :meth:`read` is **latest-only**, not FIFO. Each call returns the most
-    recent frame the backend has produced and discards anything older
-    that was waiting. This is intentional for video workloads: when a
-    consumer falls behind, a FIFO queue would let lag accumulate
-    indefinitely; latest-only caps the worst-case staleness at a single
-    frame interval. Callers that genuinely need every frame (e.g. lossy
-    recording at a fixed rate) must drive :meth:`read` faster than the
-    producer.
-
-    Use as a context manager (recommended)::
-
-        import vrcpilot
-        with vrcpilot.Capture() as cap:
-            for _ in range(60):
-                frame = cap.read()  # (H, W, 3) uint8 RGB
-
-    Or with explicit lifecycle::
-
-        cap = vrcpilot.Capture()
-        try:
-            frame = cap.read()
-        finally:
-            cap.close()
-
-    The instance is single-use: do not nest two ``with`` blocks against
-    the same instance, and do not reopen after :meth:`close`.
+    The session is single-use: a single backend connection is held open
+    until :meth:`close`, and reads are latest-only — old frames buffered
+    while the consumer was busy are discarded so lag cannot accumulate
+    when the consumer falls behind. Callers that need every frame must
+    drive :meth:`read` faster than the producer.
 
     Args:
         frame_timeout: Seconds :meth:`read` will wait for a frame before
-            raising :class:`TimeoutError`. Must be ``> 0``. Defaults to
-            ``2.0``, generous for the typical ~33 ms WGC delivery cadence.
+            raising :class:`TimeoutError`. Must be ``> 0``. Default
+            ``2.0`` is generous for WGC's ~33 ms cadence.
 
     Raises:
-        NotImplementedError: When constructed on a platform other than
-            Windows or Linux.
-        RuntimeError: When the platform backend cannot be brought up:
-            VRChat is not running, the top-level window is not yet
-            mapped, the X11 display is unavailable, the X11 Composite
-            extension is missing, the WGC session fails to start, or the
-            session is native Wayland (Capture requires X11 / XWayland).
-        ValueError: When ``frame_timeout`` is not strictly positive.
+        NotImplementedError: Platform other than Windows or Linux.
+        RuntimeError: Backend cannot start (VRChat not running, window
+            not mapped, X11 display unavailable, Composite missing, WGC
+            session failed, or native Wayland — streaming has no useful
+            fallback there).
+        ValueError: ``frame_timeout`` is not strictly positive.
     """
 
     _backend: CaptureBackend
@@ -126,42 +69,28 @@ class Capture:
         self._backend = _select_capture_backend(frame_timeout=frame_timeout)
 
     def read(self) -> np.ndarray:
-        """Return the latest unread frame as an RGB ``ndarray``.
+        """Return the latest unread frame as an ``(H, W, 3)`` uint8 RGB
+        ndarray.
 
-        Blocks until a fresh frame is available or :attr:`frame_timeout`
-        seconds elapse. Old frames buffered while the caller was busy are
-        discarded -- the call returns the most recent frame, not the
-        oldest, so latency does not accumulate when consumers fall
-        behind.
-
-        The returned array is independent of any internal buffer: it is
-        safe to retain, edit in place, or hand off to a writer.
-
-        Returns:
-            ``(H, W, 3)`` ``uint8`` RGB :class:`numpy.ndarray`. The
-            shape can change between calls if the VRChat window is
-            resized; callers that require a fixed size should resize
-            themselves.
+        Returned array is detached from internal buffers (safe to retain
+        and mutate). Shape may change across calls if the window is
+        resized.
 
         Raises:
-            RuntimeError: When the capture has already been closed, or
-                when the platform backend reports a fatal error (X11
-                ``XError``, invalid window geometry, etc.).
-            TimeoutError: When no frame arrives within
-                :attr:`frame_timeout` seconds (Windows / WGC only; the
-                X11 path is synchronous).
+            RuntimeError: Capture is closed or the backend reports a
+                fatal error (X11 ``XError``, invalid geometry, etc.).
+            TimeoutError: No frame within :attr:`frame_timeout` seconds
+                (Windows / WGC only; the X11 path is synchronous).
         """
         if self._closed:
             raise RuntimeError("Capture is closed")
         return self._backend.read()
 
     def close(self) -> None:
-        """Release the platform backend; idempotent and exception-safe.
+        """Release the backend; idempotent and never raises.
 
-        Subsequent calls to :meth:`read` raise :class:`RuntimeError`.
-        Calling :meth:`close` more than once is a no-op. Backend cleanup
-        failures are surfaced as :class:`RuntimeWarning` rather than
-        raised, so contexts like ``__exit__`` are always safe.
+        Backend cleanup failures are surfaced as :class:`RuntimeWarning`
+        so ``__exit__`` paths stay safe.
         """
         if self._closed:
             return

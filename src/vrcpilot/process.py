@@ -1,13 +1,4 @@
-"""VRChat process management API.
-
-Public entry points for starting, observing, and stopping the VRChat
-client. This layer is the foundation other automation builds on:
-anything that drives the live client first needs to launch it, confirm
-it is running, or shut it down. Use :func:`launch` for the end-to-end
-start flow, :func:`find_pid` to check liveness, :func:`terminate` to
-stop it, and :func:`build_launch_command` when you need to inspect or
-customize the command before spawning.
-"""
+"""VRChat process lifecycle: launch, find, terminate."""
 
 from __future__ import annotations
 
@@ -21,44 +12,27 @@ import psutil
 
 from vrcpilot._steam import find_steam_executable
 
-#: Steam application id for VRChat. Hard-coded as a published constant rather
-#: than discovered at runtime so callers can reference it without launching.
+#: Steam application id for VRChat.
 VRCHAT_STEAM_APP_ID: Final[int] = 438100
 
-#: Process name used by VRChat across platforms. On Linux/Steam Deck the
-#: client runs under Proton and still presents itself as ``VRChat.exe``,
-#: so the same constant is correct for every supported OS.
+#: Process name used by VRChat. On Linux/Steam Deck the client runs under
+#: Proton and still presents itself as ``VRChat.exe``, so the same constant
+#: is correct on every supported OS.
 VRCHAT_PROCESS_NAME: Final[str] = "VRChat.exe"
 
 
 @dataclass(frozen=True)
 class OscConfig:
-    """Python representation of VRChat's ``--osc=in:ip:out`` launch flag.
+    """Structured form of VRChat's ``--osc=<in>:<ip>:<out>`` launch flag.
 
-    VRChat accepts a single ``--osc=<in_port>:<out_ip>:<out_port>`` argument
-    that pins the OSC server it spins up at startup. This dataclass models
-    that triple as a typed, structured value so callers do not assemble the
-    string by hand and so two configurations can be compared with ``==``.
-
-    Defaults intentionally mirror VRChat's own factory OSC settings, so
-    ``OscConfig()`` reproduces the client's out-of-the-box behaviour while
-    still forwarding the flag explicitly — useful when you want the
-    deterministic argv (e.g. for logging) without changing semantics.
-
-    The dataclass is ``frozen=True``: instances are hashable and safe to
-    share across threads or use as cache keys. To change a port, construct
-    a new instance (or use :func:`dataclasses.replace`).
+    Defaults mirror VRChat's factory OSC settings, so ``OscConfig()``
+    forwards the flag explicitly without changing client semantics —
+    useful when a deterministic argv is wanted (logging, tests).
 
     Attributes:
         in_port: UDP port VRChat listens on for inbound OSC messages.
-        out_ip: IP address VRChat sends outbound OSC messages to.
+        out_ip: IP VRChat sends outbound OSC messages to.
         out_port: UDP port VRChat sends outbound OSC messages to.
-
-    Examples:
-        >>> OscConfig() == OscConfig(9000, "127.0.0.1", 9001)
-        True
-        >>> OscConfig(in_port=9100).to_launch_arg()
-        '--osc=9100:127.0.0.1:9001'
     """
 
     in_port: int = 9000
@@ -66,19 +40,7 @@ class OscConfig:
     out_port: int = 9001
 
     def to_launch_arg(self) -> str:
-        """Render the configuration as a single ``--osc=...`` CLI token.
-
-        The result is one argv element (no spaces), ready to be appended to
-        the VRChat-side argument list returned by
-        :func:`build_vrchat_launch_args`.
-
-        Returns:
-            The argument string to pass to VRChat.
-
-        Examples:
-            >>> OscConfig().to_launch_arg()
-            '--osc=9000:127.0.0.1:9001'
-        """
+        """Render as a single ``--osc=...`` argv token."""
         return f"--osc={self.in_port}:{self.out_ip}:{self.out_port}"
 
 
@@ -90,38 +52,21 @@ def build_vrchat_launch_args(
     osc: OscConfig | None = None,
     extra_args: list[str] | None = None,
 ) -> list[str]:
-    """Assemble the VRChat-specific argument list passed after ``-applaunch``.
+    """Assemble the VRChat-side argv that follows ``-applaunch <app_id>``.
 
-    Pure helper that turns a structured set of options into the flat token
-    list VRChat (and the underlying Unity runtime) expect. It is kept
-    separate from :func:`build_launch_command` because the two operate on
-    different layers: this function only knows about VRChat's own flags,
-    while :func:`build_launch_command` deals with Steam's wrapper argv.
-    Splitting them lets callers reuse, inspect, or further filter the
-    VRChat-side argv without re-implementing Steam's invocation contract.
-
-    The output order is fixed — ``no_vr`` → ``screen_width`` →
-    ``screen_height`` → ``osc`` → ``extra_args`` — so the produced argv is
-    byte-stable across runs, which keeps tests, logs, and reproducibility
-    tooling honest.
-
-    ``extra_args`` is the deliberate escape hatch for flags this helper
-    does not model (e.g. ``--profile=N`` or future VRChat options): tokens
-    are forwarded verbatim with no interpretation, so callers retain full
-    control when the structured arguments are not enough.
+    Output order is fixed (``no_vr`` -> screen size -> ``osc`` ->
+    ``extra_args``) so the argv is byte-stable across runs. Kept
+    separate from :func:`build_launch_command` so callers can reuse or
+    filter the VRChat-side argv without re-implementing Steam's
+    wrapper.
 
     Args:
-        no_vr: When ``True``, append ``--no-vr`` to launch in desktop mode.
+        no_vr: When ``True`` append ``--no-vr``.
         screen_width: Optional Unity ``-screen-width`` value.
         screen_height: Optional Unity ``-screen-height`` value.
-        osc: Optional :class:`OscConfig`; rendered via
-            :meth:`OscConfig.to_launch_arg`.
-        extra_args: Additional raw tokens appended verbatim after every
-            structured option. Use for flags this helper does not model.
-
-    Returns:
-        A list of CLI tokens ready to splice in after the Steam
-        ``-applaunch <app_id>`` prefix.
+        osc: Optional :class:`OscConfig`.
+        extra_args: Raw tokens appended verbatim. Escape hatch for
+            flags this helper does not model.
     """
     args: list[str] = []
     if no_vr:
@@ -143,32 +88,18 @@ def build_launch_command(
     *,
     vrchat_args: list[str] | None = None,
 ) -> list[str]:
-    """Build the argv used to launch a Steam game via Steam's CLI.
+    """Build the Steam ``-applaunch`` argv for spawning the game.
 
-    Exposed separately from :func:`launch` so callers can inspect,
-    log, or wrap the command (for example, to spawn it under a sandbox or
-    a different process manager) without paying the cost of an actual
-    launch. The function is pure and side-effect free, which also makes
-    it easy to unit-test command-shape regressions.
-
-    Steam's ``-applaunch`` form forwards every trailing token to the
-    launched game, which is how VRChat ends up receiving its own flags
-    even though the process Python actually spawns is Steam itself. That
-    one-step transport is the reason ``vrchat_args`` belongs here rather
-    than as a parallel ``Popen`` argument.
+    Exposed separately from :func:`launch` so callers can inspect, log,
+    or wrap the command without spawning. ``vrchat_args`` lives here
+    because Steam's ``-applaunch`` form transports trailing tokens to
+    the launched game in the same argv — there is no parallel channel.
 
     Args:
-        steam_executable: Path to the Steam executable. Not validated
-            here; pass a path returned from auto-detection or one you
-            have already verified.
-        app_id: Steam application id of the game to launch. Defaults to
+        steam_executable: Path to the Steam executable. Not validated.
+        app_id: Steam application id. Defaults to
             :data:`VRCHAT_STEAM_APP_ID`.
-        vrchat_args: Optional list of arguments forwarded to VRChat after
-            ``-applaunch <app_id>``. Pre-built via
-            :func:`build_vrchat_launch_args` or supplied as raw tokens.
-
-    Returns:
-        Argument vector suitable for :class:`subprocess.Popen`.
+        vrchat_args: Forwarded to VRChat after ``-applaunch <app_id>``.
     """
     cmd = [str(steam_executable), "-applaunch", str(app_id)]
     if vrchat_args:
@@ -188,46 +119,25 @@ def launch(
 ) -> None:
     """Launch VRChat through Steam.
 
-    Use this as the standard way to bring VRChat up before driving any
-    higher-level automation. The launcher is detached from the parent's
-    process group / session so that the Python script can exit without
-    taking VRChat down with it.
-
-    The PID of the spawned Steam invoker is intentionally not exposed: it
-    is short-lived and unrelated to the actual VRChat process. When Steam
-    is already running, the invoker hands the launch request off to the
-    existing Steam client and exits almost immediately, so its PID is not
-    a useful handle. To observe whether VRChat itself is up, use
-    :func:`find_pid`.
-
-    Steam must be installed and either auto-detectable or supplied via
-    ``steam_path``; the user is not required to be signed in beforehand,
-    Steam will surface its own login UI if needed.
-
-    The keyword arguments below mirror :func:`build_vrchat_launch_args` —
-    they are forwarded as-is and converted into the VRChat argv that
-    Steam's ``-applaunch`` form transports to the game. Use ``extra_args``
-    when you need to pass an option this function does not model
-    explicitly (e.g. uncommon or future VRChat flags).
+    Detached from the parent's process group / session so the calling
+    Python script can exit without taking VRChat down with it. The
+    spawned PID is intentionally not returned: it is the short-lived
+    Steam invoker, not VRChat itself; use :func:`find_pid` to observe
+    VRChat.
 
     Args:
-        app_id: Steam application id to launch. Defaults to
-            :data:`VRCHAT_STEAM_APP_ID`. Override only when targeting a
-            different title (e.g. a test app id).
-        steam_path: Optional explicit path to the Steam executable. When
-            omitted, the path is auto-detected per platform.
-        no_vr: Pass ``--no-vr`` to launch VRChat in desktop mode.
-        screen_width: Optional ``-screen-width`` value forwarded to Unity.
-        screen_height: Optional ``-screen-height`` value forwarded to
-            Unity.
-        osc: Optional :class:`OscConfig` rendered into ``--osc=...``. Pass
-            ``OscConfig()`` to forward the flag with VRChat's defaults, or
-            customise ports/IP as needed.
-        extra_args: Additional raw tokens forwarded verbatim to VRChat.
-            Escape hatch for options this signature does not cover.
+        app_id: Steam application id. Defaults to
+            :data:`VRCHAT_STEAM_APP_ID`.
+        steam_path: Explicit Steam executable path; auto-detected when
+            ``None``.
+        no_vr: Forward ``--no-vr`` (desktop mode).
+        screen_width: Unity ``-screen-width`` value.
+        screen_height: Unity ``-screen-height`` value.
+        osc: Optional :class:`OscConfig` rendered into ``--osc=...``.
+        extra_args: Raw tokens forwarded verbatim to VRChat.
 
     Raises:
-        SteamNotFoundError: If the Steam executable cannot be located.
+        SteamNotFoundError: Steam executable cannot be located.
     """
     steam_executable = find_steam_executable(steam_path)
     vrchat_args = build_vrchat_launch_args(
@@ -256,20 +166,9 @@ def launch(
 def find_pid() -> int | None:
     """Return the PID of a running VRChat process, or ``None`` if absent.
 
-    Use this to check whether VRChat is already up before deciding to
-    launch it, or to obtain a handle for higher-level automation that
-    needs to attach to the live process. The lookup is read-only — it
-    does not signal or otherwise disturb the process.
-
-    Iterates over running processes via :func:`psutil.process_iter` and
-    returns the first one whose name matches :data:`VRCHAT_PROCESS_NAME`.
-    Enumeration order is OS-defined, so when multiple instances are
-    running the choice is not configurable; callers that need every PID
-    should walk :func:`psutil.process_iter` themselves.
-
-    Returns:
-        The PID of the first matching process, or ``None`` if no VRChat
-        process is currently running.
+    Returns the first match from :func:`psutil.process_iter` — when
+    multiple instances run, enumeration order is OS-defined and the
+    choice is not configurable.
     """
     for proc in psutil.process_iter(["name"]):
         if proc.info["name"] == VRCHAT_PROCESS_NAME:
@@ -278,25 +177,17 @@ def find_pid() -> int | None:
 
 
 def terminate(*, timeout: float = 5.0) -> bool:
-    """Forcefully terminate any running VRChat processes.
-
-    Iterates over running processes and sends SIGKILL
-    (:meth:`psutil.Process.kill`, which uses ``TerminateProcess`` on
-    Windows) to every process whose name matches
-    :data:`VRCHAT_PROCESS_NAME`. Forceful termination is appropriate for
-    automation: VRChat does not require an orderly shutdown for typical
-    workflows.
+    """Forcefully ``kill`` every running VRChat process.
 
     Args:
         timeout: Seconds to wait for the killed processes to disappear
-            before returning, giving the OS time to reap them. If a
-            process is still listed after the timeout, the function
-            still returns ``True`` — the kill was issued, even if the
-            wait did not observe completion.
+            before returning. The function returns ``True`` even if a
+            process is still listed after the timeout — the kill was
+            issued, only the wait did not observe completion.
 
     Returns:
-        ``True`` if at least one matching process was found and killed,
-        ``False`` if no VRChat process was running.
+        ``True`` if at least one process was killed, ``False`` if none
+        were running.
     """
     procs = [
         p

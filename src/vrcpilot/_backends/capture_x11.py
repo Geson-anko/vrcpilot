@@ -1,11 +1,7 @@
-"""X11 / Composite backend for :class:`vrcpilot.Capture`.
+"""X11 Composite backend for :class:`vrcpilot.Capture`.
 
-Wraps the python-xlib Composite extension behind a
-:class:`~vrcpilot._backends.capture_base.CaptureBackend` so the public
-:class:`vrcpilot.Capture` wrapper does not have to know anything about
-X11. The session keeps a single display connection alive across calls
-to :meth:`read` and re-grabs the off-screen pixmap on demand: callers
-get the live state of the window without forcing it to the foreground.
+Re-grabs the off-screen pixmap on every :meth:`read` so the returned
+frame reflects the window's current state even when occluded.
 """
 
 from __future__ import annotations
@@ -33,12 +29,7 @@ if TYPE_CHECKING or sys.platform == "linux":
 
 
 class X11CaptureBackend(CaptureBackend):
-    """X11 Composite-backed capture session for the VRChat window.
-
-    Holds the display connection and the redirected window; each
-    :meth:`read` re-fetches the off-screen pixmap so the returned frame
-    reflects the window's current state even when occluded.
-    """
+    """X11 Composite capture session: holds the display + redirected window."""
 
     _display: Xlib.display.Display
     _window: _XWindow

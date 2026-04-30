@@ -1,10 +1,4 @@
-"""Win32 helpers shared between window control and screen capture.
-
-Both :mod:`vrcpilot.window` (focus / unfocus) and
-:mod:`vrcpilot.capture` (take_screenshot) need to locate the VRChat
-top-level window by PID. Centralising that primitive here keeps the
-two modules from duplicating the ``EnumWindows`` boilerplate.
-"""
+"""Win32 helpers shared between window control and screen capture."""
 
 from __future__ import annotations
 
@@ -33,22 +27,7 @@ _DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4
 
 
 def find_vrchat_hwnd(pid: int) -> int | None:
-    """Return the visible top-level HWND owned by *pid*.
-
-    Walks every top-level window via :func:`win32gui.EnumWindows` and
-    returns the first one whose owning process id matches *pid* and
-    which is currently visible (``IsWindowVisible``). Returns ``None``
-    when no matching visible window is found — for example, when the
-    process has been spawned but its main window has not yet been
-    created, or when the window is hidden.
-
-    Args:
-        pid: Process id to match against the window's owning process.
-
-    Returns:
-        The HWND of the first matching visible top-level window, or
-        ``None`` if no such window exists.
-    """
+    """Return the visible top-level HWND owned by *pid*, or ``None``."""
     if sys.platform != "win32":
         # Defensive: callers gate on ``sys.platform`` before invoking. This
         # branch also narrows the win32* names for pyright on POSIX runs.
@@ -73,25 +52,11 @@ def find_vrchat_hwnd(pid: int) -> int | None:
 def get_window_rect(hwnd: int) -> tuple[int, int, int, int] | None:
     """Return ``(x, y, width, height)`` of *hwnd* in physical screen pixels.
 
-    Wraps :func:`win32gui.GetWindowRect`, which yields ``(left, top,
-    right, bottom)`` for the outer window frame. The result is converted
-    to origin + size form for parity with :func:`vrcpilot._x11.get_window_rect`.
-
-    The current thread is switched to per-monitor DPI aware (V2) for the
-    duration of the call via ``SetThreadDpiAwarenessContext`` so that
-    ``GetWindowRect`` returns physical pixel coordinates that match what
-    :mod:`mss` grabs. The previous context is restored in ``finally`` to
-    keep the change scoped to this call. A thread-local toggle is used
-    rather than process-wide DPI awareness so that no other code in the
-    process is affected.
-
-    Args:
-        hwnd: Window handle to query.
-
-    Returns:
-        ``(x, y, width, height)`` on success, or ``None`` when the HWND
-        has been destroyed (``pywintypes.error``) or the rectangle is
-        degenerate (non-positive width or height).
+    Switches the calling thread to per-monitor DPI aware V2 for the
+    duration of the call so ``GetWindowRect`` returns physical pixels
+    matching what :mod:`mss` grabs; thread-local rather than process-
+    wide so no other code is affected. Returns ``None`` when the HWND
+    has been destroyed or the rectangle is degenerate.
     """
     if sys.platform != "win32":
         # Defensive narrow for pyright on POSIX runs.
