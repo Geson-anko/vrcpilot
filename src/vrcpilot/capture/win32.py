@@ -8,34 +8,37 @@ stashed in a single-slot, lock-protected buffer.
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
 
-if sys.platform != "win32":
+# ``TYPE_CHECKING`` is False at runtime — the raise fires on non-Windows hosts.
+# Under pyright (which treats ``TYPE_CHECKING`` as True) the raise is skipped,
+# letting the type checker see the win32 symbols below.
+if not TYPE_CHECKING and sys.platform != "win32":
     raise ImportError
+
 import threading
 import warnings
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import Any, cast, override
 
 import numpy as np
 
+# ``windows_capture`` ships no type stubs (it's a thin wrapper over a
+# PyO3 native module). The import itself trips ``reportMissingTypeStubs``,
+# which we silence explicitly here. We then re-bind the symbol with an
+# ``Any`` annotation so every downstream attribute read, decorator use,
+# and constructor call inherits ``Any`` instead of needing its own
+# ``reportUnknown*`` suppression. The public name ``WindowsCapture`` is
+# preserved because tests patch the module attribute by that name.
+from windows_capture import (  # pyright: ignore[reportMissingTypeStubs]
+    WindowsCapture as _WindowsCaptureRaw,
+)
+
+from vrcpilot._win32 import find_vrchat_hwnd
+from vrcpilot.process import find_pid
+
 from .base import CaptureBackend
 
-if TYPE_CHECKING or sys.platform == "win32":
-    # ``windows_capture`` ships no type stubs (it's a thin wrapper over a
-    # PyO3 native module). The import itself trips ``reportMissingTypeStubs``,
-    # which we silence explicitly here. We then re-bind the symbol with an
-    # ``Any`` annotation so every downstream attribute read, decorator use,
-    # and constructor call inherits ``Any`` instead of needing its own
-    # ``reportUnknown*`` suppression. The public name ``WindowsCapture`` is
-    # preserved because tests patch the module attribute by that name.
-    from windows_capture import (  # pyright: ignore[reportMissingTypeStubs]
-        WindowsCapture as _WindowsCaptureRaw,
-    )
-
-    WindowsCapture: Any = _WindowsCaptureRaw
-
-    from vrcpilot._win32 import find_vrchat_hwnd
-
-from vrcpilot.process import find_pid
+WindowsCapture: Any = _WindowsCaptureRaw
 
 
 class Win32CaptureBackend(CaptureBackend):
@@ -54,10 +57,6 @@ class Win32CaptureBackend(CaptureBackend):
     _control: object  # ``windows_capture.CaptureControl`` (no stubs).
 
     def __init__(self, *, frame_timeout: float) -> None:
-        if sys.platform != "win32":
-            # Defensive narrow for pyright on non-Windows runs.
-            raise RuntimeError("unreachable")
-
         self._frame_timeout = frame_timeout
         self._closed = False
 
