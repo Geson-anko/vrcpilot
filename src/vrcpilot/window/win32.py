@@ -3,24 +3,23 @@
 from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING, Any, cast
+
+if sys.platform != "win32":
+    raise ImportError
+
+from typing import Any, cast
+
+import pywintypes
+import win32api
+import win32con
+import win32gui
 
 from vrcpilot._win32 import find_vrchat_hwnd
 from vrcpilot.process import find_pid
 
-if TYPE_CHECKING or sys.platform == "win32":
-    import pywintypes
-    import win32api
-    import win32con
-    import win32gui
-
 
 def focus_window() -> bool:
     """Win32 implementation of :func:`vrcpilot.window.focus`."""
-    if sys.platform != "win32":
-        # Defensive narrow for pyright on POSIX runs.
-        raise RuntimeError("unreachable")
-
     pid = find_pid()
     if pid is None:
         return False
@@ -52,10 +51,6 @@ def focus_window() -> bool:
 
 def unfocus_window() -> bool:
     """Win32 implementation of :func:`vrcpilot.window.unfocus`."""
-    if sys.platform != "win32":
-        # Defensive narrow for pyright on POSIX runs.
-        raise RuntimeError("unreachable")
-
     pid = find_pid()
     if pid is None:
         return False
