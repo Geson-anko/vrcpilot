@@ -3,3 +3,4 @@
 - [Docstring Returns redundancy](feedback_docstring_returns.md) — keep return-value contract in `Returns:` block only; don't restate it in the summary paragraph
 - [Test class organization](feedback_test_classes.md) — tests live under `class Test<Target>:` with no return-type annotations; `mocker` fixture from `pytest_mock`
 - [Avoid object-typed fixture parameters](feedback_fixture_typing.md) — don't annotate mock-fixture params as `: object`; leave unannotated to keep tests free of pyright-ignore noise
+- [pyright ignore の集約・最小化](feedback_pyright_ignore_minimization.md) — stub のない C 拡張は 1 度 Any 化して連鎖する `reportUnknown*` を全部消すのが定石

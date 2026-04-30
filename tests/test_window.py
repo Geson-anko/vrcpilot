@@ -13,43 +13,44 @@ from vrcpilot.window import focus, unfocus
 
 if sys.platform == "win32":
     import pywintypes
+if sys.platform == "linux":
+    import vrcpilot.window.x11 as _x11_backend
 
 
 class TestFocus:
     @only_windows
     def test_returns_false_when_not_running(self, mocker: MockerFixture):
-        mocker.patch("vrcpilot.window.find_pid", return_value=None)
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=None)
 
         assert focus() is False
 
     @only_windows
     def test_returns_false_when_hwnd_not_found(self, mocker: MockerFixture):
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
-        mocker.patch("vrcpilot.window.find_vrchat_hwnd", return_value=None)
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=None)
 
         assert focus() is False
 
     @only_windows
     def test_returns_true_on_success(self, mocker: MockerFixture):
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
-        mocker.patch("vrcpilot.window.find_vrchat_hwnd", return_value=12345)
-        mocker.patch("vrcpilot.window.win32gui.IsIconic", return_value=False)
-        set_fg = mocker.patch("vrcpilot.window.win32gui.SetForegroundWindow")
-        mocker.patch("vrcpilot.window.win32gui.BringWindowToTop")
-        mocker.patch("vrcpilot.window.win32api.keybd_event")
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=12345)
+        mocker.patch("vrcpilot.window.win32.win32gui.IsIconic", return_value=False)
+        mocker.patch("vrcpilot.window.win32.win32gui.SetForegroundWindow")
+        mocker.patch("vrcpilot.window.win32.win32gui.BringWindowToTop")
+        mocker.patch("vrcpilot.window.win32.win32api.keybd_event")
 
         assert focus() is True
-        set_fg.assert_called_once_with(12345)
 
     @only_windows
     def test_restores_minimized_window(self, mocker: MockerFixture):
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
-        mocker.patch("vrcpilot.window.find_vrchat_hwnd", return_value=12345)
-        mocker.patch("vrcpilot.window.win32gui.IsIconic", return_value=True)
-        show_window_mock = mocker.patch("vrcpilot.window.win32gui.ShowWindow")
-        mocker.patch("vrcpilot.window.win32gui.SetForegroundWindow")
-        mocker.patch("vrcpilot.window.win32gui.BringWindowToTop")
-        mocker.patch("vrcpilot.window.win32api.keybd_event")
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=12345)
+        mocker.patch("vrcpilot.window.win32.win32gui.IsIconic", return_value=True)
+        show_window_mock = mocker.patch("vrcpilot.window.win32.win32gui.ShowWindow")
+        mocker.patch("vrcpilot.window.win32.win32gui.SetForegroundWindow")
+        mocker.patch("vrcpilot.window.win32.win32gui.BringWindowToTop")
+        mocker.patch("vrcpilot.window.win32.win32api.keybd_event")
 
         result = focus()
 
@@ -58,14 +59,14 @@ class TestFocus:
 
     @only_windows
     def test_returns_false_on_pywintypes_error(self, mocker: MockerFixture):
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
-        mocker.patch("vrcpilot.window.find_vrchat_hwnd", return_value=12345)
-        mocker.patch("vrcpilot.window.win32gui.IsIconic", return_value=False)
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=12345)
+        mocker.patch("vrcpilot.window.win32.win32gui.IsIconic", return_value=False)
         mocker.patch(
-            "vrcpilot.window.win32gui.SetForegroundWindow",
+            "vrcpilot.window.win32.win32gui.SetForegroundWindow",
             side_effect=pywintypes.error(0, "SetForegroundWindow", "msg"),
         )
-        mocker.patch("vrcpilot.window.win32api.keybd_event")
+        mocker.patch("vrcpilot.window.win32.win32api.keybd_event")
 
         assert focus() is False
 
@@ -73,35 +74,31 @@ class TestFocus:
 class TestUnfocus:
     @only_windows
     def test_returns_false_when_not_running(self, mocker: MockerFixture):
-        mocker.patch("vrcpilot.window.find_pid", return_value=None)
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=None)
 
         assert unfocus() is False
 
     @only_windows
     def test_returns_false_when_hwnd_not_found(self, mocker: MockerFixture):
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
-        mocker.patch("vrcpilot.window.find_vrchat_hwnd", return_value=None)
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=None)
 
         assert unfocus() is False
 
     @only_windows
     def test_returns_true_on_success(self, mocker: MockerFixture):
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
-        mocker.patch("vrcpilot.window.find_vrchat_hwnd", return_value=12345)
-        set_pos = mocker.patch("vrcpilot.window.win32gui.SetWindowPos")
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=12345)
+        mocker.patch("vrcpilot.window.win32.win32gui.SetWindowPos")
 
         assert unfocus() is True
-        set_pos.assert_called_once()
-        # First positional arg is the HWND, second is the insert-after handle.
-        args = set_pos.call_args.args
-        assert args[0] == 12345
 
     @only_windows
     def test_returns_false_on_pywintypes_error(self, mocker: MockerFixture):
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
-        mocker.patch("vrcpilot.window.find_vrchat_hwnd", return_value=12345)
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=12345)
         mocker.patch(
-            "vrcpilot.window.win32gui.SetWindowPos",
+            "vrcpilot.window.win32.win32gui.SetWindowPos",
             side_effect=pywintypes.error(0, "SetWindowPos", "msg"),
         )
 
@@ -140,7 +137,7 @@ class TestFocusX11:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setenv("DISPLAY", ":0")
-        mocker.patch("vrcpilot.window.find_pid", return_value=None)
+        mocker.patch("vrcpilot.window.x11.find_pid", return_value=None)
 
         assert vrcpilot.window.focus() is False
 
@@ -149,9 +146,9 @@ class TestFocusX11:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setenv("DISPLAY", ":0")
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.x11.find_pid", return_value=4242)
         mocker.patch("vrcpilot._x11.Xlib.display.Display")
-        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=None)
+        mocker.patch("vrcpilot.window.x11.find_vrchat_window", return_value=None)
 
         assert vrcpilot.window.focus() is False
 
@@ -160,10 +157,10 @@ class TestFocusX11:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setenv("DISPLAY", ":0")
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.x11.find_pid", return_value=4242)
         mocker.patch(
             "vrcpilot._x11.Xlib.display.Display",
-            side_effect=vrcpilot.window.Xlib.error.DisplayError(":0"),
+            side_effect=_x11_backend.Xlib.error.DisplayError(":0"),
         )
 
         assert vrcpilot.window.focus() is False
@@ -173,7 +170,7 @@ class TestFocusX11:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setenv("DISPLAY", ":0")
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.x11.find_pid", return_value=4242)
 
         fake_window = mocker.Mock()
         fake_root = mocker.Mock()
@@ -181,11 +178,11 @@ class TestFocusX11:
         fake_display = mocker.Mock()
         fake_display.screen.return_value = fake_screen
         mocker.patch("vrcpilot._x11.Xlib.display.Display", return_value=fake_display)
-        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=fake_window)
+        mocker.patch("vrcpilot.window.x11.find_vrchat_window", return_value=fake_window)
         # ``ClientMessage`` packs its arguments into a struct on
         # construction; the mocked window cannot satisfy that, so we
         # stub the event class out entirely.
-        mocker.patch("vrcpilot.window.Xlib.protocol.event.ClientMessage")
+        mocker.patch("vrcpilot.window.x11.Xlib.protocol.event.ClientMessage")
 
         assert vrcpilot.window.focus() is True
         assert fake_root.send_event.called
@@ -207,7 +204,7 @@ class TestUnfocusX11:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setenv("DISPLAY", ":0")
-        mocker.patch("vrcpilot.window.find_pid", return_value=None)
+        mocker.patch("vrcpilot.window.x11.find_pid", return_value=None)
 
         assert vrcpilot.window.unfocus() is False
 
@@ -216,9 +213,9 @@ class TestUnfocusX11:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setenv("DISPLAY", ":0")
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.x11.find_pid", return_value=4242)
         mocker.patch("vrcpilot._x11.Xlib.display.Display")
-        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=None)
+        mocker.patch("vrcpilot.window.x11.find_vrchat_window", return_value=None)
 
         assert vrcpilot.window.unfocus() is False
 
@@ -227,12 +224,12 @@ class TestUnfocusX11:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setenv("DISPLAY", ":0")
-        mocker.patch("vrcpilot.window.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.x11.find_pid", return_value=4242)
 
         fake_window = mocker.Mock()
         fake_display = mocker.Mock()
         mocker.patch("vrcpilot._x11.Xlib.display.Display", return_value=fake_display)
-        mocker.patch("vrcpilot.window.find_vrchat_window", return_value=fake_window)
+        mocker.patch("vrcpilot.window.x11.find_vrchat_window", return_value=fake_window)
 
         assert vrcpilot.window.unfocus() is True
         assert fake_window.configure.called

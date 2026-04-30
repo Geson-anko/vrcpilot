@@ -1,21 +1,8 @@
 # PYTHON_ARGCOMPLETE_OK
 """Command line interface for vrcpilot.
 
-Thin wrapper around the public Python API so the same workflows are
-reachable from a shell. The CLI is intentionally minimal: it shells out
-to the library functions and translates exceptions into exit codes,
-keeping behavioral logic in the library itself.
-
-Invocation::
-
-    python -m vrcpilot launch [--app-id ID] [--steam-path PATH] [--no-vr]
-        [--screen-width N] [--screen-height N]
-        [--osc-in-port N [--osc-out-ip IP] [--osc-out-port N]]
-    python -m vrcpilot status
-    python -m vrcpilot terminate
-    python -m vrcpilot focus
-    python -m vrcpilot unfocus
-    python -m vrcpilot screenshot [-o PATH | --output PATH]
+Thin wrapper that translates the public Python API into exit codes;
+behavioural logic stays in the library.
 """
 
 from __future__ import annotations
@@ -44,10 +31,8 @@ from vrcpilot.window import focus, unfocus
 def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level argparse parser with all subcommands.
 
-    Extracted from :func:`main` so tests (and the ``argcomplete`` shell
-    hook) can obtain a fully-configured parser without running the
-    command. Each call returns a fresh parser; callers that mutate it
-    should not share the instance.
+    Extracted from :func:`main` so tests and the ``argcomplete`` hook
+    can obtain a fully-configured parser without running the command.
     """
     parser = argparse.ArgumentParser(
         prog="vrcpilot",
@@ -71,8 +56,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override the auto-detected Steam executable path.",
     )
-    steam_path_action.completer = FilesCompleter(  # type: ignore[attr-defined]
-        allowednames=("exe",), directories=True
+    _attach_completer(
+        steam_path_action, FilesCompleter(allowednames=("exe",), directories=True)
     )
     launch_parser.add_argument(
         "--no-vr",
@@ -149,30 +134,38 @@ def _build_parser() -> argparse.ArgumentParser:
             "directory."
         ),
     )
-    output_action.completer = FilesCompleter(  # type: ignore[attr-defined]
-        allowednames=("png",), directories=True
+    _attach_completer(
+        output_action, FilesCompleter(allowednames=("png",), directories=True)
     )
 
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Run the ``vrcpilot`` command line interface.
+def _attach_completer(action: argparse.Action, completer: object) -> None:
+    """Attach an ``argcomplete`` completer to an argparse ``Action``.
 
-    Entry point used both by the console script and by ``python -m
-    vrcpilot``. Returns an exit code instead of calling :func:`sys.exit`
-    so it stays trivially testable: pass ``argv`` explicitly from a test
-    and assert on the return value.
+    ``argcomplete`` reads ``action.completer`` at completion time but
+    argparse itself does not declare the attribute, so a direct
+    assignment trips ``reportAttributeAccessIssue`` under pyright
+    strict. Routing through ``setattr`` keeps that noise out of
+    :func:`_build_parser`.
+    """
+    setattr(action, "completer", completer)  # noqa: B010 - argcomplete's documented hook
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the ``vrcpilot`` CLI and return an exit code.
+
+    Returns the code instead of calling :func:`sys.exit` so tests can
+    pass ``argv`` and assert on the return value.
 
     Args:
-        argv: Optional argument list passed to :mod:`argparse`. When
-            ``None`` (the default), arguments are read from
+        argv: Argument list passed to :mod:`argparse`. ``None`` reads
             :data:`sys.argv`.
 
     Returns:
-        Process exit code. ``0`` on success, ``2`` on a recoverable error
-        such as Steam not being found (mirrors common CLI conventions for
-        usage / environment errors).
+        ``0`` on success, ``2`` on environment errors such as Steam
+        missing (mirrors common CLI conventions).
     """
     parser = _build_parser()
     argcomplete.autocomplete(parser)
@@ -217,31 +210,13 @@ def _run_launch(
 ) -> int:
     """Execute the ``launch`` subcommand.
 
-    Bridges the flat CLI argument shape onto :func:`launch`. The
-    inbound OSC port acts as the gate: when it is ``None`` the entire OSC
-    triple is suppressed (no ``--osc`` flag is forwarded, and
-    ``osc_out_ip`` / ``osc_out_port`` are silently ignored). This keeps
-    the CLI ergonomic — users who do not care about OSC do not have to
-    blank the outbound defaults — at the cost of letting unused flags
-    pass without a warning.
-
-    Args:
-        app_id: Steam app id to launch.
-        steam_path: Optional explicit path to the Steam executable.
-        no_vr: When ``True``, force desktop mode via ``--no-vr``.
-        screen_width: Optional Unity ``-screen-width`` value.
-        screen_height: Optional Unity ``-screen-height`` value.
-        osc_in_port: When provided, an :class:`OscConfig` is built using this
-            inbound port together with ``osc_out_ip`` and ``osc_out_port``
-            and forwarded to VRChat. When ``None``, no OSC flag is sent and
-            the outbound options are ignored.
-        osc_out_ip: OSC outbound IP. Only meaningful when ``osc_in_port`` is
-            set.
-        osc_out_port: OSC outbound port. Only meaningful when ``osc_in_port``
-            is set.
+    ``osc_in_port`` gates the entire OSC triple: when ``None`` no
+    ``--osc`` flag is forwarded and ``osc_out_ip`` / ``osc_out_port``
+    are silently ignored. Keeps the CLI ergonomic at the cost of
+    accepting unused flags without warning.
 
     Returns:
-        ``0`` if VRChat was launched successfully, ``2`` if Steam was not found.
+        ``0`` on launch, ``2`` if Steam was not found.
     """
     osc = (
         OscConfig(
@@ -271,14 +246,11 @@ def _run_launch(
 def _run_status() -> int:
     """Execute the ``status`` subcommand.
 
-    Reports whether VRChat is currently running by delegating to
-    :func:`find_pid`. The exit code is intentionally
-    state-dependent — unlike :func:`_run_terminate`, which is idempotent —
-    so shell users can branch on it (``if vrcpilot status; then ...``).
+    Exit code is state-dependent (unlike :func:`_run_terminate`) so
+    shells can branch with ``if vrcpilot status; then ...``.
 
     Returns:
-        ``0`` if a VRChat process was found (PID is printed to stdout),
-        ``1`` if no VRChat process is running.
+        ``0`` if running (PID printed), ``1`` otherwise.
     """
     pid = find_pid()
     if pid is None:
@@ -291,12 +263,8 @@ def _run_status() -> int:
 def _run_terminate() -> int:
     """Execute the ``terminate`` subcommand.
 
-    Termination is treated as idempotent: callers can invoke it without
-    knowing whether VRChat is currently running, and either outcome is
-    reported on stdout with a successful exit code.
-
-    Returns:
-        ``0`` whether VRChat was running or not.
+    Idempotent: exit ``0`` whether VRChat was running or not, so
+    callers do not need a preflight ``status`` check.
     """
     if terminate():
         print("Terminated VRChat.")
@@ -308,16 +276,9 @@ def _run_terminate() -> int:
 def _run_focus() -> int:
     """Execute the ``focus`` subcommand.
 
-    Thin wrapper around :func:`focus`. The boolean return value is
-    translated into an exit code so shell callers can branch on it; the
-    CLI does not try to attribute *why* a failure occurred (the
-    underlying API does not surface that), so a single generic message
-    is emitted on failure.
-
     Returns:
-        ``0`` if VRChat was brought to the foreground, ``1`` if the
-        operation failed (VRChat not running, window not yet available,
-        or unsupported session such as native Wayland).
+        ``0`` on success, ``1`` on any failure (VRChat not running,
+        window unavailable, native Wayland).
     """
     if focus():
         print("Focused VRChat.")
@@ -329,14 +290,9 @@ def _run_focus() -> int:
 def _run_unfocus() -> int:
     """Execute the ``unfocus`` subcommand.
 
-    Counterpart of :func:`_run_focus` for sending VRChat to the bottom
-    of the z-order. Same exit-code contract: ``0`` on success, ``1`` on
-    any failure mode reported by :func:`unfocus`.
-
     Returns:
-        ``0`` if VRChat was sent to the bottom of the z-order, ``1`` if
-        the operation failed (VRChat not running, window not yet
-        available, or unsupported session such as native Wayland).
+        ``0`` on success, ``1`` on any failure (VRChat not running,
+        window unavailable, native Wayland).
     """
     if unfocus():
         print("Unfocused VRChat.")
@@ -348,26 +304,13 @@ def _run_unfocus() -> int:
 def _run_screenshot(*, output: Path | None) -> int:
     """Execute the ``screenshot`` subcommand.
 
-    Bridges :func:`take_screenshot` to the file system: when capture
-    succeeds the returned :class:`vrcpilot.Screenshot`'s ``image``
-    ndarray is converted to a :class:`PIL.Image.Image` via
-    :func:`PIL.Image.fromarray` and written with ``Image.save`` (the
-    format is inferred from the path's extension). When the underlying
-    API returns ``None`` — VRChat not running, window not yet
-    available, native Wayland session, screen grabber failure — a
-    generic message is emitted on stderr and the CLI exits non-zero so
-    shell callers can branch on it.
-
     Args:
-        output: Destination path for the captured image. When ``None``
-            the file is written to the current working directory as
-            ``vrcpilot_screenshot_<YYYYMMDD_HHMMSS>.png``. The extension
-            determines the on-disk format (use ``.png`` for the
-            documented PNG behaviour).
+        output: Destination path. ``None`` writes
+            ``./vrcpilot_screenshot_<YYYYMMDD_HHMMSS>.png``. Extension
+            determines the on-disk format via :func:`PIL.Image.save`.
 
     Returns:
-        ``0`` if the screenshot was captured and saved, ``1`` if the
-        capture failed.
+        ``0`` on success, ``1`` if capture failed.
     """
     shot = take_screenshot()
     if shot is None:
