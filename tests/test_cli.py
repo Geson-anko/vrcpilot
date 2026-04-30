@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
+from types import TracebackType
+from typing import Self
 
+import numpy as np
 import pytest
 from argcomplete.completers import FilesCompleter
 from pytest_mock import MockerFixture
@@ -350,6 +355,221 @@ class TestScreenshotCommand:
         assert saved_path.suffix == ".png"
 
 
+class _FakeCaptureLoop:
+    instances: list[_FakeCaptureLoop] = []
+    frames_per_start: int = 3
+    init_side_effect: BaseException | None = None
+
+    def __init__(
+        self,
+        callback: Callable[[np.ndarray], None],
+        *,
+        fps: float,
+        frame_timeout: float = 2.0,
+    ) -> None:
+        if _FakeCaptureLoop.init_side_effect is not None:
+            raise _FakeCaptureLoop.init_side_effect
+        self.callback = callback
+        self.fps = fps
+        self.frame_timeout = frame_timeout
+        self.start_calls = 0
+        _FakeCaptureLoop.instances.append(self)
+
+    def start(self) -> None:
+        self.start_calls += 1
+        for _ in range(_FakeCaptureLoop.frames_per_start):
+            self.callback(np.zeros((4, 4, 3), dtype=np.uint8))
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        del exc_type, exc_val, exc_tb
+
+
+class _FakeMp4FrameSink:
+    instances: list[_FakeMp4FrameSink] = []
+
+    def __init__(self, output_path: Path, fps: float) -> None:
+        self.output_path = output_path
+        self.fps = fps
+        self.writes: list[np.ndarray] = []
+        self.closed = False
+        _FakeMp4FrameSink.instances.append(self)
+
+    @property
+    def frame_count(self) -> int:
+        return len(self.writes)
+
+    def write(self, frame_rgb: np.ndarray) -> None:
+        self.writes.append(frame_rgb)
+
+    def close(self) -> None:
+        self.closed = True
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        del exc_type, exc_val, exc_tb
+        self.close()
+
+
+@dataclass
+class _CaptureFakes:
+    loop: type[_FakeCaptureLoop]
+    sink: type[_FakeMp4FrameSink]
+    sleep: object = field(default=None)
+
+
+@pytest.fixture
+def capture_fakes(mocker: MockerFixture) -> _CaptureFakes:
+    # KeyboardInterrupt 既定: production の `while True: time.sleep(3600)`
+    # idiom に入っても 1 回目で抜ける。これを忘れると Mock.call_args_list が
+    # 無限蓄積してメモリが爆発する（feedback_just_run_memory_pressure 参照）。
+    sleep_mock = mocker.patch("vrcpilot.cli.time.sleep", side_effect=KeyboardInterrupt)
+    mocker.patch("vrcpilot.cli.CaptureLoop", _FakeCaptureLoop)
+    mocker.patch("vrcpilot.cli.Mp4FrameSink", _FakeMp4FrameSink)
+    _FakeCaptureLoop.instances = []
+    _FakeCaptureLoop.frames_per_start = 3
+    _FakeCaptureLoop.init_side_effect = None
+    _FakeMp4FrameSink.instances = []
+    return _CaptureFakes(
+        loop=_FakeCaptureLoop, sink=_FakeMp4FrameSink, sleep=sleep_mock
+    )
+
+
+class TestCaptureCommand:
+    def test_default_output_uses_cwd_with_timestamp(
+        self,
+        capture_fakes: _CaptureFakes,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        exit_code = main(["capture"])
+
+        assert exit_code == 0
+        assert len(capture_fakes.sink.instances) == 1
+        sink = capture_fakes.sink.instances[0]
+        assert sink.output_path.parent == tmp_path
+        assert sink.output_path.name.startswith("vrcpilot_capture_")
+        assert sink.output_path.suffix == ".mp4"
+        assert "Saved capture to" in capsys.readouterr().out
+
+    def test_explicit_output_path(self, capture_fakes: _CaptureFakes, tmp_path: Path):
+        out = tmp_path / "foo.mp4"
+
+        exit_code = main(["capture", "--output", str(out)])
+
+        assert exit_code == 0
+        assert capture_fakes.sink.instances[0].output_path == out
+
+    def test_short_output_flag(self, capture_fakes: _CaptureFakes, tmp_path: Path):
+        out = tmp_path / "bar.mp4"
+
+        exit_code = main(["capture", "-o", str(out)])
+
+        assert exit_code == 0
+        assert capture_fakes.sink.instances[0].output_path == out
+
+    def test_default_fps_is_30(self, capture_fakes: _CaptureFakes, tmp_path: Path):
+        exit_code = main(["capture", "-o", str(tmp_path / "fps.mp4")])
+
+        assert exit_code == 0
+        assert capture_fakes.loop.instances[0].fps == 30.0
+        assert capture_fakes.sink.instances[0].fps == 30.0
+
+    def test_fps_argument_propagates(
+        self, capture_fakes: _CaptureFakes, tmp_path: Path
+    ):
+        exit_code = main(["capture", "-o", str(tmp_path / "fps.mp4"), "--fps", "60"])
+
+        assert exit_code == 0
+        assert capture_fakes.loop.instances[0].fps == 60.0
+        assert capture_fakes.sink.instances[0].fps == 60.0
+
+    def test_duration_argument_propagates(
+        self,
+        capture_fakes: _CaptureFakes,
+        tmp_path: Path,
+        mocker: MockerFixture,
+    ):
+        # duration ありの正常完了パスを確認するため、sleep を return_value=None
+        # で上書き。--duration を指定しているので 1 回の sleep で抜ける。
+        sleep_mock = mocker.patch("vrcpilot.cli.time.sleep", return_value=None)
+
+        exit_code = main(["capture", "-o", str(tmp_path / "d.mp4"), "--duration", "5"])
+
+        assert exit_code == 0
+        sleep_mock.assert_called_once_with(5.0)
+        assert capture_fakes.sink.instances[0].closed
+
+    def test_no_duration_waits_until_keyboard_interrupt(
+        self, capture_fakes: _CaptureFakes, tmp_path: Path
+    ):
+        # 既定 fixture の sleep は side_effect=KeyboardInterrupt なので
+        # `while True: time.sleep(3600)` の最初の呼び出しで抜ける。exit 0。
+        exit_code = main(["capture", "-o", str(tmp_path / "ki.mp4")])
+
+        assert exit_code == 0
+        # `else` 分岐に入って sleep が 1 度だけ呼ばれて抜けたことを確認。
+        # ここを忘れると Mock.call_args_list が無限蓄積する罠を踏むため
+        # その契約をテストでロックしておく。
+        assert capture_fakes.sleep.call_count == 1  # type: ignore[attr-defined]
+
+    def test_zero_frames_returns_error(
+        self,
+        capture_fakes: _CaptureFakes,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        capture_fakes.loop.frames_per_start = 0
+
+        exit_code = main(["capture", "-o", str(tmp_path / "zero.mp4")])
+
+        assert exit_code == 1
+        assert "no frames captured" in capsys.readouterr().err
+        assert capture_fakes.sink.instances[0].frame_count == 0
+
+    def test_runtime_error_returns_error(
+        self,
+        capture_fakes: _CaptureFakes,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        capture_fakes.loop.init_side_effect = RuntimeError("VRChat is not running")
+
+        exit_code = main(["capture", "-o", str(tmp_path / "err.mp4")])
+
+        assert exit_code == 1
+        assert "VRChat is not running" in capsys.readouterr().err
+
+    def test_callback_writes_frames_to_sink(
+        self, capture_fakes: _CaptureFakes, tmp_path: Path
+    ):
+        capture_fakes.loop.frames_per_start = 5
+
+        exit_code = main(["capture", "-o", str(tmp_path / "cb.mp4")])
+
+        assert exit_code == 0
+        sink = capture_fakes.sink.instances[0]
+        assert sink.frame_count == 5
+        assert sink.closed
+
+
 class TestMain:
     def test_missing_subcommand_exits(self):
         with pytest.raises(SystemExit):
@@ -394,3 +614,19 @@ class TestArgcompleteIntegration:
         exit_code = main(["launch"])
 
         assert exit_code == 0
+
+    def test_capture_output_has_files_completer(self):
+        parser = _build_parser()
+
+        subparsers_action = parser._subparsers._group_actions[0]  # type: ignore[union-attr]
+        capture_parser = subparsers_action.choices["capture"]
+        output_action = next(
+            action
+            for action in capture_parser._actions
+            if "--output" in action.option_strings
+        )
+
+        completer = output_action.completer  # type: ignore[attr-defined]
+        assert isinstance(completer, FilesCompleter)
+        allowednames = completer.allowednames
+        assert any("mp4" in name for name in allowednames)
