@@ -31,7 +31,7 @@ dev = [
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
-    "types-python-xlib>=0.33",
+    "types-python-xlib>=0.33; sys_platform == 'linux'",
     "types-pywin32>=311.0.0.20260408 ; sys_platform == 'win32'",
 ]
 
