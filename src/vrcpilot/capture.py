@@ -31,37 +31,30 @@ callers can recover gracefully.
 from __future__ import annotations
 
 import sys
-import threading
-import warnings
 from types import TracebackType
-from typing import TYPE_CHECKING, Self
+from typing import Self
 
 import numpy as np
 
-from vrcpilot._x11 import (
-    find_vrchat_window,
-    is_wayland_native,
-    open_x11_display,
-)
-from vrcpilot.process import find_pid
+from vrcpilot._backends.capture_base import CaptureBackend
 
-if TYPE_CHECKING or sys.platform == "linux":
-    import Xlib.display
-    import Xlib.error
-    from Xlib import X
-    from Xlib.ext import composite
-    from Xlib.xobject.drawable import Window as _XWindow
 
-if sys.platform == "win32":
-    # ``windows_capture`` ships no type stubs (it's a thin wrapper over a
-    # PyO3 native module), so the import trips ``reportMissingTypeStubs``
-    # and downstream attribute reads come back as ``Unknown``. We narrow
-    # with isinstance / asserts at use sites.
-    from windows_capture import (  # pyright: ignore[reportMissingTypeStubs]
-        WindowsCapture,
-    )
+def _select_capture_backend(*, frame_timeout: float) -> CaptureBackend:
+    """Return the platform-appropriate :class:`CaptureBackend`.
 
-    from vrcpilot._win32 import find_vrchat_hwnd
+    Imports the chosen backend lazily so platform-specific dependencies
+    (``windows_capture`` on Windows, ``Xlib`` on Linux) never need to be
+    importable on the other platform.
+    """
+    if sys.platform == "win32":
+        from vrcpilot._backends.capture_win32 import Win32CaptureBackend
+
+        return Win32CaptureBackend(frame_timeout=frame_timeout)
+    if sys.platform == "linux":
+        from vrcpilot._backends.capture_x11 import X11CaptureBackend
+
+        return X11CaptureBackend()
+    raise NotImplementedError(f"Capture is not supported on {sys.platform}")
 
 
 class Capture:
@@ -122,226 +115,15 @@ class Capture:
         ValueError: When ``frame_timeout`` is not strictly positive.
     """
 
-    _frame_timeout: float
+    _backend: CaptureBackend
     _closed: bool
-
-    # WGC-only attributes; created in ``_init_win32`` on Windows runs.
-    _latest_frame: tuple[np.ndarray, int, int] | None
-    _frame_lock: threading.Lock
-    _frame_event: threading.Event
-    _control: object  # ``windows_capture.CaptureControl`` (no stubs).
-
-    # X11-only attributes; created in ``_init_x11`` on Linux runs.
-    _display: Xlib.display.Display
-    _window: _XWindow
 
     def __init__(self, *, frame_timeout: float = 2.0) -> None:
         if frame_timeout <= 0:
             raise ValueError("frame_timeout must be > 0")
 
-        self._frame_timeout = frame_timeout
         self._closed = False
-
-        if sys.platform == "win32":
-            self._init_win32()
-        elif sys.platform == "linux":
-            self._init_x11()
-        else:
-            raise NotImplementedError(
-                f"Capture is not supported on {sys.platform}",
-            )
-
-    # --- Win32 / WGC backend -------------------------------------------------
-
-    def _init_win32(self) -> None:
-        """Bring up the WGC backend and start the free-threaded session."""
-        if sys.platform != "win32":
-            # Defensive narrow for pyright on non-Windows runs.
-            raise RuntimeError("unreachable")
-
-        pid = find_pid()
-        if pid is None:
-            raise RuntimeError("VRChat is not running")
-
-        hwnd = find_vrchat_hwnd(pid)
-        if hwnd is None:
-            raise RuntimeError("VRChat top-level window is not yet mapped")
-
-        # Single-slot latest-frame buffer; threading.Event wakes ``read``.
-        self._latest_frame = None
-        self._frame_lock = threading.Lock()
-        self._frame_event = threading.Event()
-
-        capture = WindowsCapture(  # pyright: ignore[reportUnknownVariableType]
-            cursor_capture=False,
-            draw_border=False,
-            window_hwnd=hwnd,
-        )
-
-        @capture.event  # pyright: ignore[reportUnknownMemberType, reportUntypedFunctionDecorator, reportArgumentType]
-        def on_frame_arrived(frame: object, control: object) -> None:  # pyright: ignore[reportUnusedFunction]
-            del control  # We never stop from inside the handler.
-            # ``frame.frame_buffer`` is a row-tight ``(H, W, 4)`` BGRA ndarray;
-            # the library has already collapsed the GPU stride for us. Convert
-            # BGRA -> RGB and copy out so the buffer is safe to keep after the
-            # handler returns (the underlying ctypes memory is reused).
-            buf = frame.frame_buffer.tobytes()  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue, reportUnknownVariableType]
-            width = int(frame.width)  # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
-            height = int(frame.height)  # pyright: ignore[reportUnknownArgumentType, reportAttributeAccessIssue, reportUnknownMemberType]
-            assert isinstance(buf, bytes)
-            if width <= 0 or height <= 0:
-                # Spurious frame; ignore. ``read`` will keep waiting.
-                return
-            bgra = np.frombuffer(buf, dtype=np.uint8).reshape(height, width, 4)
-            rgb = np.ascontiguousarray(bgra[..., 2::-1])
-            with self._frame_lock:
-                self._latest_frame = (rgb, width, height)
-                self._frame_event.set()
-
-        @capture.event  # pyright: ignore[reportUnknownMemberType, reportUntypedFunctionDecorator, reportArgumentType]
-        def on_closed() -> None:  # pyright: ignore[reportUnusedFunction]
-            pass
-
-        try:
-            self._control = capture.start_free_threaded()  # pyright: ignore[reportUnknownMemberType]
-        except OSError as exc:
-            raise RuntimeError(f"Failed to start WGC session: {exc}") from exc
-
-    def _read_win32(self) -> np.ndarray:
-        """Block on the latest-frame slot and return one RGB ndarray."""
-        if not self._frame_event.wait(timeout=self._frame_timeout):
-            # ``close`` may have set the event; re-check the closed flag
-            # before raising ``TimeoutError`` so the message stays accurate.
-            if self._closed:
-                raise RuntimeError("Capture is closed")
-            raise TimeoutError(
-                f"No frame arrived within {self._frame_timeout}s",
-            )
-        with self._frame_lock:
-            if self._closed:
-                # ``close`` raced ahead and woke us; do not return a frame.
-                raise RuntimeError("Capture is closed")
-            slot = self._latest_frame
-            self._latest_frame = None
-            self._frame_event.clear()
-        if slot is None:
-            # Event was set but slot was already drained; treat as timeout.
-            raise TimeoutError(
-                f"No frame arrived within {self._frame_timeout}s",
-            )
-        rgb, _w, _h = slot
-        return rgb
-
-    def _close_win32(self) -> None:
-        """Stop the WGC session, wake any waiter, and drain the slot."""
-        try:
-            self._control.stop()  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
-        except Exception as exc:  # noqa: BLE001 - close() must not raise
-            warnings.warn(
-                f"WGC stop() failed: {exc}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-        # Wake any thread blocked in ``read`` so it observes ``_closed = True``.
-        self._frame_event.set()
-        with self._frame_lock:
-            self._latest_frame = None
-
-    # --- X11 / Composite backend --------------------------------------------
-
-    def _init_x11(self) -> None:
-        """Open the X display, locate the window, and redirect via
-        Composite."""
-        if sys.platform != "linux":
-            # Defensive narrow for pyright on non-Linux runs.
-            raise RuntimeError("unreachable")
-
-        if is_wayland_native():
-            raise RuntimeError(
-                "Capture requires X11 or XWayland; native Wayland is not supported",
-            )
-
-        pid = find_pid()
-        if pid is None:
-            raise RuntimeError("VRChat is not running")
-
-        display = open_x11_display()
-        if display is None:
-            raise RuntimeError("X11 display unavailable")
-
-        try:
-            window = find_vrchat_window(display, pid)
-            if window is None:
-                raise RuntimeError("VRChat top-level window is not yet mapped")
-
-            # Verify the server speaks Composite -- raises XError when
-            # the extension isn't loaded so we can fail fast.
-            try:
-                composite.query_version(display)
-            except Xlib.error.XError as exc:
-                raise RuntimeError(
-                    f"X11 Composite extension not available: {exc}",
-                ) from exc
-
-            try:
-                # Redirect the window to off-screen storage so we can read
-                # its pixels regardless of stacking order. Idempotent when
-                # a compositor (picom, mutter, kwin...) already redirects.
-                # python-xlib stubs declare ``update`` as a callable but
-                # the protocol value is the int constant
-                # ``RedirectAutomatic``.
-                composite.redirect_window(window, composite.RedirectAutomatic)  # pyright: ignore[reportArgumentType]
-            except Xlib.error.XError as exc:
-                raise RuntimeError(f"Failed to redirect window: {exc}") from exc
-        except BaseException:
-            # Any failure between display open and successful redirect must
-            # release the connection; otherwise an exception during init
-            # leaks the X server socket.
-            try:
-                display.close()
-            except Exception:  # noqa: BLE001 - cleanup must not mask the cause
-                pass
-            raise
-
-        self._display = display
-        self._window = window
-
-    def _read_x11(self) -> np.ndarray:
-        """Re-grab the window pixmap through Composite and return RGB
-        ndarray."""
-        if sys.platform != "linux":
-            # Defensive narrow for pyright on non-Linux runs.
-            raise RuntimeError("unreachable")
-
-        try:
-            geom = self._window.get_geometry()
-            width = int(geom.width)
-            height = int(geom.height)
-            if width <= 0 or height <= 0:
-                raise RuntimeError("Window has invalid geometry")
-            pixmap = composite.name_window_pixmap(self._window)
-            try:
-                reply = pixmap.get_image(0, 0, width, height, X.ZPixmap, 0xFFFFFFFF)
-            finally:
-                pixmap.free()
-        except Xlib.error.XError as exc:
-            raise RuntimeError(f"X11 capture failed: {exc}") from exc
-
-        bgra = np.frombuffer(reply.data, dtype=np.uint8).reshape(height, width, 4)
-        return np.ascontiguousarray(bgra[..., 2::-1])
-
-    def _close_x11(self) -> None:
-        """Close the held X display connection (no unredirect, no pixmap)."""
-        try:
-            self._display.close()
-        except Exception as exc:  # noqa: BLE001 - close() must not raise
-            warnings.warn(
-                f"X11 display close failed: {exc}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-
-    # --- Public API ---------------------------------------------------------
+        self._backend = _select_capture_backend(frame_timeout=frame_timeout)
 
     def read(self) -> np.ndarray:
         """Return the latest unread frame as an RGB ``ndarray``.
@@ -371,12 +153,7 @@ class Capture:
         """
         if self._closed:
             raise RuntimeError("Capture is closed")
-        if sys.platform == "win32":
-            return self._read_win32()
-        if sys.platform == "linux":
-            return self._read_x11()
-        # Unreachable: ``__init__`` already filtered platforms.
-        raise NotImplementedError(f"Capture is not supported on {sys.platform}")
+        return self._backend.read()
 
     def close(self) -> None:
         """Release the platform backend; idempotent and exception-safe.
@@ -389,10 +166,7 @@ class Capture:
         if self._closed:
             return
         self._closed = True
-        if sys.platform == "win32":
-            self._close_win32()
-        elif sys.platform == "linux":
-            self._close_x11()
+        self._backend.close()
 
     def __enter__(self) -> Self:
         return self
