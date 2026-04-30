@@ -506,6 +506,7 @@ dependencies = [
     { name = "argcomplete" },
     { name = "mss" },
     { name = "numpy" },
+    { name = "opencv-python" },
     { name = "pillow" },
     { name = "psutil" },
     { name = "python-xlib", marker = "sys_platform == 'linux'" },
@@ -515,7 +516,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "opencv-python" },
     { name = "pre-commit" },
     { name = "pyright" },
     { name = "pytest" },
@@ -530,6 +530,7 @@ requires-dist = [
     { name = "argcomplete", specifier = ">=3.5,<4" },
     { name = "mss", specifier = ">=10.2.0" },
     { name = "numpy", specifier = ">=2.1" },
+    { name = "opencv-python", specifier = ">=4.10" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "psutil", specifier = ">=7.2.2" },
     { name = "python-xlib", marker = "sys_platform == 'linux'", specifier = ">=0.33" },
@@ -539,7 +540,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "opencv-python", specifier = ">=4.10" },
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pyright", specifier = ">=1.1.398" },
     { name = "pytest", specifier = ">=8.3.5" },

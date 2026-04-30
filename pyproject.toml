@@ -9,6 +9,7 @@ dependencies = [
     "argcomplete>=3.5,<4",
     "mss>=10.2.0",
     "numpy>=2.1",
+    "opencv-python>=4.10",
     "pillow>=12.2.0",
     "psutil>=7.2.2",
     "python-xlib>=0.33 ; sys_platform == 'linux'",
@@ -25,7 +26,6 @@ build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "opencv-python>=4.10",
     "pre-commit>=4.2.0",
     "pyright>=1.1.398",
     "pytest>=8.3.5",
