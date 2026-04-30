@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -13,18 +12,6 @@ if TYPE_CHECKING or sys.platform == "linux":
     import Xlib.error
     from Xlib import X
     from Xlib.xobject.drawable import Window as _XWindow
-
-
-def is_wayland_native() -> bool:
-    """Return ``True`` when the session is Wayland with no XWayland.
-
-    XWayland exposes a usable ``DISPLAY`` to X11 clients, so the
-    detection requires both ``XDG_SESSION_TYPE == "wayland"`` AND no
-    ``DISPLAY``. Otherwise our X11 operations would still be reachable.
-    """
-    return os.environ.get("XDG_SESSION_TYPE") == "wayland" and not os.environ.get(
-        "DISPLAY"
-    )
 
 
 def open_x11_display() -> Xlib.display.Display | None:

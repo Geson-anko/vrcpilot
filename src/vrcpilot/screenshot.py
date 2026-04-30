@@ -20,7 +20,7 @@ import mss
 import numpy as np
 from numpy.typing import NDArray
 
-from vrcpilot._x11 import is_wayland_native
+from vrcpilot._session import is_wayland_native
 from vrcpilot.geometry import get_vrchat_window_rect
 from vrcpilot.window import focus
 

@@ -6,7 +6,8 @@ import sys
 import warnings
 from typing import TYPE_CHECKING
 
-from vrcpilot._x11 import find_vrchat_window, is_wayland_native, x11_display
+from vrcpilot._session import is_wayland_native
+from vrcpilot._x11 import find_vrchat_window, x11_display
 from vrcpilot.process import find_pid
 
 if TYPE_CHECKING or sys.platform == "linux":
