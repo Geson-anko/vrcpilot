@@ -31,10 +31,16 @@ class CaptureLoop:
         callback: Function invoked with each captured RGB ndarray. Its
             return value is ignored.
         fps: Target frames per second. Must be ``> 0``.
-        frame_timeout: Forwarded to the internal :class:`Capture`.
+        frame_timeout: Per-frame timeout forwarded to the internal
+            :class:`Capture`. See :class:`Capture` for semantics.
 
     Raises:
-        ValueError: ``fps`` is not strictly positive.
+        ValueError: ``fps`` is not strictly positive, or ``frame_timeout``
+            is not strictly positive (forwarded from :class:`Capture`).
+        RuntimeError: The internal :class:`Capture` cannot start (VRChat
+            not running, window not mapped, backend session failed,
+            etc.). See :class:`Capture` for the full list.
+        NotImplementedError: Platform other than Windows or Linux.
     """
 
     _capture: Capture
@@ -106,12 +112,11 @@ class CaptureLoop:
             if thread is not None and thread is not threading.current_thread():
                 thread.join()
                 self._thread = None
-            elif thread is None:
-                # Already stopped or never started.
-                pass
-            # Same-thread case: leave _thread set so is_running stays
-            # truthful while the caller's frame is still on the stack;
-            # _run will fall out on the next loop check.
+            # Same-thread case (callback called stop()): skip join to
+            # avoid self-deadlock and leave _thread set so is_running
+            # stays truthful while the caller's frame is still on the
+            # stack; _run will exit once control returns to it.
+            # thread is None case: already stopped or never started.
 
             exc = self._exception
             self._exception = None
