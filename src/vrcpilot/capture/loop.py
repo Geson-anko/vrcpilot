@@ -17,7 +17,7 @@ import numpy as np
 
 from .session import Capture
 
-FrameCallback = Callable[[np.ndarray], None]
+type FrameCallback = Callable[[np.ndarray], None]
 
 
 class CaptureLoop:
