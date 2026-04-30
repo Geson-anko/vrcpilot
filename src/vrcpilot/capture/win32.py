@@ -77,7 +77,6 @@ class Win32CaptureBackend(CaptureBackend):
             window_hwnd=hwnd,
         )
 
-        @capture.event
         def on_frame_arrived(frame: Any, control: Any) -> None:
             del control  # We never stop from inside the handler.
             # ``frame.frame_buffer`` is a row-tight ``(H, W, 4)`` BGRA ndarray;
@@ -97,16 +96,11 @@ class Win32CaptureBackend(CaptureBackend):
                 self._latest_frame = (rgb, width, height)
                 self._frame_event.set()
 
-        # Keep references so pyright doesn't flag the locally-defined event
-        # handlers as unused; ``windows_capture`` keeps them alive via the
-        # decorator side effect.
-        _ = on_frame_arrived
-
-        @capture.event
         def on_closed() -> None:
             pass
 
-        _ = on_closed
+        capture.event(on_frame_arrived)
+        capture.event(on_closed)
 
         try:
             self._control = capture.start_free_threaded()
