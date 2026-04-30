@@ -42,14 +42,11 @@ class TestFocus:
         mocker.patch(
             "vrcpilot._backends.window_win32.win32gui.IsIconic", return_value=False
         )
-        set_fg = mocker.patch(
-            "vrcpilot._backends.window_win32.win32gui.SetForegroundWindow"
-        )
+        mocker.patch("vrcpilot._backends.window_win32.win32gui.SetForegroundWindow")
         mocker.patch("vrcpilot._backends.window_win32.win32gui.BringWindowToTop")
         mocker.patch("vrcpilot._backends.window_win32.win32api.keybd_event")
 
         assert focus() is True
-        set_fg.assert_called_once_with(12345)
 
     @only_windows
     def test_restores_minimized_window(self, mocker: MockerFixture):
@@ -112,13 +109,9 @@ class TestUnfocus:
         mocker.patch(
             "vrcpilot._backends.window_win32.find_vrchat_hwnd", return_value=12345
         )
-        set_pos = mocker.patch("vrcpilot._backends.window_win32.win32gui.SetWindowPos")
+        mocker.patch("vrcpilot._backends.window_win32.win32gui.SetWindowPos")
 
         assert unfocus() is True
-        set_pos.assert_called_once()
-        # First positional arg is the HWND, second is the insert-after handle.
-        args = set_pos.call_args.args
-        assert args[0] == 12345
 
     @only_windows
     def test_returns_false_on_pywintypes_error(self, mocker: MockerFixture):

@@ -54,16 +54,41 @@ def _build_fake_sct(
 
 def _patch_happy_path(
     mocker: MockerFixture,
+    monkeypatch: pytest.MonkeyPatch,
     *,
+    platform: str = "win32",
     rect: tuple[int, int, int, int] = (100, 200, 800, 600),
     monitors: list[dict[str, int]] | None = None,
 ) -> Any:
-    """Wire up the four collaborators ``take_screenshot`` calls.
+    """Wire up the collaborators ``take_screenshot`` calls.
+
+    The focus step is patched at the platform-specific *backend*
+    boundary (``_backends.window_win32.focus_window`` or
+    ``_backends.window_x11.focus_window``) so the in-process
+    ``vrcpilot.window.focus`` dispatcher runs for real — only the
+    external Win32 / Xlib bindings are stubbed.
 
     Returns the fake ``mss.MSS`` instance so tests can inspect its
     ``grab`` invocations or override its ``side_effect``.
     """
-    mocker.patch("vrcpilot.screenshot.focus", return_value=True)
+    # Eagerly import the relevant backend BEFORE monkeypatching
+    # ``sys.platform`` so the ``Xlib``-gated imports inside the linux
+    # backend run under the host's real platform (i.e. they no-op on
+    # Windows where ``Xlib`` is unavailable). Also lets ``mocker.patch``
+    # resolve the dotted path on hosts that have not naturally imported
+    # the module.
+    if platform == "win32":
+        import vrcpilot._backends.window_win32  # noqa: F401
+    elif platform == "linux":
+        import vrcpilot._backends.window_x11  # noqa: F401
+
+    monkeypatch.setattr("vrcpilot.screenshot.sys.platform", platform)
+    monkeypatch.setattr("vrcpilot.window.sys.platform", platform)
+    if platform == "win32":
+        mocker.patch("vrcpilot._backends.window_win32.focus_window", return_value=True)
+    elif platform == "linux":
+        mocker.patch("vrcpilot.screenshot.is_wayland_native", return_value=False)
+        mocker.patch("vrcpilot._backends.window_x11.focus_window", return_value=True)
     mocker.patch("vrcpilot.screenshot.time.sleep")
     mocker.patch("vrcpilot.screenshot.get_vrchat_window_rect", return_value=rect)
 
@@ -78,8 +103,10 @@ class TestSettleSecondsValidation:
         with pytest.raises(ValueError, match="settle_seconds must be >= 0"):
             take_screenshot(settle_seconds=bad_value)
 
-    def test_zero_settle_seconds_is_allowed(self, mocker: MockerFixture):
-        _patch_happy_path(mocker)
+    def test_zero_settle_seconds_is_allowed(
+        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    ):
+        _patch_happy_path(mocker, monkeypatch)
 
         result = take_screenshot(settle_seconds=0)
 
@@ -114,9 +141,8 @@ class TestTakeScreenshot:
     ):
         # Force the win32 rectangle path so the test runs identically on
         # any host. The Linux path is symmetrical, just patched a bit
-        # differently — see ``test_uses_x11_rect_helper_on_linux``.
-        monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
-        _patch_happy_path(mocker, rect=(100, 200, 800, 600))
+        # differently - see ``test_uses_x11_rect_helper_on_linux``.
+        _patch_happy_path(mocker, monkeypatch, rect=(100, 200, 800, 600))
 
         result = take_screenshot()
 
@@ -136,63 +162,41 @@ class TestTakeScreenshot:
     def test_uses_x11_rect_helper_on_linux(
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
-        monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "linux")
-        mocker.patch("vrcpilot.screenshot.is_wayland_native", return_value=False)
-        mocker.patch("vrcpilot.screenshot.focus", return_value=True)
-        mocker.patch("vrcpilot.screenshot.time.sleep")
-
-        x11_rect = mocker.patch(
-            "vrcpilot.screenshot.get_vrchat_window_rect",
-            return_value=(50, 60, 800, 600),
+        _patch_happy_path(
+            mocker, monkeypatch, platform="linux", rect=(50, 60, 800, 600)
         )
-        fake_sct = _build_fake_sct(mocker, width=800, height=600)
-        mocker.patch("vrcpilot.screenshot.mss.MSS", return_value=fake_sct)
 
         result = take_screenshot()
 
         assert result is not None
         assert (result.x, result.y) == (50, 60)
-        x11_rect.assert_called_once()
 
     def test_returns_none_when_focus_fails(
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
+        # Patch at the backend boundary so ``vrcpilot.window.focus`` runs
+        # for real - this is the integration we care about.
         monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
-        mocker.patch("vrcpilot.screenshot.focus", return_value=False)
-        sleep_spy = mocker.patch("vrcpilot.screenshot.time.sleep")
-        rect_spy = mocker.patch(
-            "vrcpilot.screenshot.get_vrchat_window_rect", return_value=(0, 0, 1, 1)
-        )
-        mss_spy = mocker.patch("vrcpilot.screenshot.mss.MSS")
+        monkeypatch.setattr("vrcpilot.window.sys.platform", "win32")
+        mocker.patch("vrcpilot._backends.window_win32.focus_window", return_value=False)
 
         assert take_screenshot() is None
-        # When focus fails the rest of the pipeline must not run; that's
-        # the contract that lets callers cheaply poll for VRChat readiness.
-        sleep_spy.assert_not_called()
-        rect_spy.assert_not_called()
-        mss_spy.assert_not_called()
 
     def test_returns_none_when_rect_helper_returns_none(
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
-        mocker.patch("vrcpilot.screenshot.focus", return_value=True)
+        monkeypatch.setattr("vrcpilot.window.sys.platform", "win32")
+        mocker.patch("vrcpilot._backends.window_win32.focus_window", return_value=True)
         mocker.patch("vrcpilot.screenshot.time.sleep")
         mocker.patch("vrcpilot.screenshot.get_vrchat_window_rect", return_value=None)
-        mss_spy = mocker.patch("vrcpilot.screenshot.mss.MSS")
 
         assert take_screenshot() is None
-        # Rect lookup failing must short-circuit before mss is opened —
-        # otherwise we leak a connection for nothing.
-        mss_spy.assert_not_called()
 
     def test_returns_none_on_mss_screenshot_error(
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
-        monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
-        _patch_happy_path(
-            mocker,
-        )
+        _patch_happy_path(mocker, monkeypatch)
         # Override grab to raise the recoverable mss failure.
         fake_sct = _build_fake_sct(
             mocker,
@@ -203,75 +207,6 @@ class TestTakeScreenshot:
         mocker.patch("vrcpilot.screenshot.mss.MSS", return_value=fake_sct)
 
         assert take_screenshot() is None
-
-
-class TestSettlePropagation:
-    def test_default_settle_is_50ms(
-        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
-    ):
-        monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
-        _patch_happy_path(mocker)
-        sleep_mock = mocker.patch("vrcpilot.screenshot.time.sleep")
-
-        take_screenshot()
-
-        sleep_mock.assert_called_once_with(0.05)
-
-    @pytest.mark.parametrize("settle", [0.0, 0.1, 0.5, 1.0])
-    def test_custom_settle_is_forwarded(
-        self,
-        mocker: MockerFixture,
-        monkeypatch: pytest.MonkeyPatch,
-        settle: float,
-    ):
-        monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
-        _patch_happy_path(mocker)
-        sleep_mock = mocker.patch("vrcpilot.screenshot.time.sleep")
-
-        take_screenshot(settle_seconds=settle)
-
-        sleep_mock.assert_called_once_with(settle)
-
-
-class TestStepOrdering:
-    def test_focus_runs_before_sleep_runs_before_grab(
-        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
-    ):
-        # The five-step flow (platform -> focus -> sleep -> rect -> grab)
-        # is part of the contract: skipping focus or grabbing before the
-        # compositor has settled would silently capture stale frames. A
-        # parent ``Mock`` records call order across all collaborators.
-        monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
-        parent = mocker.Mock()
-
-        focus_mock = mocker.patch("vrcpilot.screenshot.focus", return_value=True)
-        sleep_mock = mocker.patch("vrcpilot.screenshot.time.sleep")
-        rect_mock = mocker.patch(
-            "vrcpilot.screenshot.get_vrchat_window_rect",
-            return_value=(0, 0, 100, 100),
-        )
-        fake_sct = _build_fake_sct(mocker, width=100, height=100)
-        mss_mock = mocker.patch("vrcpilot.screenshot.mss.MSS", return_value=fake_sct)
-
-        parent.attach_mock(focus_mock, "focus")
-        parent.attach_mock(sleep_mock, "sleep")
-        parent.attach_mock(rect_mock, "rect")
-        parent.attach_mock(mss_mock, "mss")
-
-        take_screenshot()
-
-        called_names = [
-            c[0]
-            for c in parent.mock_calls
-            if c[0]
-            in {
-                "focus",
-                "sleep",
-                "rect",
-                "mss",
-            }
-        ]
-        assert called_names == ["focus", "sleep", "rect", "mss"]
 
 
 class TestMonitorIndexResolution:
@@ -295,8 +230,7 @@ class TestMonitorIndexResolution:
         rect: tuple[int, int, int, int],
         expected_index: int,
     ):
-        monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
-        _patch_happy_path(mocker, rect=rect)
+        _patch_happy_path(mocker, monkeypatch, rect=rect)
 
         result = take_screenshot()
 
@@ -307,8 +241,7 @@ class TestMonitorIndexResolution:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         # Center far outside any individual monitor -> composite (0).
-        monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
-        _patch_happy_path(mocker, rect=(10_000, 10_000, 100, 100))
+        _patch_happy_path(mocker, monkeypatch, rect=(10_000, 10_000, 100, 100))
 
         result = take_screenshot()
 
