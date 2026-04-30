@@ -12,13 +12,14 @@ from typing import TYPE_CHECKING, Any, cast, override
 
 import numpy as np
 
-from vrcpilot._backends.capture_base import CaptureBackend
 from vrcpilot._x11 import (
     find_vrchat_window,
     is_wayland_native,
     open_x11_display,
 )
 from vrcpilot.process import find_pid
+
+from .base import CaptureBackend
 
 if TYPE_CHECKING or sys.platform == "linux":
     import Xlib.display

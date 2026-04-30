@@ -14,7 +14,7 @@ from typing import Self
 
 import numpy as np
 
-from vrcpilot._backends.capture_base import CaptureBackend
+from .base import CaptureBackend
 
 
 def _select_capture_backend(*, frame_timeout: float) -> CaptureBackend:
@@ -25,11 +25,11 @@ def _select_capture_backend(*, frame_timeout: float) -> CaptureBackend:
     importable on the other platform.
     """
     if sys.platform == "win32":
-        from vrcpilot._backends.capture_win32 import Win32CaptureBackend
+        from .win32 import Win32CaptureBackend
 
         return Win32CaptureBackend(frame_timeout=frame_timeout)
     if sys.platform == "linux":
-        from vrcpilot._backends.capture_x11 import X11CaptureBackend
+        from .x11 import X11CaptureBackend
 
         return X11CaptureBackend()
     raise NotImplementedError(f"Capture is not supported on {sys.platform}")

@@ -147,7 +147,7 @@ def fake_windows_capture(
         start_raises: BaseException | None = None
         last_instance: _FakeWindowsCapture | None = None
 
-    mocker.patch("vrcpilot._backends.capture_win32.WindowsCapture", _Fake)
+    mocker.patch("vrcpilot.capture.win32.WindowsCapture", _Fake)
     return _Fake
 
 
@@ -174,17 +174,13 @@ def _patch_x11_backend(
     fake_pixmap = mocker.Mock()
     fake_pixmap.get_image.return_value = mocker.Mock(data=bytes(width * height * 4))
 
-    mocker.patch("vrcpilot._backends.capture_x11.find_pid", return_value=pid)
+    mocker.patch("vrcpilot.capture.x11.find_pid", return_value=pid)
+    mocker.patch("vrcpilot.capture.x11.open_x11_display", return_value=fake_display)
+    mocker.patch("vrcpilot.capture.x11.find_vrchat_window", return_value=fake_window)
+    mocker.patch("vrcpilot.capture.x11.composite.query_version")
+    mocker.patch("vrcpilot.capture.x11.composite.redirect_window")
     mocker.patch(
-        "vrcpilot._backends.capture_x11.open_x11_display", return_value=fake_display
-    )
-    mocker.patch(
-        "vrcpilot._backends.capture_x11.find_vrchat_window", return_value=fake_window
-    )
-    mocker.patch("vrcpilot._backends.capture_x11.composite.query_version")
-    mocker.patch("vrcpilot._backends.capture_x11.composite.redirect_window")
-    mocker.patch(
-        "vrcpilot._backends.capture_x11.composite.name_window_pixmap",
+        "vrcpilot.capture.x11.composite.name_window_pixmap",
         return_value=fake_pixmap,
     )
     return fake_display, fake_window, fake_pixmap
@@ -201,7 +197,7 @@ def _make_xerror_subclass() -> type[BaseException]:
     unset by the empty ``__init__`` -- the f-string in capture.py would
     otherwise recurse forever in ``GetAttrData.__getattr__``.
     """
-    import vrcpilot._backends.capture_x11 as _x11_backend
+    import vrcpilot.capture.x11 as _x11_backend
 
     real_xerror = _x11_backend.Xlib.error.XError
 
@@ -253,10 +249,8 @@ class TestCapture:
     ):
         # Construct the WGC backend, emit a recognisable BGRA payload,
         # and verify Capture decodes a contiguous (H, W, 3) RGB array.
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=12345
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=12345)
 
         # 4 BGRA pixels: B=0x10 G=0x20 R=0x30 A=0xff -- after BGRA -> RGB
         # the first three channels per pixel should be (0x30, 0x20, 0x10).
@@ -285,10 +279,8 @@ class TestCapture:
         # latest-only buffer should drop the first and surface only the
         # most recent. Otherwise consumers fall behind by accumulating
         # FIFO lag -- the explicit anti-pattern this design rejects.
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=12345
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=12345)
 
         a_payload = b"\x00\x00\x00\xff" * 4  # all black -> RGB (0,0,0)
         b_payload = b"\x10\x20\x30\xff" * 4  # -> RGB (0x30,0x20,0x10)
@@ -311,10 +303,8 @@ class TestCapture:
     ):
         # When the WGC session never delivers a frame, ``read`` must
         # raise ``TimeoutError`` rather than hang indefinitely.
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=12345
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=12345)
 
         with Capture(frame_timeout=0.05) as cap:
             with pytest.raises(TimeoutError, match="No frame arrived"):
@@ -326,7 +316,7 @@ class TestCapture:
         mocker: MockerFixture,
         fake_windows_capture: type[_FakeWindowsCapture],
     ):
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=None)
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=None)
 
         with pytest.raises(RuntimeError, match="VRChat is not running"):
             Capture()
@@ -337,10 +327,8 @@ class TestCapture:
         mocker: MockerFixture,
         fake_windows_capture: type[_FakeWindowsCapture],
     ):
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=None
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=None)
 
         with pytest.raises(RuntimeError, match="window is not yet mapped"):
             Capture()
@@ -355,10 +343,8 @@ class TestCapture:
         # GPU / OS support. Capture must re-raise as RuntimeError so the
         # caller sees a single failure mode, with the original OSError
         # preserved on ``__cause__`` for diagnosis.
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=12345
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=12345)
         original = OSError("WGC unavailable")
         fake_windows_capture.start_raises = original
 
@@ -376,10 +362,8 @@ class TestCapture:
         # the returned frame contains only window content, not OS chrome.
         # ``window_hwnd`` pins the target so the wrong window cannot be
         # captured if a same-titled one appears later.
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=98765
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=98765)
 
         cap = Capture()
         try:
@@ -426,7 +410,7 @@ class TestCapture:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setenv("DISPLAY", ":0")
-        mocker.patch("vrcpilot._backends.capture_x11.find_pid", return_value=None)
+        mocker.patch("vrcpilot.capture.x11.find_pid", return_value=None)
 
         with pytest.raises(RuntimeError, match="VRChat is not running"):
             Capture()
@@ -436,10 +420,8 @@ class TestCapture:
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
         monkeypatch.setenv("DISPLAY", ":0")
-        mocker.patch("vrcpilot._backends.capture_x11.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_x11.open_x11_display", return_value=None
-        )
+        mocker.patch("vrcpilot.capture.x11.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.x11.open_x11_display", return_value=None)
 
         with pytest.raises(RuntimeError, match="X11 display unavailable"):
             Capture()
@@ -453,14 +435,12 @@ class TestCapture:
         # leaks across each retry.
         monkeypatch.setenv("DISPLAY", ":0")
         fake_display = mocker.Mock()
-        mocker.patch("vrcpilot._backends.capture_x11.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.x11.find_pid", return_value=4242)
         mocker.patch(
-            "vrcpilot._backends.capture_x11.open_x11_display",
+            "vrcpilot.capture.x11.open_x11_display",
             return_value=fake_display,
         )
-        mocker.patch(
-            "vrcpilot._backends.capture_x11.find_vrchat_window", return_value=None
-        )
+        mocker.patch("vrcpilot.capture.x11.find_vrchat_window", return_value=None)
 
         with pytest.raises(RuntimeError, match="window is not yet mapped"):
             Capture()
@@ -473,19 +453,19 @@ class TestCapture:
         monkeypatch.setenv("DISPLAY", ":0")
         fake_display = mocker.Mock()
         fake_window = mocker.Mock()
-        mocker.patch("vrcpilot._backends.capture_x11.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.x11.find_pid", return_value=4242)
         mocker.patch(
-            "vrcpilot._backends.capture_x11.open_x11_display",
+            "vrcpilot.capture.x11.open_x11_display",
             return_value=fake_display,
         )
         mocker.patch(
-            "vrcpilot._backends.capture_x11.find_vrchat_window",
+            "vrcpilot.capture.x11.find_vrchat_window",
             return_value=fake_window,
         )
 
         xerr_cls = _make_xerror_subclass()
         mocker.patch(
-            "vrcpilot._backends.capture_x11.composite.query_version",
+            "vrcpilot.capture.x11.composite.query_version",
             side_effect=xerr_cls(),
         )
 
@@ -538,10 +518,8 @@ class TestCapture:
     ):
         # ``close`` may be called from ``__exit__``, by an explicit
         # caller, or from a finally block -- doubling up must be safe.
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=12345
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=12345)
 
         cap = Capture()
         cap.close()
@@ -576,10 +554,8 @@ class TestCapture:
         mocker: MockerFixture,
         fake_windows_capture: type[_FakeWindowsCapture],
     ):
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=12345
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=12345)
 
         cap = Capture()
         cap.close()
@@ -604,10 +580,8 @@ class TestCapture:
         mocker: MockerFixture,
         fake_windows_capture: type[_FakeWindowsCapture],
     ):
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=12345
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=12345)
 
         with Capture() as cap:
             pass
@@ -624,10 +598,8 @@ class TestCapture:
         # The context manager must propagate exceptions from the with-
         # block. Suppression would silently swallow real failures and
         # is not the contract we want.
-        mocker.patch("vrcpilot._backends.capture_win32.find_pid", return_value=4242)
-        mocker.patch(
-            "vrcpilot._backends.capture_win32.find_vrchat_hwnd", return_value=12345
-        )
+        mocker.patch("vrcpilot.capture.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.capture.win32.find_vrchat_hwnd", return_value=12345)
 
         class _Sentinel(Exception):
             pass

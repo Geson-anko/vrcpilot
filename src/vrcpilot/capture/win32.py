@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, cast, override
 
 import numpy as np
 
-from vrcpilot._backends.capture_base import CaptureBackend
+from .base import CaptureBackend
 
 if TYPE_CHECKING or sys.platform == "win32":
     # ``windows_capture`` ships no type stubs (it's a thin wrapper over a
