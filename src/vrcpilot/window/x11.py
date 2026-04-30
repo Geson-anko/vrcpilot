@@ -3,25 +3,27 @@
 from __future__ import annotations
 
 import sys
-import warnings
 from typing import TYPE_CHECKING
+
+# ``TYPE_CHECKING`` is False at runtime — the raise fires on non-Linux hosts.
+# Under pyright (which treats ``TYPE_CHECKING`` as True) the raise is skipped,
+# letting the type checker see the Xlib-typed symbols below.
+if not TYPE_CHECKING and sys.platform != "linux":
+    raise ImportError
+
+import warnings
+
+import Xlib.error
+import Xlib.protocol.event
+from Xlib import X
 
 from vrcpilot._session import is_wayland_native
 from vrcpilot._x11 import find_vrchat_window, x11_display
 from vrcpilot.process import find_pid
 
-if TYPE_CHECKING or sys.platform == "linux":
-    import Xlib.error
-    import Xlib.protocol.event
-    from Xlib import X
-
 
 def focus_window() -> bool:
     """X11/XWayland implementation of :func:`vrcpilot.window.focus`."""
-    if sys.platform != "linux":
-        # Defensive narrow for pyright on non-Linux runs.
-        raise RuntimeError("unreachable")
-
     if is_wayland_native():
         warnings.warn(
             "Wayland native session detected; "
@@ -62,10 +64,6 @@ def focus_window() -> bool:
 
 def unfocus_window() -> bool:
     """X11/XWayland implementation of :func:`vrcpilot.window.unfocus`."""
-    if sys.platform != "linux":
-        # Defensive narrow for pyright on non-Linux runs.
-        raise RuntimeError("unreachable")
-
     if is_wayland_native():
         warnings.warn(
             "Wayland native session detected; "
