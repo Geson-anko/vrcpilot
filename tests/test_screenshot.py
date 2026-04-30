@@ -65,8 +65,7 @@ def _patch_happy_path(
     """
     mocker.patch("vrcpilot.screenshot.focus", return_value=True)
     mocker.patch("vrcpilot.screenshot.time.sleep")
-    mocker.patch("vrcpilot.screenshot._get_vrchat_rect_win32", return_value=rect)
-    mocker.patch("vrcpilot.screenshot._get_vrchat_rect_x11", return_value=rect)
+    mocker.patch("vrcpilot.screenshot.get_vrchat_window_rect", return_value=rect)
 
     fake_sct = _build_fake_sct(mocker, width=rect[2], height=rect[3], monitors=monitors)
     mocker.patch("vrcpilot.screenshot.mss.MSS", return_value=fake_sct)
@@ -143,12 +142,8 @@ class TestTakeScreenshot:
         mocker.patch("vrcpilot.screenshot.time.sleep")
 
         x11_rect = mocker.patch(
-            "vrcpilot.screenshot._get_vrchat_rect_x11",
+            "vrcpilot.screenshot.get_vrchat_window_rect",
             return_value=(50, 60, 800, 600),
-        )
-        win32_rect = mocker.patch(
-            "vrcpilot.screenshot._get_vrchat_rect_win32",
-            return_value=(0, 0, 1, 1),
         )
         fake_sct = _build_fake_sct(mocker, width=800, height=600)
         mocker.patch("vrcpilot.screenshot.mss.MSS", return_value=fake_sct)
@@ -158,7 +153,6 @@ class TestTakeScreenshot:
         assert result is not None
         assert (result.x, result.y) == (50, 60)
         x11_rect.assert_called_once()
-        win32_rect.assert_not_called()
 
     def test_returns_none_when_focus_fails(
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
@@ -167,7 +161,7 @@ class TestTakeScreenshot:
         mocker.patch("vrcpilot.screenshot.focus", return_value=False)
         sleep_spy = mocker.patch("vrcpilot.screenshot.time.sleep")
         rect_spy = mocker.patch(
-            "vrcpilot.screenshot._get_vrchat_rect_win32", return_value=(0, 0, 1, 1)
+            "vrcpilot.screenshot.get_vrchat_window_rect", return_value=(0, 0, 1, 1)
         )
         mss_spy = mocker.patch("vrcpilot.screenshot.mss.MSS")
 
@@ -184,7 +178,7 @@ class TestTakeScreenshot:
         monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
         mocker.patch("vrcpilot.screenshot.focus", return_value=True)
         mocker.patch("vrcpilot.screenshot.time.sleep")
-        mocker.patch("vrcpilot.screenshot._get_vrchat_rect_win32", return_value=None)
+        mocker.patch("vrcpilot.screenshot.get_vrchat_window_rect", return_value=None)
         mss_spy = mocker.patch("vrcpilot.screenshot.mss.MSS")
 
         assert take_screenshot() is None
@@ -253,7 +247,7 @@ class TestStepOrdering:
         focus_mock = mocker.patch("vrcpilot.screenshot.focus", return_value=True)
         sleep_mock = mocker.patch("vrcpilot.screenshot.time.sleep")
         rect_mock = mocker.patch(
-            "vrcpilot.screenshot._get_vrchat_rect_win32",
+            "vrcpilot.screenshot.get_vrchat_window_rect",
             return_value=(0, 0, 100, 100),
         )
         fake_sct = _build_fake_sct(mocker, width=100, height=100)

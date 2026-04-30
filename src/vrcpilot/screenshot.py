@@ -40,20 +40,9 @@ import mss
 import numpy as np
 from numpy.typing import NDArray
 
-from vrcpilot._x11 import (
-    find_vrchat_window,
-    get_window_rect as _x11_get_window_rect,
-    is_wayland_native,
-    open_x11_display,
-)
-from vrcpilot.process import find_pid
+from vrcpilot._backends.geometry import get_vrchat_window_rect
+from vrcpilot._x11 import is_wayland_native
 from vrcpilot.window import focus
-
-if sys.platform == "win32":
-    from vrcpilot._win32 import (
-        find_vrchat_hwnd,
-        get_window_rect as _win32_get_window_rect,
-    )
 
 
 @dataclass(frozen=True, eq=False)
@@ -140,46 +129,6 @@ def _resolve_monitor_index(
     return 0
 
 
-def _get_vrchat_rect_win32() -> tuple[int, int, int, int] | None:
-    """Win32 path: ``find_pid`` -> ``find_vrchat_hwnd`` -> ``get_window_rect``."""
-    if sys.platform != "win32":
-        # Defensive narrow for pyright on POSIX runs.
-        raise RuntimeError("unreachable")
-    pid = find_pid()
-    if pid is None:
-        return None
-    hwnd = find_vrchat_hwnd(pid)
-    if hwnd is None:
-        return None
-    return _win32_get_window_rect(hwnd)
-
-
-def _get_vrchat_rect_x11() -> tuple[int, int, int, int] | None:
-    """X11 path: open display, locate the VRChat window, query geometry.
-
-    The display is opened locally and closed before returning so the
-    function leaves no X resources behind — Screenshot is a single-shot
-    API, unlike :class:`vrcpilot.capture.Capture` which keeps a long-
-    lived display connection.
-    """
-    if sys.platform != "linux":
-        # Defensive narrow for pyright on non-Linux runs.
-        raise RuntimeError("unreachable")
-    pid = find_pid()
-    if pid is None:
-        return None
-    display = open_x11_display()
-    if display is None:
-        return None
-    try:
-        window = find_vrchat_window(display, pid)
-        if window is None:
-            return None
-        return _x11_get_window_rect(display, window)
-    finally:
-        display.close()
-
-
 def take_screenshot(*, settle_seconds: float = 0.05) -> Screenshot | None:
     """Focus VRChat, wait briefly, then grab a single window-only screenshot.
 
@@ -255,10 +204,7 @@ def take_screenshot(*, settle_seconds: float = 0.05) -> Screenshot | None:
     time.sleep(settle_seconds)
 
     # 4. Window rectangle
-    if sys.platform == "win32":
-        rect = _get_vrchat_rect_win32()
-    else:
-        rect = _get_vrchat_rect_x11()
+    rect = get_vrchat_window_rect()
     if rect is None:
         return None
     x, y, width, height = rect
