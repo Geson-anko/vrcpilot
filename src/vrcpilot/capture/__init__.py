@@ -108,3 +108,8 @@ class Capture:
     ) -> None:
         del exc_type, exc_val, exc_tb
         self.close()
+
+
+from .loop import CaptureLoop  # noqa: E402  -- defined after Capture to avoid cycle
+
+__all__ = ["Capture", "CaptureLoop"]
