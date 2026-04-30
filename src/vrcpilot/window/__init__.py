@@ -26,11 +26,11 @@ def focus() -> bool:
         session is native Wayland (also emits :class:`RuntimeWarning`).
     """
     if sys.platform == "win32":
-        from vrcpilot._backends.window_win32 import focus_window as _impl
+        from .win32 import focus_window as _impl
 
         return _impl()
     if sys.platform == "linux":
-        from vrcpilot._backends.window_x11 import focus_window as _impl
+        from .x11 import focus_window as _impl
 
         return _impl()
     raise NotImplementedError(f"focus() is not supported on {sys.platform}")
@@ -51,11 +51,11 @@ def unfocus() -> bool:
         session is native Wayland (also emits :class:`RuntimeWarning`).
     """
     if sys.platform == "win32":
-        from vrcpilot._backends.window_win32 import unfocus_window as _impl
+        from .win32 import unfocus_window as _impl
 
         return _impl()
     if sys.platform == "linux":
-        from vrcpilot._backends.window_x11 import unfocus_window as _impl
+        from .x11 import unfocus_window as _impl
 
         return _impl()
     raise NotImplementedError(f"unfocus() is not supported on {sys.platform}")

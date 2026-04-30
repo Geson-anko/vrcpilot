@@ -63,8 +63,8 @@ def _patch_happy_path(
     """Wire up the collaborators ``take_screenshot`` calls.
 
     The focus step is patched at the platform-specific *backend*
-    boundary (``_backends.window_win32.focus_window`` or
-    ``_backends.window_x11.focus_window``) so the in-process
+    boundary (``vrcpilot.window.win32.focus_window`` or
+    ``vrcpilot.window.x11.focus_window``) so the in-process
     ``vrcpilot.window.focus`` dispatcher runs for real — only the
     external Win32 / Xlib bindings are stubbed.
 
@@ -78,17 +78,17 @@ def _patch_happy_path(
     # resolve the dotted path on hosts that have not naturally imported
     # the module.
     if platform == "win32":
-        import vrcpilot._backends.window_win32  # noqa: F401
+        import vrcpilot.window.win32  # noqa: F401
     elif platform == "linux":
-        import vrcpilot._backends.window_x11  # noqa: F401
+        import vrcpilot.window.x11  # noqa: F401
 
     monkeypatch.setattr("vrcpilot.screenshot.sys.platform", platform)
     monkeypatch.setattr("vrcpilot.window.sys.platform", platform)
     if platform == "win32":
-        mocker.patch("vrcpilot._backends.window_win32.focus_window", return_value=True)
+        mocker.patch("vrcpilot.window.win32.focus_window", return_value=True)
     elif platform == "linux":
         mocker.patch("vrcpilot.screenshot.is_wayland_native", return_value=False)
-        mocker.patch("vrcpilot._backends.window_x11.focus_window", return_value=True)
+        mocker.patch("vrcpilot.window.x11.focus_window", return_value=True)
     mocker.patch("vrcpilot.screenshot.time.sleep")
     mocker.patch("vrcpilot.screenshot.get_vrchat_window_rect", return_value=rect)
 
@@ -178,7 +178,7 @@ class TestTakeScreenshot:
         # for real - this is the integration we care about.
         monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
         monkeypatch.setattr("vrcpilot.window.sys.platform", "win32")
-        mocker.patch("vrcpilot._backends.window_win32.focus_window", return_value=False)
+        mocker.patch("vrcpilot.window.win32.focus_window", return_value=False)
 
         assert take_screenshot() is None
 
@@ -187,7 +187,7 @@ class TestTakeScreenshot:
     ):
         monkeypatch.setattr("vrcpilot.screenshot.sys.platform", "win32")
         monkeypatch.setattr("vrcpilot.window.sys.platform", "win32")
-        mocker.patch("vrcpilot._backends.window_win32.focus_window", return_value=True)
+        mocker.patch("vrcpilot.window.win32.focus_window", return_value=True)
         mocker.patch("vrcpilot.screenshot.time.sleep")
         mocker.patch("vrcpilot.screenshot.get_vrchat_window_rect", return_value=None)
 
