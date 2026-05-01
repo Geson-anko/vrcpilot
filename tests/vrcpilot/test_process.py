@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import Any
 
 import psutil
 import pytest
 from pytest_mock import MockerFixture
 
+from tests._fakes import FakePopen, FakeProcess
 from tests.helpers import only_linux, only_windows
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
@@ -23,11 +23,30 @@ from vrcpilot.process import (
 )
 
 
-def _make_proc_mock(mocker: MockerFixture, name: str, pid: int = 12345) -> Any:
-    proc = mocker.MagicMock()
-    proc.info = {"name": name}
-    proc.pid = pid
-    return proc
+@pytest.fixture
+def fake_popen(monkeypatch: pytest.MonkeyPatch) -> type[FakePopen]:
+    """Replace ``subprocess.Popen`` with :class:`FakePopen` for the test.
+
+    The class itself is swapped in (not an instance), so each
+    ``Popen(...)`` call inside production code constructs a real
+    ``FakePopen`` and we can introspect ``last_argv`` / ``last_kwargs``.
+    """
+    FakePopen.reset()
+    monkeypatch.setattr("vrcpilot.process.subprocess.Popen", FakePopen)
+    return FakePopen
+
+
+def _patch_steam_path(mocker: MockerFixture, steam: Path) -> None:
+    """Stub out the Steam binary discovery so ``launch()`` can be exercised."""
+    mocker.patch("vrcpilot.process.find_steam_executable", return_value=steam)
+
+
+def _process_iter_returning(mocker: MockerFixture, *procs: FakeProcess) -> None:
+    """Override the autouse empty-iterator default with the given fakes."""
+    mocker.patch(
+        "vrcpilot.process.psutil.process_iter",
+        return_value=list(procs),
+    )
 
 
 class TestOscConfig:
@@ -157,131 +176,102 @@ class TestBuildLaunchCommand:
 
 
 class TestLaunch:
-    def test_invokes_popen_with_default_argv(self, mocker: MockerFixture):
+    """Cross-platform argv assembly is the same shape on every host."""
+
+    def test_invokes_popen_with_default_argv(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
         steam = Path("/usr/bin/steam")
-        mocker.patch(
-            "vrcpilot.process.find_steam_executable",
-            return_value=steam,
-        )
-        popen_mock = mocker.patch("vrcpilot.process.subprocess.Popen")
+        _patch_steam_path(mocker, steam)
 
         launch()
 
-        argv = popen_mock.call_args.args[0]
-        assert argv == [str(steam), "-applaunch", "438100"]
+        assert fake_popen.last_argv == [str(steam), "-applaunch", "438100"]
 
-    def test_propagates_steam_path_override(self, mocker: MockerFixture):
+    def test_propagates_steam_path_override(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
         override = Path("/custom/steam")
-        mocker.patch(
-            "vrcpilot.process.find_steam_executable",
-            return_value=override,
-        )
-        popen_mock = mocker.patch("vrcpilot.process.subprocess.Popen")
+        _patch_steam_path(mocker, override)
 
         launch(steam_path=override)
 
-        argv = popen_mock.call_args.args[0]
-        assert argv[0] == str(override)
+        assert fake_popen.last_argv is not None
+        assert fake_popen.last_argv[0] == str(override)
 
-    def test_app_id_override(self, mocker: MockerFixture):
+    def test_app_id_override(self, mocker: MockerFixture, fake_popen: type[FakePopen]):
         steam = Path("/usr/bin/steam")
-        mocker.patch(
-            "vrcpilot.process.find_steam_executable",
-            return_value=steam,
-        )
-        popen_mock = mocker.patch("vrcpilot.process.subprocess.Popen")
+        _patch_steam_path(mocker, steam)
 
         launch(app_id=440)
 
-        argv = popen_mock.call_args.args[0]
-        assert argv == [str(steam), "-applaunch", "440"]
+        assert fake_popen.last_argv == [str(steam), "-applaunch", "440"]
 
-    @only_windows
-    def test_uses_new_process_group_on_windows(self, mocker: MockerFixture):
-        mocker.patch(
-            "vrcpilot.process.find_steam_executable",
-            return_value=Path("C:/Steam/Steam.exe"),
-        )
-        popen_mock = mocker.patch("vrcpilot.process.subprocess.Popen")
-
-        launch()
-
-        assert "creationflags" in popen_mock.call_args.kwargs
-        assert "start_new_session" not in popen_mock.call_args.kwargs
-
-    @only_linux
-    def test_uses_new_session_on_linux(self, mocker: MockerFixture):
-        mocker.patch(
-            "vrcpilot.process.find_steam_executable",
-            return_value=Path("/usr/bin/steam"),
-        )
-        popen_mock = mocker.patch("vrcpilot.process.subprocess.Popen")
-
-        launch()
-
-        assert popen_mock.call_args.kwargs.get("start_new_session") is True
-        assert "creationflags" not in popen_mock.call_args.kwargs
-
-    def test_passes_no_vr_to_argv(self, mocker: MockerFixture):
+    def test_passes_no_vr_to_argv(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
         steam = Path("/usr/bin/steam")
-        mocker.patch(
-            "vrcpilot.process.find_steam_executable",
-            return_value=steam,
-        )
-        popen_mock = mocker.patch("vrcpilot.process.subprocess.Popen")
+        _patch_steam_path(mocker, steam)
 
         launch(no_vr=True)
 
-        argv = popen_mock.call_args.args[0]
-        assert "--no-vr" in argv
+        assert fake_popen.last_argv is not None
+        assert "--no-vr" in fake_popen.last_argv
 
-    def test_passes_osc_to_argv(self, mocker: MockerFixture):
+    def test_passes_osc_to_argv(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
         steam = Path("/usr/bin/steam")
-        mocker.patch(
-            "vrcpilot.process.find_steam_executable",
-            return_value=steam,
-        )
-        popen_mock = mocker.patch("vrcpilot.process.subprocess.Popen")
+        _patch_steam_path(mocker, steam)
 
         launch(osc=OscConfig(in_port=9000))
 
-        argv = popen_mock.call_args.args[0]
-        assert "--osc=9000:127.0.0.1:9001" in argv
+        assert fake_popen.last_argv is not None
+        assert "--osc=9000:127.0.0.1:9001" in fake_popen.last_argv
+
+    @only_windows
+    def test_uses_new_process_group_on_windows(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
+        _patch_steam_path(mocker, Path("C:/Steam/Steam.exe"))
+
+        launch()
+
+        assert "creationflags" in fake_popen.last_kwargs
+        assert "start_new_session" not in fake_popen.last_kwargs
+
+    @only_linux
+    def test_uses_new_session_on_linux(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
+        _patch_steam_path(mocker, Path("/usr/bin/steam"))
+
+        launch()
+
+        assert fake_popen.last_kwargs.get("start_new_session") is True
+        assert "creationflags" not in fake_popen.last_kwargs
 
 
 class TestFindPid:
     def test_returns_pid_when_running(self, mocker: MockerFixture):
-        proc = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME, pid=4242)
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[proc],
-        )
+        _process_iter_returning(mocker, FakeProcess(name=VRCHAT_PROCESS_NAME, pid=4242))
 
         assert find_pid() == 4242
 
-    def test_returns_none_when_not_running(self, mocker: MockerFixture):
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[],
-        )
-
+    def test_returns_none_when_not_running(self):
+        # autouse fixture already empties ``process_iter``; no setup needed.
         assert find_pid() is None
 
     def test_ignores_other_processes(self, mocker: MockerFixture):
-        other = _make_proc_mock(mocker, "explorer.exe", pid=1)
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[other],
-        )
+        _process_iter_returning(mocker, FakeProcess(name="explorer.exe", pid=1))
 
         assert find_pid() is None
 
     def test_returns_first_when_multiple_match(self, mocker: MockerFixture):
-        p1 = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME, pid=111)
-        p2 = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME, pid=222)
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[p1, p2],
+        _process_iter_returning(
+            mocker,
+            FakeProcess(name=VRCHAT_PROCESS_NAME, pid=111),
+            FakeProcess(name=VRCHAT_PROCESS_NAME, pid=222),
         )
 
         assert find_pid() == 111
@@ -289,24 +279,17 @@ class TestFindPid:
 
 class TestTerminate:
     def test_kills_matching_process(self, mocker: MockerFixture):
-        proc = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME)
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[proc],
-        )
+        proc = FakeProcess(name=VRCHAT_PROCESS_NAME)
+        _process_iter_returning(mocker, proc)
         mocker.patch("vrcpilot.process.psutil.wait_procs")
 
         result = terminate()
 
         assert result is True
-        assert proc.kill.called
+        assert proc.kill_calls == 1
 
     def test_returns_false_when_not_running(self, mocker: MockerFixture):
-        other = _make_proc_mock(mocker, "explorer.exe")
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[other],
-        )
+        _process_iter_returning(mocker, FakeProcess(name="explorer.exe"))
         mocker.patch("vrcpilot.process.psutil.wait_procs")
 
         result = terminate()
@@ -314,28 +297,25 @@ class TestTerminate:
         assert result is False
 
     def test_kills_all_matching(self, mocker: MockerFixture):
-        p1 = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME)
-        p2 = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME)
-        other = _make_proc_mock(mocker, "explorer.exe")
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[p1, other, p2],
-        )
+        p1 = FakeProcess(name=VRCHAT_PROCESS_NAME, pid=10)
+        p2 = FakeProcess(name=VRCHAT_PROCESS_NAME, pid=20)
+        other = FakeProcess(name="explorer.exe", pid=30)
+        _process_iter_returning(mocker, p1, other, p2)
         mocker.patch("vrcpilot.process.psutil.wait_procs")
 
         result = terminate()
 
         assert result is True
-        assert p1.kill.called and p2.kill.called
-        assert not other.kill.called
+        assert p1.kill_calls == 1
+        assert p2.kill_calls == 1
+        assert other.kill_calls == 0
 
     def test_swallows_no_such_process(self, mocker: MockerFixture):
-        proc = _make_proc_mock(mocker, VRCHAT_PROCESS_NAME)
-        proc.kill.side_effect = psutil.NoSuchProcess(pid=9999)
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[proc],
+        proc = FakeProcess(
+            name=VRCHAT_PROCESS_NAME,
+            kill_raises=psutil.NoSuchProcess(pid=9999),
         )
+        _process_iter_returning(mocker, proc)
         mocker.patch("vrcpilot.process.psutil.wait_procs")
 
         result = terminate()
