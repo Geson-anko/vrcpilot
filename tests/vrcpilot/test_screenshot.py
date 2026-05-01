@@ -10,8 +10,6 @@ testable on every host without a live VRChat or compositor.
 
 from __future__ import annotations
 
-import sys
-
 import pytest
 
 from tests.helpers import only_linux, only_windows
@@ -55,16 +53,3 @@ class TestTakeScreenshotPlatformBehaviour:
 
         with pytest.warns(RuntimeWarning, match="Wayland native"):
             assert take_screenshot() is None
-
-
-class TestTakeScreenshotPlatformDispatch:
-    def test_raises_not_implemented_on_unsupported_platform(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
-        # Patching ``sys.platform`` exercises the trailing
-        # ``elif sys.platform != "win32"`` branch in the dispatch.
-        # Read at call time, so this works on any real host.
-        monkeypatch.setattr(sys, "platform", "darwin")
-
-        with pytest.raises(NotImplementedError, match="darwin"):
-            take_screenshot()

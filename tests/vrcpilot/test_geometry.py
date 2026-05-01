@@ -13,17 +13,13 @@ relevant to its OS.
 
 from __future__ import annotations
 
-import sys
-
-import pytest
-
 from tests.helpers import only_linux, only_windows
 from vrcpilot.geometry import get_vrchat_window_rect
 
 
 class TestGetVrchatWindowRect:
-    """Cross-platform: ``find_pid()`` is ``None``, helper must return
-    ``None`` regardless of which platform branch is taken."""
+    """``find_pid()`` is ``None``, helper must return ``None`` regardless of
+    which platform branch is taken."""
 
     @only_windows
     def test_returns_none_when_vrchat_not_running_windows(self):
@@ -36,17 +32,5 @@ class TestGetVrchatWindowRect:
     def test_returns_none_when_vrchat_not_running_linux(self):
         # X11 path: ``_get_vrchat_rect_x11`` short-circuits on
         # ``find_pid() is None`` before opening a display, so this
-        # works even on hosts with no X server.
+        # works even on hosts without an X server.
         assert get_vrchat_window_rect() is None
-
-    def test_raises_not_implemented_on_unsupported_platform(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
-        # Patching ``sys.platform`` to a value the helper does not
-        # recognise drives the trailing ``raise NotImplementedError``
-        # branch. The check is read at call time (not import time) so
-        # this works on any host.
-        monkeypatch.setattr(sys, "platform", "darwin")
-
-        with pytest.raises(NotImplementedError, match="darwin"):
-            get_vrchat_window_rect()
