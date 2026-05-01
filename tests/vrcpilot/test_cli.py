@@ -18,6 +18,7 @@ Tests favour real integration over mock surfaces:
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -99,10 +100,14 @@ class TestLaunchCommand:
     def test_reports_steam_not_found(self, capsys: pytest.CaptureFixture[str]):
         # Pass a path that does not exist — ``find_steam_executable``
         # raises ``SteamNotFoundError`` for real, no patching needed.
-        exit_code = main(["launch", "--steam-path", "/does/not/exist/Steam.exe"])
+        steam_path = "/does/not/exist/Steam.exe"
+        exit_code = main(["launch", "--steam-path", steam_path])
 
         assert exit_code == 2
-        assert "/does/not/exist/Steam.exe" in capsys.readouterr().err
+        if sys.platform == "win32":
+            assert steam_path.replace("/", "\\") in capsys.readouterr().err
+        else:
+            assert "/does/not/exist/Steam.exe" in capsys.readouterr().err
 
     def test_no_vr_flag_propagates(self, fake_popen: type[FakePopen]):
         exit_code = main(["launch", "--no-vr"])
