@@ -6,9 +6,15 @@
 
 `vrcpilot` は VRChat の操作を自動化するための Python ライブラリ。VRChat クライアントの UI 操作からゲーム内操作までを対象とする。
 
+## メモリ参照
+
+プロジェクト固有の規約・知見・ユーザーの好みは `.claude/memory/` に保存する（git 管理対象、subagent 用の `.claude/agent-memory/` と同じ階層）。harness が自動ロードする `~/.claude/projects/.../memory/` パスは **使わない**（プロジェクト内の git 管理を優先する方針）。
+
+セッション開始時、または規約が関係しそうなタスクに着手する前に [.claude/memory/MEMORY.md](.claude/memory/MEMORY.md) のインデックスを確認すること。新しい規約・フィードバック・ユーザー像が判明した場合は同ディレクトリにファイルを足し、`MEMORY.md` から 1 行リンクを張る。
+
 ## プロジェクト状況
 
-このリポジトリは Python の `uv` テンプレートから初期化された直後で、`vrcpilot` パッケージ自体は現状空のスケルトン（`src/vrcpilot/__init__.py` に `__version__` のみ）。ドメインコードやアーキテクチャはまだ存在しないため、ゼロから構築する想定。最初の実モジュールを追加するタイミングで、出現したアーキテクチャに合わせてこのファイルを更新すること。
+`vrcpilot` パッケージは VRChat の起動・終了・プロセス検出（`process`）、ウィンドウ操作（`window/`、Win32/X11 バックエンド）、画面キャプチャ（`capture/`、`Capture` セッション + `CaptureLoop` + `Mp4FrameSink`）、スクリーンショット（`screenshot`）、CLI フロントエンド（`cli`）から構成される。プラットフォーム抽象は親 `__init__.py` で `sys.platform` ディスパッチして公開する（`__all__` 経由で公開 API を集約）。プラットフォーム固有の低レベル実装（`steam`, `win32`, `x11`, `capture/sinks`, `_session`）は内部モジュールとして配置している。
 
 ## ツーリング
 
@@ -32,7 +38,7 @@
 
 細かい制御が必要な場合の直接呼び出し:
 
-- 単一テスト: `uv run pytest tests/test_package.py::test_version -v`
+- 単一テスト: `uv run pytest tests/vrcpilot/test_init.py::TestPackage::test_version -v`
 - キーワードフィルタ: `uv run pytest -v -k "<expr>"`
 - 単一パスへの pyright: `uv run pyright src/vrcpilot/<file>.py`
 - 単一の pre-commit フック: `uv run pre-commit run ruff -a`
@@ -70,6 +76,18 @@
 - 必要十分なテストのみを記述する。過剰なテストは避ける
 - 内部実装の詳細はテストしない。公開インターフェースと振る舞いをテストする
 - テスト関数に戻り値の型アノテーションは不要
+
+### テストレイアウト
+
+`tests/` は `src/vrcpilot/` の構造を 1 対 1 でミラーリングする:
+
+- `src/vrcpilot/foo.py` ↔ `tests/vrcpilot/test_foo.py`
+- `src/vrcpilot/__init__.py` ↔ `tests/vrcpilot/test_init.py`
+- `src/vrcpilot/sub/bar.py` ↔ `tests/vrcpilot/sub/test_bar.py`
+- `tests/` 直下に置くのは `__init__.py` / `helpers.py` / `conftest.py` / `manual/` のみ
+- 1 ファイル 1 テストを原則とし、`window/{win32,x11}.py` のようにバックエンド分割されているソースはテストも分けて 1 対 1 を維持する
+
+詳細: [.claude/memory/feedback_test_layout_mirror.md](.claude/memory/feedback_test_layout_mirror.md)
 
 ### 実践的なテスト
 
@@ -115,7 +133,17 @@
 
 - `src/vrcpilot/`（PEP 561 typed、`py.typed` 同梱）。インポート名は `vrcpilot`（distribution 名からのアンダースコアマッピングは `__init__.py` の `metadata.version` ルックアップで処理）
 - テストは `tests/` 配下に置き、pyright strict チェックからは除外されるが、ruff と pre-commit は通る
-- バージョンは単一の真実: `pyproject.toml` の `[project].version` が真値で、`vrcpilot.__version__` は `importlib.metadata` 経由で読む。既存の `tests/test_package.py::test_version` がこれを強制しているため、他の場所にバージョンをハードコードしないこと
+- バージョンは単一の真実: `pyproject.toml` の `[project].version` が真値で、`vrcpilot.__version__` は `importlib.metadata` 経由で読む。既存の `tests/vrcpilot/test_init.py::TestPackage::test_version` がこれを強制しているため、他の場所にバージョンをハードコードしないこと
+
+### private モジュール規約
+
+`src/vrcpilot/` 配下のモジュールは **テストの有無** で `_` prefix の有無を決める:
+
+- テストを書かない（真に private な実装）→ ファイル名に `_` prefix を付ける（例: `_session.py`）
+- テストを書く / 書かれている → `_` prefix を **付けない**（例: `steam.py`, `win32.py`, `x11.py`, `capture/sinks.py`）
+- 外部公開は親 `__init__.py` の `__all__` で別軸として集約管理する。モジュール名から `_` を外すことと「外部公開」は独立した判断
+
+詳細: [.claude/memory/feedback_private_module_convention.md](.claude/memory/feedback_private_module_convention.md)
 
 ### カプセル化
 
