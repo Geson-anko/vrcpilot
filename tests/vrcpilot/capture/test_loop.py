@@ -1,8 +1,9 @@
 """Tests for :class:`vrcpilot.capture.loop.CaptureLoop`.
 
 The internal :class:`Capture` is patched in the loop's own module
-(``vrcpilot.capture.loop.Capture``) with a fake whose ``read()`` yields
-real ``numpy.ndarray`` instances. This keeps the OS-dependent backend
+(``vrcpilot.capture.loop.Capture``) with the canonical
+:class:`tests.fakes.FakeCapture` whose ``read()`` yields real
+``numpy.ndarray`` instances. This keeps the OS-dependent backend
 (WGC / X11) out of unit tests while still exercising the genuine
 threading machinery in :class:`CaptureLoop`.
 """
@@ -16,42 +17,17 @@ import numpy as np
 import pytest
 from pytest_mock import MockerFixture
 
+from tests.fakes import FakeCapture
 from vrcpilot.capture import CaptureLoop
 
-# ---------------------------------------------------------------------------
-# Test double for the internal Capture
-# ---------------------------------------------------------------------------
 
+def _patch_capture(mocker: MockerFixture, fake: FakeCapture) -> FakeCapture:
+    """Patch the ``Capture`` reference inside the loop module.
 
-class _FakeCapture:
-    """Stand-in for :class:`vrcpilot.capture.Capture` with controllable read
-    behaviour."""
-
-    def __init__(
-        self,
-        *,
-        read_side_effect: BaseException | None = None,
-        read_delay: float = 0.0,
-    ) -> None:
-        self.read_calls: int = 0
-        self.close_calls: int = 0
-        self._read_side_effect = read_side_effect
-        self._read_delay = read_delay
-
-    def read(self) -> np.ndarray:
-        self.read_calls += 1
-        if self._read_delay > 0:
-            time.sleep(self._read_delay)
-        if self._read_side_effect is not None:
-            raise self._read_side_effect
-        return np.zeros((4, 4, 3), dtype=np.uint8)
-
-    def close(self) -> None:
-        self.close_calls += 1
-
-
-def _patch_capture(mocker: MockerFixture, fake: _FakeCapture) -> _FakeCapture:
-    """Patch the ``Capture`` reference inside the loop module."""
+    The CaptureLoop is the unit under test; the platform-backed Capture
+    it owns is internal collaboration that we substitute
+    deterministically.
+    """
     mocker.patch("vrcpilot.capture.loop.Capture", return_value=fake)
     return fake
 
@@ -72,7 +48,7 @@ class TestCaptureLoop:
     def test_rejects_non_positive_fps(self, mocker: MockerFixture, fps: float):
         # fps <= 0 would either spin forever or divide by zero downstream;
         # we surface the misuse at construction time rather than at start().
-        _patch_capture(mocker, _FakeCapture())
+        _patch_capture(mocker, FakeCapture())
         with pytest.raises(ValueError, match="fps must be > 0"):
             CaptureLoop(_noop, fps=fps)
 
@@ -92,7 +68,7 @@ class TestCaptureLoop:
     def test_invokes_callback_with_frames(self, mocker: MockerFixture):
         # The callback must receive ndarrays from read(); a few ticks at
         # high fps confirms the loop is actually running, not just primed.
-        _patch_capture(mocker, _FakeCapture())
+        _patch_capture(mocker, FakeCapture())
         received: list[np.ndarray] = []
         ready = threading.Event()
 
@@ -116,7 +92,7 @@ class TestCaptureLoop:
         # generous window. The exact value depends on scheduler jitter so
         # the bounds are wide; the point is to detect "free running" or
         # "completely stalled" loops, not to benchmark.
-        _patch_capture(mocker, _FakeCapture())
+        _patch_capture(mocker, FakeCapture())
         count = 0
 
         def cb(_: np.ndarray) -> None:
@@ -138,7 +114,7 @@ class TestCaptureLoop:
     def test_stop_then_start_resumes(self, mocker: MockerFixture):
         # stop() must not close Capture; users can pause and resume the
         # loop without rebuilding the (expensive) backend session.
-        fake = _patch_capture(mocker, _FakeCapture())
+        fake = _patch_capture(mocker, FakeCapture())
 
         loop = CaptureLoop(_noop, fps=200.0)
         loop.start()
@@ -156,7 +132,7 @@ class TestCaptureLoop:
         assert fake.close_calls == 1
 
     def test_double_start_raises(self, mocker: MockerFixture):
-        _patch_capture(mocker, _FakeCapture())
+        _patch_capture(mocker, FakeCapture())
         loop = CaptureLoop(_noop, fps=50.0)
         loop.start()
         try:
@@ -166,7 +142,7 @@ class TestCaptureLoop:
             loop.close()
 
     def test_start_after_close_raises(self, mocker: MockerFixture):
-        _patch_capture(mocker, _FakeCapture())
+        _patch_capture(mocker, FakeCapture())
         loop = CaptureLoop(_noop, fps=50.0)
         loop.close()
         with pytest.raises(RuntimeError, match="closed"):
@@ -176,7 +152,7 @@ class TestCaptureLoop:
         # stop() must be safe before start(), after stop(), and after
         # close(); it is the public "make sure the loop is not running"
         # primitive and callers should not have to track state.
-        _patch_capture(mocker, _FakeCapture())
+        _patch_capture(mocker, FakeCapture())
         loop = CaptureLoop(_noop, fps=50.0)
         loop.stop()
         loop.start()
@@ -186,7 +162,7 @@ class TestCaptureLoop:
         loop.stop()
 
     def test_close_is_idempotent(self, mocker: MockerFixture):
-        fake = _patch_capture(mocker, _FakeCapture())
+        fake = _patch_capture(mocker, FakeCapture())
         loop = CaptureLoop(_noop, fps=50.0)
         loop.close()
         loop.close()
@@ -196,7 +172,7 @@ class TestCaptureLoop:
         assert fake.close_calls == 1
 
     def test_close_stops_running_loop(self, mocker: MockerFixture):
-        fake = _patch_capture(mocker, _FakeCapture())
+        fake = _patch_capture(mocker, FakeCapture())
         loop = CaptureLoop(_noop, fps=200.0)
         loop.start()
         time.sleep(0.05)
@@ -205,7 +181,7 @@ class TestCaptureLoop:
         assert fake.close_calls == 1
 
     def test_context_manager_closes(self, mocker: MockerFixture):
-        fake = _patch_capture(mocker, _FakeCapture())
+        fake = _patch_capture(mocker, FakeCapture())
         with CaptureLoop(_noop, fps=200.0) as loop:
             loop.start()
             time.sleep(0.05)
@@ -218,7 +194,7 @@ class TestCaptureLoop:
         # A callback that raises terminates the worker; the exception is
         # held and surfaced on the next stop()/close() call so the user
         # cannot miss a silent thread death.
-        _patch_capture(mocker, _FakeCapture())
+        _patch_capture(mocker, FakeCapture())
 
         class _Boom(RuntimeError):
             pass
@@ -241,7 +217,7 @@ class TestCaptureLoop:
 
     def test_read_exception_re_raised_on_close(self, mocker: MockerFixture):
         boom = RuntimeError("read blew up")
-        _patch_capture(mocker, _FakeCapture(read_side_effect=boom))
+        _patch_capture(mocker, FakeCapture(read_side_effect=boom))
 
         loop = CaptureLoop(_noop, fps=200.0)
         loop.start()
@@ -252,7 +228,7 @@ class TestCaptureLoop:
             loop.close()
 
     def test_loop_stops_on_exception(self, mocker: MockerFixture):
-        _patch_capture(mocker, _FakeCapture(read_side_effect=RuntimeError("x")))
+        _patch_capture(mocker, FakeCapture(read_side_effect=RuntimeError("x")))
         loop = CaptureLoop(_noop, fps=200.0)
         loop.start()
         deadline = time.perf_counter() + 2.0
@@ -269,7 +245,7 @@ class TestCaptureLoop:
         # implementation is required to skip self-join when invoked from
         # the loop thread itself. We use a watchdog timer to fail fast
         # rather than hang the test session.
-        _patch_capture(mocker, _FakeCapture())
+        _patch_capture(mocker, FakeCapture())
         ticks = 0
 
         def cb(_: np.ndarray) -> None:

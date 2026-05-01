@@ -1,10 +1,20 @@
-"""Shared test helpers."""
+"""Shared test helpers.
+
+Skip markers, environment probes, and lightweight polling utilities
+shared between the automated test suite and the manual scenarios under
+``tests/manual/``. Anything platform- or display-specific lives here so
+that individual test modules can decide at file scope whether to run.
+"""
 
 from __future__ import annotations
 
+import functools
 import sys
+import time
 
 import pytest
+
+import vrcpilot
 
 #: Skip a test on non-Windows platforms.
 #:
@@ -22,3 +32,81 @@ only_windows = pytest.mark.skipif(
 only_linux = pytest.mark.skipif(
     not sys.platform.startswith("linux"), reason="Linux-only behaviour"
 )
+
+
+@functools.lru_cache(maxsize=1)
+def has_x11_display() -> bool:
+    """Return ``True`` when an X11 display is reachable on this host.
+
+    Probes by opening and immediately closing a connection via
+    ``Xlib.display.Display()``. Cached because the underlying state
+    cannot change during a pytest run, and probing repeatedly would
+    leak X server file descriptors on Linux CI.
+
+    Returns ``False`` on non-Linux platforms unconditionally; ``Xlib``
+    is a Linux-only dependency in this project.
+    """
+    if not sys.platform.startswith("linux"):
+        return False
+    try:
+        import Xlib.display
+
+        display = Xlib.display.Display()
+    except Exception:
+        return False
+    try:
+        display.close()
+    except Exception:
+        pass
+    return True
+
+
+#: Skip a test when the Linux X11 display is unavailable.
+#:
+#: Use this on tests that exercise the real ``Xlib`` paths (window
+#: lookup, focus, capture). Tests that purely simulate X11 with the
+#: ``tests.fakes.x11`` doubles do not need this marker.
+requires_x11_display = pytest.mark.skipif(
+    not has_x11_display(), reason="X11 display unavailable"
+)
+
+_PID_WAIT_TIMEOUT: float = 30.0
+_PID_WAIT_INTERVAL: float = 1.0
+
+
+def wait_for_pid(
+    timeout: float = _PID_WAIT_TIMEOUT,
+    interval: float = _PID_WAIT_INTERVAL,
+) -> int | None:
+    """Poll for a VRChat PID until one appears or ``timeout`` elapses.
+
+    Returns the observed PID, or ``None`` if the deadline expires
+    first. Suitable for both manual scenarios (waiting for VRChat to
+    finish launching) and automated tests that drive a real launcher.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        pid = vrcpilot.find_pid()
+        if pid is not None:
+            return pid
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(interval)
+
+
+def wait_for_no_pid(
+    timeout: float = _PID_WAIT_TIMEOUT,
+    interval: float = _PID_WAIT_INTERVAL,
+) -> bool:
+    """Poll until VRChat is no longer running, or ``timeout`` elapses.
+
+    Returns ``True`` once the process is gone; ``False`` if the
+    deadline expired with the process still present.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if vrcpilot.find_pid() is None:
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(interval)
