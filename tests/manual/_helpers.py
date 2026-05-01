@@ -18,12 +18,23 @@ import mss.tools
 from PIL import Image
 
 import vrcpilot
+from tests.helpers import wait_for_no_pid, wait_for_pid
+
+__all__ = [
+    "ARTIFACT_DIR",
+    "WARMUP_SECONDS",
+    "ensure_no_vrchat",
+    "log",
+    "run_scenario",
+    "save_image",
+    "save_monitor_screenshot",
+    "wait_for_no_pid",
+    "wait_for_pid",
+    "warmup",
+]
 
 # Fixed wait after a PID first appears, to let VRChat finish initializing.
 WARMUP_SECONDS: float = 15.0
-
-_PID_WAIT_TIMEOUT: float = 30.0
-_PID_WAIT_INTERVAL: float = 1.0
 
 #: Directory used by manual scenarios to drop visual artifacts (PNGs).
 #:
@@ -38,37 +49,6 @@ ARTIFACT_DIR: Path = Path(__file__).resolve().parents[2] / "_manual_artifacts"
 def log(msg: str) -> None:
     stamp = datetime.now().strftime("%H:%M:%S")
     print(f"[{stamp}] {msg}", flush=True)
-
-
-def wait_for_pid(
-    timeout: float = _PID_WAIT_TIMEOUT,
-    interval: float = _PID_WAIT_INTERVAL,
-) -> int | None:
-    """Poll :func:`vrcpilot.find_pid` until a PID appears or *timeout*
-    elapses."""
-    deadline = time.monotonic() + timeout
-    while True:
-        pid = vrcpilot.find_pid()
-        if pid is not None:
-            return pid
-        if time.monotonic() >= deadline:
-            return None
-        time.sleep(interval)
-
-
-def wait_for_no_pid(
-    timeout: float = _PID_WAIT_TIMEOUT,
-    interval: float = _PID_WAIT_INTERVAL,
-) -> bool:
-    """Poll until :func:`vrcpilot.find_pid` returns ``None`` or *timeout*
-    elapses."""
-    deadline = time.monotonic() + timeout
-    while True:
-        if vrcpilot.find_pid() is None:
-            return True
-        if time.monotonic() >= deadline:
-            return False
-        time.sleep(interval)
 
 
 def ensure_no_vrchat() -> None:
