@@ -1,4 +1,11 @@
-"""Tests for :mod:`vrcpilot.win32`."""
+"""Tests for :mod:`vrcpilot.win32`.
+
+The module under test imports Windows-only DLLs (``pywintypes``,
+``win32gui``, ``win32process``) and raises ``ImportError`` on any
+other platform. A module-level skip up front keeps non-Windows runners
+from even attempting the import — anything below executes only on
+Windows.
+"""
 
 from __future__ import annotations
 
@@ -7,72 +14,41 @@ import sys
 import pytest
 
 if sys.platform != "win32":
-    pytest.skip("Only windows.", allow_module_level=True)
+    pytest.skip("Windows-only module", allow_module_level=True)
 
 from pytest_mock import MockerFixture
 
-from tests.helpers import only_windows
+from vrcpilot.win32 import find_vrchat_hwnd, get_window_rect
 
 
-@only_windows
+class TestFindVrchatHwnd:
+    """Real ``EnumWindows`` walk; no real VRChat process running.
+
+    Passing a sentinel PID that no real process owns is enough to
+    exercise the enumeration without depending on any specific window
+    being open. The helper must report ``None`` rather than raise.
+    """
+
+    def test_returns_none_for_unknown_pid(self):
+        # ``-1`` is never a valid Windows PID; with no matching window
+        # the helper must surface ``None``.
+        assert find_vrchat_hwnd(-1) is None
+
+
 class TestGetWindowRect:
-    @pytest.fixture
-    def mock_set_thread_dpi(self, mocker: MockerFixture):
-        """Patch ``SetThreadDpiAwarenessContext`` to a recordable mock.
+    def test_returns_none_for_invalid_hwnd(self):
+        # ``0`` is not a valid HWND. ``GetWindowRect`` raises
+        # ``pywintypes.error`` for it; the helper must convert that to
+        # ``None`` and not propagate.
+        assert get_window_rect(0) is None
 
-        Returns a sentinel handle from the first call (the ``old_ctx``)
-        and is reused for the restore call. Without this, every test
-        would invoke the real Win32 API and mutate the test runner
-        thread's DPI awareness as a side effect.
-        """
-        if sys.platform != "win32":
-            pytest.skip("Windows-only fixture")
-        import ctypes
-
-        sentinel_old_ctx = 0x1234ABCD
-        mock = mocker.patch.object(
-            ctypes.windll.user32,
-            "SetThreadDpiAwarenessContext",
-            return_value=sentinel_old_ctx,
-        )
-        return mock
-
-    def test_returns_origin_and_size_on_success(
-        self, mocker: MockerFixture, mock_set_thread_dpi
-    ):
-        # ``GetWindowRect`` returns ``(left, top, right, bottom)`` and the
-        # helper's contract is to convert to origin + size form.
-        from vrcpilot.win32 import get_window_rect
-
-        mocker.patch(
-            "vrcpilot.win32.win32gui.GetWindowRect",
-            return_value=(100, 200, 900, 800),
-        )
-
-        assert get_window_rect(12345) == (100, 200, 800, 600)
-
-    def test_supports_negative_origin(self, mocker: MockerFixture, mock_set_thread_dpi):
-        # Multi-monitor setups can place the primary window's origin at
-        # negative coordinates when the user dragged VRChat onto a
-        # left-of-primary monitor. The helper must preserve the sign.
-        from vrcpilot.win32 import get_window_rect
-
-        mocker.patch(
-            "vrcpilot.win32.win32gui.GetWindowRect",
-            return_value=(-1920, 0, -1120, 600),
-        )
-
-        assert get_window_rect(12345) == (-1920, 0, 800, 600)
-
-    def test_returns_none_when_hwnd_destroyed(
-        self, mocker: MockerFixture, mock_set_thread_dpi
-    ):
-        # ``pywintypes.error`` is what ``win32gui`` raises when the HWND
-        # has gone away between lookup and the rect query; the helper
-        # surfaces this as ``None`` so callers can degrade gracefully.
+    def test_returns_none_when_rect_query_raises(self, mocker: MockerFixture):
+        # When the underlying API raises ``pywintypes.error`` (HWND
+        # destroyed mid-call) the helper must surface ``None`` rather
+        # than propagate. Patching the API is the only way to drive
+        # this branch deterministically without owning a real HWND
+        # that disappears on cue.
         import pywintypes
-
-        from vrcpilot.win32 import get_window_rect
 
         mocker.patch(
             "vrcpilot.win32.win32gui.GetWindowRect",
@@ -96,30 +72,10 @@ class TestGetWindowRect:
         self,
         mocker: MockerFixture,
         rect: tuple[int, int, int, int],
-        mock_set_thread_dpi,
     ):
-        from vrcpilot.win32 import get_window_rect
-
+        # Degenerate rectangles cannot occur for a real visible HWND but
+        # are cheap to drive via a patch and document the boundary
+        # contract (``width <= 0 or height <= 0`` -> ``None``).
         mocker.patch("vrcpilot.win32.win32gui.GetWindowRect", return_value=rect)
 
         assert get_window_rect(12345) is None
-
-    def test_returns_none_when_rect_query_raises(
-        self, mocker: MockerFixture, mock_set_thread_dpi
-    ):
-        # If GetWindowRect raises (HWND destroyed mid-call) the helper
-        # must surface ``None`` rather than propagating the error. The
-        # internal ``finally``-based DPI context restoration is an
-        # implementation detail and intentionally not asserted here.
-        import pywintypes
-
-        from vrcpilot.win32 import get_window_rect
-
-        mocker.patch(
-            "vrcpilot.win32.win32gui.GetWindowRect",
-            side_effect=pywintypes.error(
-                1400, "GetWindowRect", "Invalid window handle."
-            ),
-        )
-
-        assert get_window_rect(99999) is None

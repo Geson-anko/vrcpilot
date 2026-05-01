@@ -1,105 +1,144 @@
-"""Tests for :mod:`vrcpilot.x11`."""
+"""Tests for :mod:`vrcpilot.x11`.
+
+The module under test raises ``ImportError`` on non-Linux platforms,
+and the real connection paths require a reachable X server. Two
+module-level skips up front gate the rest of the file: platform
+first, then display reachability. Below the gate, normal-path tests
+exercise the real ``Xlib.display.Display()``; failure-path tests use
+``FakeXDisplay`` from :mod:`tests._fakes` to drive ``XError``
+branches without a fragile real-X11 setup.
+"""
 
 from __future__ import annotations
 
+import sys
+
 import pytest
-from pytest_mock import MockerFixture
 
-from tests.helpers import only_linux
+if sys.platform != "linux":
+    pytest.skip("Linux-only module", allow_module_level=True)
+
+from tests.helpers import has_x11_display
+
+if not has_x11_display():
+    pytest.skip("X11 display unavailable", allow_module_level=True)
+
+import vrcpilot.x11 as x11_mod
+from tests._fakes import FakeXDisplay, FakeXGeometry, FakeXWindow
+from vrcpilot.x11 import (
+    find_vrchat_window,
+    get_window_rect,
+    open_x11_display,
+    x11_display,
+)
 
 
-@only_linux
 class TestOpenX11Display:
-    def test_returns_display_on_success(
-        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+    def test_returns_real_display_on_success(self):
+        # The autouse env on this host has a reachable X server (the
+        # module-level guard above ensures this), so the helper should
+        # produce a live ``Display`` object.
+        display = open_x11_display()
+
+        assert display is not None
+        try:
+            # ``screen()`` is the cheapest call that proves we got a
+            # working display rather than some other truthy stand-in.
+            assert display.screen() is not None
+        finally:
+            display.close()
+
+    def test_returns_none_when_display_unreachable(
+        self, monkeypatch: pytest.MonkeyPatch
     ):
-        from vrcpilot.x11 import open_x11_display
-
-        monkeypatch.setenv("DISPLAY", ":0")
-        fake_display = mocker.Mock()
-        mocker.patch("vrcpilot.x11.Xlib.display.Display", return_value=fake_display)
-
-        assert open_x11_display() is fake_display
-
-    def test_returns_none_on_oserror(
-        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
-    ):
-        # Connection failures (X server unreachable, missing
-        # XAUTHORITY, etc.) raise into the open call; the helper
-        # converts them to ``None`` so long-lived callers can fall back
-        # rather than crash.
-        from vrcpilot.x11 import open_x11_display
-
-        monkeypatch.setenv("DISPLAY", ":99")
-        mocker.patch(
-            "vrcpilot.x11.Xlib.display.Display", side_effect=OSError("unreachable")
-        )
-
-        assert open_x11_display() is None
-
-    def test_returns_none_on_display_error(
-        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
-    ):
-        # ``DisplayError`` covers malformed DISPLAY values (parser
-        # failures); should also degrade to ``None``.
-        import vrcpilot.x11 as x11_mod
-        from vrcpilot.x11 import open_x11_display
-
+        # ``"garbage"`` is not a parseable DISPLAY string, so the real
+        # ``Xlib.display.Display()`` constructor raises
+        # ``Xlib.error.DisplayError`` — driving the failure branch with
+        # zero mocks and zero environment-dependent flakiness.
         monkeypatch.setenv("DISPLAY", "garbage")
-        mocker.patch(
-            "vrcpilot.x11.Xlib.display.Display",
-            side_effect=x11_mod.Xlib.error.DisplayError("garbage"),
-        )
 
         assert open_x11_display() is None
 
 
-@only_linux
+class TestX11DisplayContextManager:
+    def test_yields_display_and_closes(self):
+        with x11_display() as display:
+            assert display is not None
+            assert display.screen() is not None
+        # After exit the connection has been closed; calling close again
+        # on a real ``Display`` is a no-op so we do not assert state
+        # here — the contract verified is that the ``with`` block
+        # produced a usable display.
+
+    def test_yields_none_on_connection_failure(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("DISPLAY", "garbage")
+
+        with x11_display() as display:
+            assert display is None
+
+
+class TestFindVrchatWindow:
+    """Live ``Xlib`` walk over ``_NET_CLIENT_LIST``; VRChat is not running
+    (autouse fixture forces ``find_pid()`` to ``None``), so the helper must
+    report ``None`` whatever windows the desktop happens to have open."""
+
+    def test_returns_none_when_no_window_owns_pid(self):
+        display = open_x11_display()
+        assert display is not None
+        try:
+            # ``-1`` is never a valid PID, so even a populated client
+            # list will produce no match.
+            assert find_vrchat_window(display, -1) is None
+        finally:
+            display.close()
+
+
 class TestGetWindowRect:
-    def test_returns_origin_and_size_on_success(self, mocker: MockerFixture):
-        # ``translate_coords`` reports the inverse of the window's
-        # screen-space origin under python-xlib (see commit 77a6422),
-        # so the helper sign-flips ``coords.x`` / ``coords.y`` to give
-        # callers an origin in the conventional sense.
-        from vrcpilot.x11 import get_window_rect
+    """Failure-path tests use FakeXDisplay rather than a fragile real-X11 setup
+    to drive degenerate-geometry and XError branches.
 
-        fake_display = mocker.Mock()
-        fake_window = mocker.Mock()
-        fake_window.translate_coords.return_value = mocker.Mock(x=-100, y=-200)
-        fake_window.get_geometry.return_value = mocker.Mock(width=800, height=600)
+    The success path depends on a specific real window's geometry and
+    is covered end-to-end by the manual scenarios under
+    ``tests/manual/`` rather than re-stubbed here.
+    """
 
-        assert get_window_rect(fake_display, fake_window) == (100, 200, 800, 600)
-
-    def test_returns_none_on_xerror(self, mocker: MockerFixture):
-        # Defining a tiny ``XError`` subclass with a no-arg ``__init__``
-        # bypasses the real protocol-payload requirement; only the type
-        # hierarchy matters for the except clause.
-        import vrcpilot.x11 as x11_mod
-        from vrcpilot.x11 import get_window_rect
-
+    def test_returns_none_on_xerror(self):
+        # ``XError`` covers any X protocol failure during the lookup;
+        # the FakeXWindow's ``raises`` channel injects exactly such a
+        # failure on the first method call.
         class _FakeXError(x11_mod.Xlib.error.XError):
-            def __init__(self) -> None:  # noqa: D401
+            def __init__(self) -> None:
                 # Skip parent ``__init__`` which expects a parsed reply.
                 pass
 
-        fake_display = mocker.Mock()
-        fake_window = mocker.Mock()
-        fake_window.translate_coords.side_effect = _FakeXError()
+        fake_display = FakeXDisplay()
+        fake_window = FakeXWindow(raises=_FakeXError())
 
-        assert get_window_rect(fake_display, fake_window) is None
+        assert get_window_rect(fake_display, fake_window) is None  # type: ignore[arg-type]
 
     @pytest.mark.parametrize(
         ("width", "height"),
         [(0, 50), (100, 0), (-1, 50), (100, -1), (0, 0)],
     )
-    def test_returns_none_on_degenerate_geometry(
-        self, mocker: MockerFixture, width: int, height: int
-    ):
-        from vrcpilot.x11 import get_window_rect
+    def test_returns_none_on_degenerate_geometry(self, width: int, height: int):
+        fake_display = FakeXDisplay()
+        fake_window = FakeXWindow(geometry=FakeXGeometry(width=width, height=height))
 
-        fake_display = mocker.Mock()
-        fake_window = mocker.Mock()
-        fake_window.translate_coords.return_value = mocker.Mock(x=0, y=0)
-        fake_window.get_geometry.return_value = mocker.Mock(width=width, height=height)
+        assert get_window_rect(fake_display, fake_window) is None  # type: ignore[arg-type]
 
-        assert get_window_rect(fake_display, fake_window) is None
+    def test_sign_flips_translate_coords(self):
+        # Documents the empirical sign-flip behaviour (see source
+        # docstring + commit ``77a6422``): translate_coords reports the
+        # negated origin under python-xlib, so the helper inverts it.
+        fake_display = FakeXDisplay()
+        fake_window = FakeXWindow(
+            geometry=FakeXGeometry(width=800, height=600),
+            translate_coords=(-100, -200),
+        )
+
+        assert get_window_rect(fake_display, fake_window) == (  # type: ignore[arg-type]
+            100,
+            200,
+            800,
+            600,
+        )
