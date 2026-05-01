@@ -7,7 +7,7 @@ Below the gate, the autouse ``_no_real_vrchat`` fixture in
 not running" branch is exercised with zero explicit mocks.
 
 These tests never open a real X display; ``open_x11_display`` is
-patched with :class:`tests._fakes.FakeXDisplay` so we can assert
+patched with :class:`tests.fakes.FakeXDisplay` so we can assert
 ``close()`` is invoked when init aborts — otherwise the X server
 socket leaks across each retry. (Lifecycle tests that need a real
 frame are in ``test_session.py`` and use the public ``Capture``.)
@@ -26,7 +26,7 @@ from dataclasses import dataclass
 
 from pytest_mock import MockerFixture
 
-from tests._fakes import FakeXDisplay, FakeXWindow, make_xerror_subclass
+from tests.fakes import FakeXDisplay, FakeXWindow, make_xerror_subclass
 from vrcpilot.capture.x11 import X11CaptureBackend
 
 

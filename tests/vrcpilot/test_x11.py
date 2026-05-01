@@ -5,7 +5,7 @@ and the real connection paths require a reachable X server. Two
 module-level skips up front gate the rest of the file: platform
 first, then display reachability. Below the gate, normal-path tests
 exercise the real ``Xlib.display.Display()``; failure-path tests use
-``FakeXDisplay`` from :mod:`tests._fakes` to drive ``XError``
+``FakeXDisplay`` from :mod:`tests.fakes` to drive ``XError``
 branches without a fragile real-X11 setup.
 """
 
@@ -23,7 +23,7 @@ from tests.helpers import has_x11_display
 if not has_x11_display():
     pytest.skip("X11 display unavailable", allow_module_level=True)
 
-from tests._fakes import (
+from tests.fakes import (
     FakeXDisplay,
     FakeXGeometry,
     FakeXWindow,

@@ -6,7 +6,7 @@ the file. Below the gate, the autouse ``_no_real_vrchat`` fixture in
 :mod:`tests.conftest` pins ``find_pid()`` to ``None`` so the
 "VRChat not running" branch is exercised with zero explicit mocks. The
 WGC failure path is covered by replacing ``WindowsCapture`` with
-:class:`tests._fakes.FakeWindowsCapture` and toggling its
+:class:`tests.fakes.FakeWindowsCapture` and toggling its
 ``start_raises`` attribute.
 """
 
@@ -21,7 +21,7 @@ if sys.platform != "win32":
 
 from pytest_mock import MockerFixture
 
-from tests._fakes import FakeWindowsCapture, make_fresh_windows_capture_subclass
+from tests.fakes import FakeWindowsCapture, make_fresh_windows_capture_subclass
 from vrcpilot.capture.win32 import Win32CaptureBackend
 
 

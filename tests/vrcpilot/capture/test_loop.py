@@ -2,7 +2,7 @@
 
 The internal :class:`Capture` is patched in the loop's own module
 (``vrcpilot.capture.loop.Capture``) with the canonical
-:class:`tests._fakes.FakeCapture` whose ``read()`` yields real
+:class:`tests.fakes.FakeCapture` whose ``read()`` yields real
 ``numpy.ndarray`` instances. This keeps the OS-dependent backend
 (WGC / X11) out of unit tests while still exercising the genuine
 threading machinery in :class:`CaptureLoop`.
@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 from pytest_mock import MockerFixture
 
-from tests._fakes import FakeCapture
+from tests.fakes import FakeCapture
 from vrcpilot.capture import CaptureLoop
 
 

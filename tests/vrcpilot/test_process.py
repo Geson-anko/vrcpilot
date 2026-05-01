@@ -9,7 +9,7 @@ import psutil
 import pytest
 from pytest_mock import MockerFixture
 
-from tests._fakes import FakePopen, FakeProcess
+from tests.fakes import FakePopen, FakeProcess
 from tests.helpers import only_linux, only_windows
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,

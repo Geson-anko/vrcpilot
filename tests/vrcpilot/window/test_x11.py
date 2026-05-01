@@ -10,7 +10,7 @@ before any X protocol traffic is sent — that single shared fixture
 covers the dominant happy-VRChat-not-running branch with zero mocks.
 The shared ``except Xlib.error.XError`` contract (any X protocol
 failure surfaces as ``False``) is exercised once via
-:class:`tests._fakes.FakeXWindow` on the simpler ``unfocus_window``
+:class:`tests.fakes.FakeXWindow` on the simpler ``unfocus_window``
 path, avoiding both a fragile real-X11 setup and wholesale Xlib-module
 mocks.
 """
@@ -31,7 +31,7 @@ if not has_x11_display():
 
 from pytest_mock import MockerFixture
 
-from tests._fakes import (
+from tests.fakes import (
     FakeXDisplay,
     FakeXWindow,
     fake_x11_display_cm,

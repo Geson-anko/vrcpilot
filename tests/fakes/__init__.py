@@ -6,12 +6,12 @@ behaviour and surface are consistent across the suite.
 
 Usage:
 
-    from tests._fakes import FakeCapture, FakePopen
+    from tests.fakes import FakeCapture, FakePopen
 
 When a fake's surface needs extending, modify the canonical class
 here so every test benefits — do not subclass ad-hoc inside a test
 file. (Per-test class-level state isolation is provided by helper
-fixtures next to each fake; see :mod:`tests._fakes.capture`.)
+fixtures next to each fake; see :mod:`tests.fakes.capture`.)
 """
 
 from __future__ import annotations

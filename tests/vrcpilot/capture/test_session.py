@@ -4,13 +4,13 @@ Two backends, two test classes:
 
 - :class:`TestCaptureWin32` runs only on Windows. Win32 deps
   (``windows_capture``) load on import there, so the tests substitute
-  the WGC entry point with :class:`tests._fakes.FakeWindowsCapture`
+  the WGC entry point with :class:`tests.fakes.FakeWindowsCapture`
   and drive frames synchronously.
 - :class:`TestCaptureX11` runs only on Linux. The X11 backend module
   raises ``ImportError`` on non-Linux, so the class is gated with
   ``pytestmark = only_linux``. Real ``Xlib`` functions are patched
-  with :class:`tests._fakes.FakeXDisplay` / :class:`tests._fakes.FakeXWindow`
-  / :class:`tests._fakes.FakePixmap`.
+  with :class:`tests.fakes.FakeXDisplay` / :class:`tests.fakes.FakeXWindow`
+  / :class:`tests.fakes.FakePixmap`.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from pytest_mock import MockerFixture
 
-from tests._fakes import (
+from tests.fakes import (
     FakePixmap,
     FakeWindowsCapture,
     FakeXDisplay,
@@ -67,7 +67,7 @@ def fake_windows_capture(
     """Patch ``WindowsCapture`` in the Win32 backend module with a fresh fake.
 
     Delegates the per-test subclass dance to
-    :func:`tests._fakes.make_fresh_windows_capture_subclass` so
+    :func:`tests.fakes.make_fresh_windows_capture_subclass` so
     isolation logic stays in the canonical fake module, not duplicated
     across test files.
     """

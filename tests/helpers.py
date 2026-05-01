@@ -65,7 +65,7 @@ def has_x11_display() -> bool:
 #:
 #: Use this on tests that exercise the real ``Xlib`` paths (window
 #: lookup, focus, capture). Tests that purely simulate X11 with the
-#: ``tests._fakes.x11`` doubles do not need this marker.
+#: ``tests.fakes.x11`` doubles do not need this marker.
 requires_x11_display = pytest.mark.skipif(
     not has_x11_display(), reason="X11 display unavailable"
 )

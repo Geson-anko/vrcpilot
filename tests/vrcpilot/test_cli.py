@@ -4,14 +4,14 @@ Tests favour real integration over mock surfaces:
 
 * ``launch`` flows go through :func:`vrcpilot.cli.main` ->
   :func:`vrcpilot.process.launch` -> :class:`subprocess.Popen`, with
-  ``Popen`` swapped for :class:`tests._fakes.FakePopen` so the actual
+  ``Popen`` swapped for :class:`tests.fakes.FakePopen` so the actual
   argv is recorded and asserted on. ``find_steam_executable`` is the
   only stub — it would otherwise hit the real registry / ``$PATH``.
 * ``screenshot`` flows construct a real :class:`PIL.Image.Image` from
   a real numpy array and write a real PNG to ``tmp_path``. Only the
   capture boundary (:func:`vrcpilot.cli.take_screenshot`) is mocked.
-* ``capture`` flows use the canonical :class:`tests._fakes.FakeCaptureLoop`
-  / :class:`tests._fakes.FakeMp4Sink` so the CLI is wired through the
+* ``capture`` flows use the canonical :class:`tests.fakes.FakeCaptureLoop`
+  / :class:`tests.fakes.FakeMp4Sink` so the CLI is wired through the
   real :func:`vrcpilot.cli._run_capture` orchestration.
 """
 
@@ -27,7 +27,7 @@ from argcomplete.completers import FilesCompleter
 from PIL import Image
 from pytest_mock import MockerFixture, MockType
 
-from tests._fakes import FakeCaptureLoop, FakeMp4Sink, FakePopen, FakeProcess
+from tests.fakes import FakeCaptureLoop, FakeMp4Sink, FakePopen, FakeProcess
 from vrcpilot.cli import _build_parser, main
 from vrcpilot.process import VRCHAT_PROCESS_NAME, VRCHAT_STEAM_APP_ID
 

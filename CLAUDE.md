@@ -110,7 +110,7 @@
 
 テストは 4 区分（unit / integration-with-fakes / integration-real / manual e2e）で組み立てる。区分が決まれば配置・モック許容度・スキップ方法が一意に決まる。詳細は [.claude/memory/feedback_test_strategy.md](.claude/memory/feedback_test_strategy.md)。
 
-- **共有 fake は `tests/_fakes/`**: `FakeWindowsCapture` / `FakeCaptureLoop` / `FakeMp4Sink` / `FakeProcess` / `FakePopen` / `FakeXDisplay` などをここに集約。テスト側は `from tests._fakes import FakeFoo` で import する。テストファイル内でアドホックに `class _Fake*` を定義しない
+- **共有 fake は `tests/fakes/`**: `FakeWindowsCapture` / `FakeCaptureLoop` / `FakeMp4Sink` / `FakeProcess` / `FakePopen` / `FakeXDisplay` などをここに集約。テスト側は `from tests.fakes import FakeFoo` で import する。テストファイル内でアドホックに `class _Fake*` を定義しない
 - **module-level skip**: プラットフォームやディスプレイに依存して **import 自体が失敗しうる** テストは、ファイル先頭で `if <condition>: pytest.skip(reason, allow_module_level=True)` を **import 文より前** に置く。関数単位の `@pytest.mark.skipif` だけでは収集エラーを防げない
 - **`sys.platform` の monkeypatch は禁止**: 偽のクロスプラットフォーム保証になる。代わりに `tests/helpers.py` の `only_windows` / `only_linux` / `requires_x11_display` を使うか、ファイル分割 + module-level skip にする
 
