@@ -1,147 +1,134 @@
-"""Tests for :mod:`vrcpilot.cli`."""
+"""Tests for :mod:`vrcpilot.cli`.
+
+Tests favour real integration over mock surfaces:
+
+* ``launch`` flows go through :func:`vrcpilot.cli.main` ->
+  :func:`vrcpilot.process.launch` -> :class:`subprocess.Popen`, with
+  ``Popen`` swapped for :class:`tests._fakes.FakePopen` so the actual
+  argv is recorded and asserted on. ``find_steam_executable`` is the
+  only stub — it would otherwise hit the real registry / ``$PATH``.
+* ``screenshot`` flows construct a real :class:`PIL.Image.Image` from
+  a real numpy array and write a real PNG to ``tmp_path``. Only the
+  capture boundary (:func:`vrcpilot.cli.take_screenshot`) is mocked.
+* ``capture`` flows use the canonical :class:`tests._fakes.FakeCaptureLoop`
+  / :class:`tests._fakes.FakeMp4Sink` so the CLI is wired through the
+  real :func:`vrcpilot.cli._run_capture` orchestration.
+"""
 
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from types import TracebackType
-from typing import Self
 
 import numpy as np
 import pytest
 from argcomplete.completers import FilesCompleter
+from PIL import Image
 from pytest_mock import MockerFixture, MockType
 
+from tests._fakes import FakeCaptureLoop, FakeMp4Sink, FakePopen, FakeProcess
 from vrcpilot.cli import _build_parser, main
-from vrcpilot.process import VRCHAT_STEAM_APP_ID, OscConfig
-from vrcpilot.steam import SteamNotFoundError
+from vrcpilot.process import VRCHAT_PROCESS_NAME, VRCHAT_STEAM_APP_ID
 
 
-def _patch_launch(mocker: MockerFixture):
-    return mocker.patch("vrcpilot.cli.launch", return_value=None)
+@pytest.fixture
+def fake_popen(mocker: MockerFixture, tmp_path: Path) -> type[FakePopen]:
+    """Patch ``subprocess.Popen`` so launch tests can record argv.
+
+    Also stubs :func:`vrcpilot.process.find_steam_executable` to
+    honour any ``--steam-path`` override, falling back to a real
+    file under ``tmp_path``. That single mock is unavoidable — the
+    real lookup would touch the Windows registry or ``$PATH`` — but
+    every other byte of the launch chain runs unmodified, including
+    the dispatch on ``override is not None``.
+
+    Class-level state is reset every test so ``last_argv`` reflects
+    only this test's invocation.
+    """
+    FakePopen.reset()
+    mocker.patch("vrcpilot.process.subprocess.Popen", FakePopen)
+    steam_stub = tmp_path / "Steam.exe"
+    steam_stub.write_bytes(b"")
+
+    def _find(override: Path | None = None) -> Path:
+        return override if override is not None else steam_stub
+
+    mocker.patch("vrcpilot.process.find_steam_executable", side_effect=_find)
+    return FakePopen
 
 
 class TestLaunchCommand:
-    def test_uses_defaults(self, mocker: MockerFixture):
-        launch_mock = _patch_launch(mocker)
-
+    def test_uses_defaults(self, fake_popen: type[FakePopen]):
         exit_code = main(["launch"])
 
         assert exit_code == 0
-        launch_mock.assert_called_once_with(
-            app_id=VRCHAT_STEAM_APP_ID,
-            steam_path=None,
-            no_vr=False,
-            screen_width=None,
-            screen_height=None,
-            osc=None,
-        )
+        assert fake_popen.last_argv is not None
+        assert fake_popen.last_argv[1:] == ["-applaunch", str(VRCHAT_STEAM_APP_ID)]
 
     def test_reports_launched_message(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+        self, fake_popen: type[FakePopen], capsys: pytest.CaptureFixture[str]
     ):
-        _patch_launch(mocker)
-
+        del fake_popen
         exit_code = main(["launch"])
 
         assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "Launched VRChat." in captured.out
+        assert "Launched VRChat." in capsys.readouterr().out
 
-    def test_app_id_override(self, mocker: MockerFixture):
-        launch_mock = _patch_launch(mocker)
-
+    def test_app_id_override(self, fake_popen: type[FakePopen]):
         exit_code = main(["launch", "--app-id", "12345"])
 
         assert exit_code == 0
-        launch_mock.assert_called_once_with(
-            app_id=12345,
-            steam_path=None,
-            no_vr=False,
-            screen_width=None,
-            screen_height=None,
-            osc=None,
-        )
+        assert fake_popen.last_argv is not None
+        assert "-applaunch" in fake_popen.last_argv
+        assert "12345" in fake_popen.last_argv
 
-    def test_steam_path_override(self, mocker: MockerFixture):
-        launch_mock = _patch_launch(mocker)
+    def test_steam_path_override(self, fake_popen: type[FakePopen], tmp_path: Path):
+        # ``fake_popen`` mocks ``find_steam_executable`` with a
+        # pass-through ``side_effect`` that honours the ``override``
+        # arg, so the user-supplied path flows all the way through
+        # to ``Popen``.
+        override = tmp_path / "custom_steam.exe"
 
-        exit_code = main(["launch", "--steam-path", "/foo/Steam.exe"])
+        exit_code = main(["launch", "--steam-path", str(override)])
 
         assert exit_code == 0
-        launch_mock.assert_called_once_with(
-            app_id=VRCHAT_STEAM_APP_ID,
-            steam_path=Path("/foo/Steam.exe"),
-            no_vr=False,
-            screen_width=None,
-            screen_height=None,
-            osc=None,
-        )
+        assert fake_popen.last_argv is not None
+        assert fake_popen.last_argv[0] == str(override)
 
-    def test_reports_steam_not_found(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
-    ):
-        mocker.patch(
-            "vrcpilot.cli.launch",
-            side_effect=SteamNotFoundError("nope"),
-        )
-
-        exit_code = main(["launch"])
+    def test_reports_steam_not_found(self, capsys: pytest.CaptureFixture[str]):
+        # Pass a path that does not exist — ``find_steam_executable``
+        # raises ``SteamNotFoundError`` for real, no patching needed.
+        exit_code = main(["launch", "--steam-path", "/does/not/exist/Steam.exe"])
 
         assert exit_code == 2
-        captured = capsys.readouterr()
-        assert "nope" in captured.err
+        assert "/does/not/exist/Steam.exe" in capsys.readouterr().err
 
-    def test_no_vr_flag_propagates(self, mocker: MockerFixture):
-        launch_mock = _patch_launch(mocker)
-
+    def test_no_vr_flag_propagates(self, fake_popen: type[FakePopen]):
         exit_code = main(["launch", "--no-vr"])
 
         assert exit_code == 0
-        launch_mock.assert_called_once_with(
-            app_id=VRCHAT_STEAM_APP_ID,
-            steam_path=None,
-            no_vr=True,
-            screen_width=None,
-            screen_height=None,
-            osc=None,
-        )
+        assert fake_popen.last_argv is not None
+        assert "--no-vr" in fake_popen.last_argv
 
-    def test_screen_dimensions_propagate(self, mocker: MockerFixture):
-        launch_mock = _patch_launch(mocker)
-
+    def test_screen_dimensions_propagate(self, fake_popen: type[FakePopen]):
         exit_code = main(["launch", "--screen-width", "1280", "--screen-height", "720"])
 
         assert exit_code == 0
-        launch_mock.assert_called_once_with(
-            app_id=VRCHAT_STEAM_APP_ID,
-            steam_path=None,
-            no_vr=False,
-            screen_width=1280,
-            screen_height=720,
-            osc=None,
-        )
+        assert fake_popen.last_argv is not None
+        assert "-screen-width" in fake_popen.last_argv
+        assert "1280" in fake_popen.last_argv
+        assert "-screen-height" in fake_popen.last_argv
+        assert "720" in fake_popen.last_argv
 
-    def test_osc_in_port_creates_config(self, mocker: MockerFixture):
-        launch_mock = _patch_launch(mocker)
-
+    def test_osc_in_port_creates_config(self, fake_popen: type[FakePopen]):
         exit_code = main(["launch", "--osc-in-port", "9000"])
 
         assert exit_code == 0
-        launch_mock.assert_called_once_with(
-            app_id=VRCHAT_STEAM_APP_ID,
-            steam_path=None,
-            no_vr=False,
-            screen_width=None,
-            screen_height=None,
-            osc=OscConfig(in_port=9000, out_ip="127.0.0.1", out_port=9001),
-        )
+        assert fake_popen.last_argv is not None
+        assert "--osc=9000:127.0.0.1:9001" in fake_popen.last_argv
 
-    def test_osc_full_override(self, mocker: MockerFixture):
-        launch_mock = _patch_launch(mocker)
-
+    def test_osc_full_override(self, fake_popen: type[FakePopen]):
         exit_code = main(
             [
                 "launch",
@@ -155,151 +142,153 @@ class TestLaunchCommand:
         )
 
         assert exit_code == 0
-        launch_mock.assert_called_once_with(
-            app_id=VRCHAT_STEAM_APP_ID,
-            steam_path=None,
-            no_vr=False,
-            screen_width=None,
-            screen_height=None,
-            osc=OscConfig(in_port=10000, out_ip="192.168.1.10", out_port=10001),
-        )
+        assert fake_popen.last_argv is not None
+        assert "--osc=10000:192.168.1.10:10001" in fake_popen.last_argv
 
-    def test_osc_out_options_ignored_without_in_port(self, mocker: MockerFixture):
-        launch_mock = _patch_launch(mocker)
-
+    def test_osc_out_options_ignored_without_in_port(self, fake_popen: type[FakePopen]):
         exit_code = main(["launch", "--osc-out-ip", "192.168.1.10"])
 
         assert exit_code == 0
-        launch_mock.assert_called_once_with(
-            app_id=VRCHAT_STEAM_APP_ID,
-            steam_path=None,
-            no_vr=False,
-            screen_width=None,
-            screen_height=None,
-            osc=None,
-        )
+        assert fake_popen.last_argv is not None
+        # No --osc=... token because --osc-in-port was not given.
+        assert not any(token.startswith("--osc=") for token in fake_popen.last_argv)
 
 
 class TestStatusCommand:
     def test_reports_running(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        mocker.patch("vrcpilot.cli.find_pid", return_value=12345)
+        # Override the autouse empty default with a real ``FakeProcess``
+        # so the live ``find_pid`` -> ``psutil.process_iter`` path runs
+        # for real.
+        mocker.patch(
+            "vrcpilot.process.psutil.process_iter",
+            return_value=[FakeProcess(name=VRCHAT_PROCESS_NAME, pid=12345)],
+        )
 
         exit_code = main(["status"])
 
         assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "VRChat is running" in captured.out
-        assert "12345" in captured.out
+        out = capsys.readouterr().out
+        assert "VRChat is running" in out
+        assert "12345" in out
 
-    def test_reports_not_running(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
-    ):
-        mocker.patch("vrcpilot.cli.find_pid", return_value=None)
-
+    def test_reports_not_running(self, capsys: pytest.CaptureFixture[str]):
+        # The conftest autouse fixture already empties ``process_iter``,
+        # so no patch is needed for the negative path.
         exit_code = main(["status"])
 
         assert exit_code == 1
-        captured = capsys.readouterr()
-        assert "VRChat is not running" in captured.out
+        assert "VRChat is not running" in capsys.readouterr().out
 
 
 class TestTerminateCommand:
     def test_reports_killed(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        mocker.patch("vrcpilot.cli.terminate", return_value=True)
+        # Drive the real ``terminate()`` end-to-end by handing it a
+        # ``FakeProcess`` whose ``.kill()`` is a recorded no-op. The
+        # ``wait_procs`` short-circuits to empty because nothing is a
+        # real ``psutil.Process``; stub it to avoid the type check
+        # raising.
+        mocker.patch(
+            "vrcpilot.process.psutil.process_iter",
+            return_value=[FakeProcess(name=VRCHAT_PROCESS_NAME)],
+        )
+        mocker.patch("vrcpilot.process.psutil.wait_procs", return_value=([], []))
 
         exit_code = main(["terminate"])
 
         assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "Terminated" in captured.out
+        assert "Terminated" in capsys.readouterr().out
 
-    def test_reports_not_running(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
-    ):
-        mocker.patch("vrcpilot.cli.terminate", return_value=False)
-
+    def test_reports_not_running(self, capsys: pytest.CaptureFixture[str]):
+        # Autouse empty default makes this a real, mock-free run of the
+        # negative path.
         exit_code = main(["terminate"])
 
         assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "not running" in captured.out
+        assert "not running" in capsys.readouterr().out
 
 
-class TestFocusCommand:
-    def test_reports_focused(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
+class TestFocusUnfocusCommands:
+    @pytest.mark.parametrize(
+        ("command", "result", "expected_exit", "expected_word"),
+        [
+            ("focus", True, 0, "Focused"),
+            ("focus", False, 1, "Could not"),
+            ("unfocus", True, 0, "Unfocused"),
+            ("unfocus", False, 1, "Could not"),
+        ],
+    )
+    def test_focus_unfocus(
+        self,
+        command: str,
+        result: bool,
+        expected_exit: int,
+        expected_word: str,
+        mocker: MockerFixture,
+        capsys: pytest.CaptureFixture[str],
     ):
-        mocker.patch("vrcpilot.cli.focus", return_value=True)
+        mocker.patch(f"vrcpilot.cli.{command}", return_value=result)
 
-        exit_code = main(["focus"])
+        exit_code = main([command])
 
-        assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "Focused" in captured.out
-
-    def test_reports_failure(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
-    ):
-        mocker.patch("vrcpilot.cli.focus", return_value=False)
-
-        exit_code = main(["focus"])
-
-        assert exit_code == 1
-        captured = capsys.readouterr()
-        assert "Could not" in captured.out
+        assert exit_code == expected_exit
+        assert expected_word in capsys.readouterr().out
 
 
-class TestUnfocusCommand:
-    def test_reports_unfocused(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
-    ):
-        mocker.patch("vrcpilot.cli.unfocus", return_value=True)
+def _make_screenshot(
+    *,
+    width: int = 8,
+    height: int = 4,
+) -> object:
+    """Build a real-shaped ``Screenshot`` stand-in.
 
-        exit_code = main(["unfocus"])
+    The CLI only reads ``shot.image``; building a full
+    :class:`vrcpilot.Screenshot` requires importing the dataclass and
+    fabricating geometry/timestamps that the CLI ignores. A simple
+    duck-typed object keeps the test focused on what the CLI actually
+    consumes — the RGB ndarray.
+    """
 
-        assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "Unfocused" in captured.out
+    @dataclass
+    class _Shot:
+        image: np.ndarray
 
-    def test_reports_failure(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
-    ):
-        mocker.patch("vrcpilot.cli.unfocus", return_value=False)
+    return _Shot(image=np.zeros((height, width, 3), dtype=np.uint8))
 
-        exit_code = main(["unfocus"])
 
-        assert exit_code == 1
-        captured = capsys.readouterr()
-        assert "Could not" in captured.out
+@pytest.fixture
+def patched_take_screenshot(mocker: MockerFixture) -> object:
+    """Patch the screenshot capture boundary with a real ndarray-backed fake.
+
+    Capturing the real desktop is platform-specific and out of scope
+    for CLI tests; everything below the ``take_screenshot`` call —
+    PIL conversion, PNG encoding, file write — runs end-to-end.
+    """
+    return mocker.patch("vrcpilot.cli.take_screenshot", return_value=_make_screenshot())
 
 
 class TestScreenshotCommand:
     def test_reports_saved_on_success(
         self,
-        mocker: MockerFixture,
+        patched_take_screenshot: object,
         capsys: pytest.CaptureFixture[str],
         tmp_path: Path,
     ):
-        # ``take_screenshot`` now returns a ``Screenshot`` whose
-        # ``image`` ndarray is converted via ``Image.fromarray`` before
-        # being saved. Patch ``Image.fromarray`` so we can intercept the
-        # save call without producing a real PNG on disk.
-        fake_pil = mocker.Mock()
-        mocker.patch("vrcpilot.cli.Image.fromarray", return_value=fake_pil)
-        fake_shot = mocker.Mock()
-        mocker.patch("vrcpilot.cli.take_screenshot", return_value=fake_shot)
+        del patched_take_screenshot
         output = tmp_path / "shot.png"
 
         exit_code = main(["screenshot", "--output", str(output)])
 
         assert exit_code == 0
-        captured = capsys.readouterr()
-        assert "Saved screenshot to" in captured.out
-        fake_pil.save.assert_called_once_with(output)
+        assert "Saved screenshot to" in capsys.readouterr().out
+        assert output.is_file()
+        # Round-trip the PNG to confirm the bytes are a valid image
+        # of the expected shape.
+        with Image.open(output) as img:
+            assert img.size == (8, 4)
 
     def test_reports_failure(
         self,
@@ -308,145 +297,69 @@ class TestScreenshotCommand:
         tmp_path: Path,
     ):
         mocker.patch("vrcpilot.cli.take_screenshot", return_value=None)
+        output = tmp_path / "shot.png"
 
-        exit_code = main(["screenshot", "--output", str(tmp_path / "shot.png")])
+        exit_code = main(["screenshot", "--output", str(output)])
 
         assert exit_code == 1
-        captured = capsys.readouterr()
-        assert "Could not" in captured.err
+        assert "Could not" in capsys.readouterr().err
+        assert not output.exists()
 
     def test_short_output_flag(
         self,
-        mocker: MockerFixture,
-        capsys: pytest.CaptureFixture[str],
+        patched_take_screenshot: object,
         tmp_path: Path,
     ):
-        fake_pil = mocker.Mock()
-        mocker.patch("vrcpilot.cli.Image.fromarray", return_value=fake_pil)
-        mocker.patch("vrcpilot.cli.take_screenshot", return_value=mocker.Mock())
+        del patched_take_screenshot
         output = tmp_path / "shot.png"
 
         exit_code = main(["screenshot", "-o", str(output)])
 
         assert exit_code == 0
-        fake_pil.save.assert_called_once_with(output)
+        assert output.is_file()
 
     def test_default_output_is_cwd_with_timestamp(
         self,
-        mocker: MockerFixture,
-        capsys: pytest.CaptureFixture[str],
+        patched_take_screenshot: object,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        fake_pil = mocker.Mock()
-        mocker.patch("vrcpilot.cli.Image.fromarray", return_value=fake_pil)
-        mocker.patch("vrcpilot.cli.take_screenshot", return_value=mocker.Mock())
+        del patched_take_screenshot
         monkeypatch.chdir(tmp_path)
 
         exit_code = main(["screenshot"])
 
         assert exit_code == 0
-        fake_pil.save.assert_called_once()
-        saved_path = fake_pil.save.call_args.args[0]
-        assert isinstance(saved_path, Path)
-        assert saved_path.parent == tmp_path
-        # vrcpilot_screenshot_YYYYMMDD_HHMMSS.png
-        assert saved_path.name.startswith("vrcpilot_screenshot_")
-        assert saved_path.suffix == ".png"
-
-
-class _FakeCaptureLoop:
-    instances: list[_FakeCaptureLoop] = []
-    frames_per_start: int = 3
-    init_side_effect: BaseException | None = None
-
-    def __init__(
-        self,
-        callback: Callable[[np.ndarray], None],
-        *,
-        fps: float,
-        frame_timeout: float = 2.0,
-    ) -> None:
-        if _FakeCaptureLoop.init_side_effect is not None:
-            raise _FakeCaptureLoop.init_side_effect
-        self.callback = callback
-        self.fps = fps
-        self.frame_timeout = frame_timeout
-        self.start_calls = 0
-        _FakeCaptureLoop.instances.append(self)
-
-    def start(self) -> None:
-        self.start_calls += 1
-        for _ in range(_FakeCaptureLoop.frames_per_start):
-            self.callback(np.zeros((4, 4, 3), dtype=np.uint8))
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
-        del exc_type, exc_val, exc_tb
-
-
-class _FakeMp4FrameSink:
-    instances: list[_FakeMp4FrameSink] = []
-
-    def __init__(self, output_path: Path, fps: float) -> None:
-        self.output_path = output_path
-        self.fps = fps
-        self.writes: list[np.ndarray] = []
-        self.closed = False
-        _FakeMp4FrameSink.instances.append(self)
-
-    @property
-    def frame_count(self) -> int:
-        return len(self.writes)
-
-    def write(self, frame_rgb: np.ndarray) -> None:
-        self.writes.append(frame_rgb)
-
-    def close(self) -> None:
-        self.closed = True
-
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
-        del exc_type, exc_val, exc_tb
-        self.close()
+        # vrcpilot_screenshot_YYYYMMDD_HHMMSS.png in the current dir.
+        produced = list(tmp_path.glob("vrcpilot_screenshot_*.png"))
+        assert len(produced) == 1
+        assert produced[0].suffix == ".png"
 
 
 @dataclass
 class _CaptureFakes:
-    loop: type[_FakeCaptureLoop]
-    sink: type[_FakeMp4FrameSink]
+    loop: type[FakeCaptureLoop]
+    sink: type[FakeMp4Sink]
     sleep: MockType
 
 
 @pytest.fixture
 def capture_fakes(mocker: MockerFixture) -> _CaptureFakes:
-    # KeyboardInterrupt 既定: production の `while True: time.sleep(3600)`
-    # idiom に入っても 1 回目で抜ける。これを忘れると Mock.call_args_list が
-    # 無限蓄積してメモリが爆発する（feedback_just_run_memory_pressure 参照）。
+    """Wire the canonical capture fakes into :mod:`vrcpilot.cli`.
+
+    ``time.sleep`` is patched to raise ``KeyboardInterrupt`` so the
+    production ``while True: time.sleep(3600)`` idiom exits on the
+    first call. Without this, ``Mock.call_args_list`` accumulates
+    forever and starves the runner of memory.
+    """
     sleep_mock = mocker.patch("vrcpilot.cli.time.sleep", side_effect=KeyboardInterrupt)
-    mocker.patch("vrcpilot.cli.CaptureLoop", _FakeCaptureLoop)
-    mocker.patch("vrcpilot.cli.Mp4FrameSink", _FakeMp4FrameSink)
-    _FakeCaptureLoop.instances = []
-    _FakeCaptureLoop.frames_per_start = 3
-    _FakeCaptureLoop.init_side_effect = None
-    _FakeMp4FrameSink.instances = []
-    return _CaptureFakes(
-        loop=_FakeCaptureLoop, sink=_FakeMp4FrameSink, sleep=sleep_mock
-    )
+    mocker.patch("vrcpilot.cli.CaptureLoop", FakeCaptureLoop)
+    mocker.patch("vrcpilot.cli.Mp4FrameSink", FakeMp4Sink)
+    FakeCaptureLoop.instances = []
+    FakeCaptureLoop.frames_per_start = 3
+    FakeCaptureLoop.init_side_effect = None
+    FakeMp4Sink.instances = []
+    return _CaptureFakes(loop=FakeCaptureLoop, sink=FakeMp4Sink, sleep=sleep_mock)
 
 
 class TestCaptureCommand:
@@ -507,8 +420,9 @@ class TestCaptureCommand:
         tmp_path: Path,
         mocker: MockerFixture,
     ):
-        # duration ありの正常完了パスを確認するため、sleep を return_value=None
-        # で上書き。--duration を指定しているので 1 回の sleep で抜ける。
+        # Override the fixture's KeyboardInterrupt sleep with a
+        # well-behaved one so the ``--duration`` branch can complete
+        # naturally.
         sleep_mock = mocker.patch("vrcpilot.cli.time.sleep", return_value=None)
 
         exit_code = main(["capture", "-o", str(tmp_path / "d.mp4"), "--duration", "5"])
@@ -520,14 +434,13 @@ class TestCaptureCommand:
     def test_no_duration_waits_until_keyboard_interrupt(
         self, capture_fakes: _CaptureFakes, tmp_path: Path
     ):
-        # 既定 fixture の sleep は side_effect=KeyboardInterrupt なので
-        # `while True: time.sleep(3600)` の最初の呼び出しで抜ける。exit 0。
+        # Default fixture sleep raises KeyboardInterrupt -> the
+        # ``while True: time.sleep(3600)`` idiom exits on the first
+        # call. The assertion locks in the call_count to guard the
+        # memory-pressure trap (feedback_just_run_memory_pressure).
         exit_code = main(["capture", "-o", str(tmp_path / "ki.mp4")])
 
         assert exit_code == 0
-        # `else` 分岐に入って sleep が 1 度だけ呼ばれて抜けたことを確認。
-        # ここを忘れると Mock.call_args_list が無限蓄積する罠を踏むため
-        # その契約をテストでロックしておく。
         assert capture_fakes.sleep.call_count == 1
 
     def test_zero_frames_returns_error(
@@ -578,12 +491,13 @@ class TestMain:
 
 class TestArgcompleteIntegration:
     def test_autocomplete_invoked_with_parser(self, mocker: MockerFixture):
+        # Use the ``status`` subcommand since the autouse conftest
+        # makes it an honest, mock-free run all the way through.
         autocomplete_mock = mocker.patch("vrcpilot.cli.argcomplete.autocomplete")
-        _patch_launch(mocker)
 
-        exit_code = main(["launch"])
+        exit_code = main(["status"])
 
-        assert exit_code == 0
+        assert exit_code == 1
         autocomplete_mock.assert_called_once()
         call_args = autocomplete_mock.call_args
         assert isinstance(call_args.args[0], argparse.ArgumentParser)
@@ -606,14 +520,18 @@ class TestArgcompleteIntegration:
         assert any("exe" in name for name in allowednames)
 
     def test_autocomplete_does_not_block_normal_run(
-        self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ):
+        # ``status`` against the autouse empty ``process_iter`` is the
+        # cheapest fully-real path through ``main`` — it confirms the
+        # ``argcomplete`` hook does not abort regular (non-completion)
+        # invocations without needing a Steam launch fake.
         monkeypatch.delenv("_ARGCOMPLETE", raising=False)
-        _patch_launch(mocker)
 
-        exit_code = main(["launch"])
+        exit_code = main(["status"])
 
-        assert exit_code == 0
+        assert exit_code == 1
 
     def test_capture_output_has_files_completer(self):
         parser = _build_parser()
