@@ -18,8 +18,6 @@ mocks.
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
 
 import pytest
 
@@ -31,30 +29,15 @@ from tests.helpers import has_x11_display
 if not has_x11_display():
     pytest.skip("X11 display unavailable", allow_module_level=True)
 
-import Xlib.error
 from pytest_mock import MockerFixture
 
-from tests._fakes import FakeXDisplay, FakeXWindow
+from tests._fakes import (
+    FakeXDisplay,
+    FakeXWindow,
+    fake_x11_display_cm,
+    make_xerror_subclass,
+)
 from vrcpilot.window.x11 import focus_window, unfocus_window
-
-
-class _FakeXError(Xlib.error.XError):
-    """Bare ``XError`` subclass that skips the parent ``__init__``.
-
-    The real ``Xlib.error.XError.__init__`` expects a parsed protocol
-    reply; tests just need an instance to raise.
-    """
-
-    def __init__(self) -> None:  # noqa: D401
-        pass
-
-
-@contextmanager
-def _fake_display_cm(
-    display: FakeXDisplay | None,
-) -> Iterator[FakeXDisplay | None]:
-    """Wrap a fake display so it satisfies the ``x11_display()`` contract."""
-    yield display
 
 
 class TestFocusWindow:
@@ -95,14 +78,15 @@ class TestUnfocusWindow:
         # with a fake context manager yielding a benign FakeXDisplay
         # (the lookup is short-circuited by patching
         # ``find_vrchat_window``).
+        xerror_cls = make_xerror_subclass()
         mocker.patch("vrcpilot.window.x11.find_pid", return_value=4242)
         mocker.patch(
             "vrcpilot.window.x11.x11_display",
-            return_value=_fake_display_cm(FakeXDisplay()),
+            return_value=fake_x11_display_cm(FakeXDisplay()),
         )
         mocker.patch(
             "vrcpilot.window.x11.find_vrchat_window",
-            return_value=FakeXWindow(raises=_FakeXError()),
+            return_value=FakeXWindow(raises=xerror_cls()),
         )
 
         assert unfocus_window() is False

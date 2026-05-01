@@ -10,23 +10,25 @@ Two backends, two test classes:
   raises ``ImportError`` on non-Linux, so the class is gated with
   ``pytestmark = only_linux``. Real ``Xlib`` functions are patched
   with :class:`tests._fakes.FakeXDisplay` / :class:`tests._fakes.FakeXWindow`
-  plus a small local pixmap fake.
+  / :class:`tests._fakes.FakePixmap`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import override
 
 import numpy as np
 import pytest
 from pytest_mock import MockerFixture
 
 from tests._fakes import (
+    FakePixmap,
     FakeWindowsCapture,
     FakeXDisplay,
     FakeXGeometry,
     FakeXWindow,
+    make_fresh_windows_capture_subclass,
+    make_xerror_subclass,
 )
 from tests.helpers import only_linux, only_windows
 from vrcpilot.capture import Capture
@@ -64,18 +66,14 @@ def fake_windows_capture(
 ) -> type[FakeWindowsCapture]:
     """Patch ``WindowsCapture`` in the Win32 backend module with a fresh fake.
 
-    A fresh subclass per test isolates the class-level ``last_kwargs`` /
-    ``start_raises`` / ``last_instance`` mutable state so tests cannot
-    leak fixture state into one another.
+    Delegates the per-test subclass dance to
+    :func:`tests._fakes.make_fresh_windows_capture_subclass` so
+    isolation logic stays in the canonical fake module, not duplicated
+    across test files.
     """
-
-    class _Fake(FakeWindowsCapture):
-        last_kwargs: dict[str, object] = {}
-        start_raises: BaseException | None = None
-        last_instance: FakeWindowsCapture | None = None
-
-    mocker.patch("vrcpilot.capture.win32.WindowsCapture", _Fake)
-    return _Fake
+    fresh = make_fresh_windows_capture_subclass()
+    mocker.patch("vrcpilot.capture.win32.WindowsCapture", fresh)
+    return fresh
 
 
 @pytest.fixture
@@ -288,52 +286,12 @@ class TestCaptureWin32:
 
 
 @dataclass
-class _FakePixmapImage:
-    """Mimic the ``GetImage`` reply returned by ``pixmap.get_image``.
-
-    Production reads ``.data`` only.
-    """
-
-    data: bytes
-
-
-class _FakePixmap:
-    """Stand-in for the pixmap returned by ``composite.name_window_pixmap``.
-
-    ``get_image`` returns a stub reply with a BGRA-shaped buffer;
-    ``free`` is a no-op the production calls under a ``finally``.
-    """
-
-    def __init__(self, *, width: int, height: int) -> None:
-        self._width = width
-        self._height = height
-        self.free_calls = 0
-        self.get_image_side_effect: BaseException | None = None
-
-    def get_image(
-        self,
-        _x: int,
-        _y: int,
-        width: int,
-        height: int,
-        _fmt: object,
-        _plane_mask: int,
-    ) -> _FakePixmapImage:
-        if self.get_image_side_effect is not None:
-            raise self.get_image_side_effect
-        return _FakePixmapImage(data=bytes(width * height * 4))
-
-    def free(self) -> None:
-        self.free_calls += 1
-
-
-@dataclass
 class _X11Patches:
     """Bundle of fakes returned by the X11 happy-path fixture."""
 
     display: FakeXDisplay
     window: FakeXWindow
-    pixmap: _FakePixmap
+    pixmap: FakePixmap
 
 
 @pytest.fixture
@@ -361,7 +319,7 @@ def patch_x11_backend(
     fake_window = FakeXWindow(
         wid=1, pid=pid, geometry=FakeXGeometry(width=width, height=height)
     )
-    fake_pixmap = _FakePixmap(width=width, height=height)
+    fake_pixmap = FakePixmap(width=width, height=height)
 
     mocker.patch("vrcpilot.capture.x11.find_pid", return_value=pid)
     mocker.patch("vrcpilot.capture.x11.open_x11_display", return_value=fake_display)
@@ -374,33 +332,6 @@ def patch_x11_backend(
     )
 
     return _X11Patches(display=fake_display, window=fake_window, pixmap=fake_pixmap)
-
-
-def _make_xerror_subclass() -> type[BaseException]:
-    """Return a no-arg subclass of the real ``Xlib.error.XError``.
-
-    The real ``XError`` requires a ``display`` and a parsed protocol
-    reply -- inconvenient in pure-unit tests. A subclass with an empty
-    ``__init__`` keeps the type identity that the implementation
-    catches without needing a real reply payload. ``__str__`` is also
-    overridden because the parent reads ``self._data`` which is left
-    unset by the empty ``__init__`` -- the f-string in capture.py would
-    otherwise recurse forever in ``GetAttrData.__getattr__``.
-    """
-    import vrcpilot.capture.x11 as _x11_backend
-
-    real_xerror = _x11_backend.Xlib.error.XError
-
-    class _NoArgXError(real_xerror):  # type: ignore[misc, valid-type]
-        @override
-        def __init__(self) -> None:  # noqa: D401
-            pass
-
-        @override
-        def __str__(self) -> str:
-            return "_NoArgXError"
-
-    return _NoArgXError
 
 
 class TestCaptureX11:
@@ -487,7 +418,7 @@ class TestCaptureX11:
             return_value=fake_window,
         )
 
-        xerr_cls = _make_xerror_subclass()
+        xerr_cls = make_xerror_subclass()
         mocker.patch(
             "vrcpilot.capture.x11.composite.query_version",
             side_effect=xerr_cls(),
@@ -514,7 +445,7 @@ class TestCaptureX11:
         # a RuntimeError -- callers catch ``RuntimeError`` and decide to
         # retry; raw ``Xlib.error.XError`` would force them to import
         # python-xlib just for error handling.
-        xerr_cls = _make_xerror_subclass()
+        xerr_cls = make_xerror_subclass()
         patch_x11_backend.pixmap.get_image_side_effect = xerr_cls()
 
         with Capture() as cap:

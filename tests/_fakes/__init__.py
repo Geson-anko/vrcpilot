@@ -23,14 +23,25 @@ from .capture import (
     FakeWindowsCapture,
     FakeWindowsCaptureControl,
     FakeWindowsFrame,
+    make_fresh_windows_capture_subclass,
 )
 from .process import FakePopen, FakeProcess
-from .x11 import FakeXDisplay, FakeXGeometry, FakeXWindow
+from .x11 import (
+    FakePixmap,
+    FakePixmapImage,
+    FakeXDisplay,
+    FakeXGeometry,
+    FakeXWindow,
+    fake_x11_display_cm,
+    make_xerror_subclass,
+)
 
 __all__ = [
     "FakeCapture",
     "FakeCaptureLoop",
     "FakeMp4Sink",
+    "FakePixmap",
+    "FakePixmapImage",
     "FakePopen",
     "FakeProcess",
     "FakeWindowsCapture",
@@ -39,4 +50,7 @@ __all__ = [
     "FakeXDisplay",
     "FakeXGeometry",
     "FakeXWindow",
+    "fake_x11_display_cm",
+    "make_fresh_windows_capture_subclass",
+    "make_xerror_subclass",
 ]

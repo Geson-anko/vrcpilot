@@ -23,35 +23,11 @@ if sys.platform != "linux":
     pytest.skip("Linux-only module", allow_module_level=True)
 
 from dataclasses import dataclass
-from typing import override
 
 from pytest_mock import MockerFixture
 
-from tests._fakes import FakeXDisplay, FakeXWindow
+from tests._fakes import FakeXDisplay, FakeXWindow, make_xerror_subclass
 from vrcpilot.capture.x11 import X11CaptureBackend
-
-
-def _make_xerror_subclass() -> type[BaseException]:
-    """Return a no-arg subclass of the real ``Xlib.error.XError``.
-
-    The real ``XError`` requires a parsed protocol reply; an empty
-    ``__init__`` keeps the type identity that the implementation
-    catches without needing one. Mirrors the helper in test_session.
-    """
-    import vrcpilot.capture.x11 as _x11_backend
-
-    real_xerror = _x11_backend.Xlib.error.XError
-
-    class _NoArgXError(real_xerror):  # type: ignore[misc, valid-type]
-        @override
-        def __init__(self) -> None:  # noqa: D401
-            pass
-
-        @override
-        def __str__(self) -> str:
-            return "_NoArgXError"
-
-    return _NoArgXError
 
 
 @dataclass
@@ -130,7 +106,7 @@ class TestX11CaptureBackend:
         # When the Composite extension is missing the server raises an
         # XError on ``query_version``. We must wrap as RuntimeError and
         # close the display so the retry loop above cannot leak.
-        xerr_cls = _make_xerror_subclass()
+        xerr_cls = make_xerror_subclass()
         mocker.patch(
             "vrcpilot.capture.x11.composite.query_version",
             side_effect=xerr_cls(),
@@ -147,7 +123,7 @@ class TestX11CaptureBackend:
         # nested Xephyr, etc.). Same recovery contract: wrap and close
         # the display.
         mocker.patch("vrcpilot.capture.x11.composite.query_version")
-        xerr_cls = _make_xerror_subclass()
+        xerr_cls = make_xerror_subclass()
         mocker.patch(
             "vrcpilot.capture.x11.composite.redirect_window",
             side_effect=xerr_cls(),

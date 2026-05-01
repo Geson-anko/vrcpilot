@@ -23,8 +23,12 @@ from tests.helpers import has_x11_display
 if not has_x11_display():
     pytest.skip("X11 display unavailable", allow_module_level=True)
 
-import vrcpilot.x11 as x11_mod
-from tests._fakes import FakeXDisplay, FakeXGeometry, FakeXWindow
+from tests._fakes import (
+    FakeXDisplay,
+    FakeXGeometry,
+    FakeXWindow,
+    make_xerror_subclass,
+)
 from vrcpilot.x11 import (
     find_vrchat_window,
     get_window_rect,
@@ -106,13 +110,9 @@ class TestGetWindowRect:
         # ``XError`` covers any X protocol failure during the lookup;
         # the FakeXWindow's ``raises`` channel injects exactly such a
         # failure on the first method call.
-        class _FakeXError(x11_mod.Xlib.error.XError):
-            def __init__(self) -> None:
-                # Skip parent ``__init__`` which expects a parsed reply.
-                pass
-
+        xerror_cls = make_xerror_subclass()
         fake_display = FakeXDisplay()
-        fake_window = FakeXWindow(raises=_FakeXError())
+        fake_window = FakeXWindow(raises=xerror_cls())
 
         assert get_window_rect(fake_display, fake_window) is None  # type: ignore[arg-type]
 

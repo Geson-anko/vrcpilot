@@ -21,7 +21,7 @@ if sys.platform != "win32":
 
 from pytest_mock import MockerFixture
 
-from tests._fakes import FakeWindowsCapture
+from tests._fakes import FakeWindowsCapture, make_fresh_windows_capture_subclass
 from vrcpilot.capture.win32 import Win32CaptureBackend
 
 
@@ -64,14 +64,10 @@ class TestWin32CaptureBackend:
         # the original on ``__cause__`` for diagnosis.
         del win32_pid_and_hwnd
 
-        class _Fake(FakeWindowsCapture):
-            last_kwargs: dict[str, object] = {}
-            start_raises: BaseException | None = None
-            last_instance: FakeWindowsCapture | None = None
-
+        fresh = make_fresh_windows_capture_subclass()
         original = OSError("WGC unavailable")
-        _Fake.start_raises = original
-        mocker.patch("vrcpilot.capture.win32.WindowsCapture", _Fake)
+        fresh.start_raises = original
+        mocker.patch("vrcpilot.capture.win32.WindowsCapture", fresh)
 
         with pytest.raises(RuntimeError, match="Failed to start WGC session") as ei:
             Win32CaptureBackend(frame_timeout=1.0)

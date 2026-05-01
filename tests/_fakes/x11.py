@@ -9,7 +9,10 @@ test.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import override
 
 
 @dataclass
@@ -169,3 +172,88 @@ class FakeXDisplay:
 
     def close(self) -> None:
         self.close_calls += 1
+
+
+@contextmanager
+def fake_x11_display_cm(
+    display: FakeXDisplay | None,
+) -> Iterator[FakeXDisplay | None]:
+    """Wrap *display* so it satisfies the :func:`vrcpilot.x11.x11_display` API.
+
+    Tests that patch ``vrcpilot.window.x11.x11_display`` must hand back
+    a context manager (production uses ``with x11_display() as d:``);
+    this helper keeps the wrap one-liner across tests.
+    """
+    yield display
+
+
+@dataclass
+class FakePixmapImage:
+    """Mimic the ``GetImage`` reply from ``pixmap.get_image``.
+
+    Production reads ``.data`` only.
+    """
+
+    data: bytes
+
+
+class FakePixmap:
+    """Stand-in for the pixmap returned by ``composite.name_window_pixmap``.
+
+    ``get_image`` returns a stub reply with a BGRA-shaped buffer
+    sized to the requested width × height; ``free`` is the no-op the
+    production calls in a ``finally``. ``get_image_side_effect`` lets
+    tests inject failures on the read path.
+    """
+
+    def __init__(self, *, width: int = 100, height: int = 50) -> None:
+        self._width = width
+        self._height = height
+        self.free_calls = 0
+        self.get_image_side_effect: BaseException | None = None
+
+    def get_image(
+        self,
+        _x: int,
+        _y: int,
+        width: int,
+        height: int,
+        _fmt: object,
+        _plane_mask: int,
+    ) -> FakePixmapImage:
+        if self.get_image_side_effect is not None:
+            raise self.get_image_side_effect
+        return FakePixmapImage(data=bytes(width * height * 4))
+
+    def free(self) -> None:
+        self.free_calls += 1
+
+
+def make_xerror_subclass() -> type[BaseException]:
+    """Return a no-arg subclass of the real ``Xlib.error.XError``.
+
+    The real ``XError`` requires a ``display`` and a parsed protocol
+    reply, which are inconvenient in pure-unit tests. A subclass with
+    an empty ``__init__`` keeps the type identity that the production
+    ``except Xlib.error.XError`` block matches without needing a real
+    reply payload. ``__str__`` is overridden because the parent reads
+    ``self._data`` (left unset by the empty ``__init__``); without the
+    override an f-string in capture.py would recurse forever in
+    ``GetAttrData.__getattr__``.
+
+    Lazy-imports ``Xlib`` so this module stays importable on Windows.
+    """
+    import Xlib.error
+
+    real_xerror = Xlib.error.XError
+
+    class _NoArgXError(real_xerror):  # type: ignore[misc, valid-type]
+        @override
+        def __init__(self) -> None:
+            pass
+
+        @override
+        def __str__(self) -> str:
+            return "_NoArgXError"
+
+    return _NoArgXError

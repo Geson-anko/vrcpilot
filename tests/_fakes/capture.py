@@ -267,3 +267,21 @@ class FakeWindowsCapture:
     @property
     def control(self) -> FakeWindowsCaptureControl:
         return self._control
+
+
+def make_fresh_windows_capture_subclass() -> type[FakeWindowsCapture]:
+    """Return a subclass of :class:`FakeWindowsCapture` with isolated state.
+
+    Each test that exercises the WGC backend needs its own
+    ``last_kwargs`` / ``start_raises`` / ``last_instance`` so class-
+    level mutations do not leak between tests. Centralising the
+    subclass dance here keeps test files free of the boilerplate that
+    the strategy document forbids.
+    """
+
+    class _Fresh(FakeWindowsCapture):
+        last_kwargs: dict[str, object] = {}
+        start_raises: BaseException | None = None
+        last_instance: FakeWindowsCapture | None = None
+
+    return _Fresh
