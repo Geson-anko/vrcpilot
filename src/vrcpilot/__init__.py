@@ -7,7 +7,6 @@ geometry, for GUI automation).
 
 from importlib import metadata
 
-from vrcpilot._steam import SteamNotFoundError
 from vrcpilot.capture import Capture, CaptureLoop
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
@@ -20,6 +19,7 @@ from vrcpilot.process import (
     terminate,
 )
 from vrcpilot.screenshot import Screenshot, take_screenshot
+from vrcpilot.steam import SteamNotFoundError
 from vrcpilot.window import focus, unfocus
 
 #: Resolved from distribution metadata so it stays in sync with

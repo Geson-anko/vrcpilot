@@ -1,11 +1,11 @@
-"""Tests package top level features."""
+"""Tests for :mod:`vrcpilot` package top-level."""
 
 import tomllib
 from pathlib import Path
 
 import vrcpilot
 
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 
 
 class TestPackage:

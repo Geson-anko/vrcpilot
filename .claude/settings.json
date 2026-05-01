@@ -45,7 +45,10 @@
       "Bash(uv run vrcpilot:*)",
       "Bash(uv run pyright:*)",
       "Bash(uv run pytest:*)",
-      "Bash(git restore *)"
+      "Bash(git restore *)",
+      "Bash(git check-ignore *)",
+      "Bash(git switch *)",
+      "Bash(git mv *)"
     ],
     "deny": [
       "Bash(git push:*)",

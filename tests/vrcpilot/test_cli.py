@@ -14,9 +14,9 @@ import pytest
 from argcomplete.completers import FilesCompleter
 from pytest_mock import MockerFixture, MockType
 
-from vrcpilot._steam import SteamNotFoundError
 from vrcpilot.cli import _build_parser, main
 from vrcpilot.process import VRCHAT_STEAM_APP_ID, OscConfig
+from vrcpilot.steam import SteamNotFoundError
 
 
 def _patch_launch(mocker: MockerFixture):

@@ -4,7 +4,7 @@ Drives :class:`vrcpilot.CaptureLoop` against a real running VRChat
 client to confirm the fixed-FPS API works end-to-end. The scenario
 opens ``CaptureLoop(callback, fps=30.0)``, sleeps the wall-clock
 duration on the main thread while the worker thread writes through
-:class:`vrcpilot.capture._sinks.Mp4FrameSink`, and logs the
+:class:`vrcpilot.capture.sinks.Mp4FrameSink`, and logs the
 per-frame interval distribution so a human can sanity-check the
 cadence.
 
@@ -38,7 +38,7 @@ from pathlib import Path
 import numpy as np
 
 import vrcpilot
-from vrcpilot.capture._sinks import Mp4FrameSink
+from vrcpilot.capture.sinks import Mp4FrameSink
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _helpers  # noqa: E402
