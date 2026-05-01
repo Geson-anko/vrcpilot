@@ -78,8 +78,7 @@ def wait_for_pid(
     timeout: float = _PID_WAIT_TIMEOUT,
     interval: float = _PID_WAIT_INTERVAL,
 ) -> int | None:
-    """Poll :func:`vrcpilot.find_pid` until a PID appears or ``timeout``
-    elapses.
+    """Poll for a VRChat PID until one appears or ``timeout`` elapses.
 
     Returns the observed PID, or ``None`` if the deadline expires
     first. Suitable for both manual scenarios (waiting for VRChat to
@@ -99,8 +98,7 @@ def wait_for_no_pid(
     timeout: float = _PID_WAIT_TIMEOUT,
     interval: float = _PID_WAIT_INTERVAL,
 ) -> bool:
-    """Poll until :func:`vrcpilot.find_pid` returns ``None`` or ``timeout``
-    elapses.
+    """Poll until VRChat is no longer running, or ``timeout`` elapses.
 
     Returns ``True`` once the process is gone; ``False`` if the
     deadline expired with the process still present.

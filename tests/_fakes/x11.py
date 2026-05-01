@@ -14,8 +14,7 @@ from dataclasses import dataclass
 
 @dataclass
 class FakeXGeometry:
-    """Stand-in for the geometry reply from
-    :meth:`Xlib.xobject.drawable.Window.get_geometry`."""
+    """Stand-in for the geometry reply from ``Window.get_geometry``."""
 
     width: int = 1920
     height: int = 1080
