@@ -1,4 +1,4 @@
-"""Tests for :mod:`vrcpilot._win32`."""
+"""Tests for :mod:`vrcpilot.win32`."""
 
 from __future__ import annotations
 
@@ -42,10 +42,10 @@ class TestGetWindowRect:
     ):
         # ``GetWindowRect`` returns ``(left, top, right, bottom)`` and the
         # helper's contract is to convert to origin + size form.
-        from vrcpilot._win32 import get_window_rect
+        from vrcpilot.win32 import get_window_rect
 
         mocker.patch(
-            "vrcpilot._win32.win32gui.GetWindowRect",
+            "vrcpilot.win32.win32gui.GetWindowRect",
             return_value=(100, 200, 900, 800),
         )
 
@@ -55,10 +55,10 @@ class TestGetWindowRect:
         # Multi-monitor setups can place the primary window's origin at
         # negative coordinates when the user dragged VRChat onto a
         # left-of-primary monitor. The helper must preserve the sign.
-        from vrcpilot._win32 import get_window_rect
+        from vrcpilot.win32 import get_window_rect
 
         mocker.patch(
-            "vrcpilot._win32.win32gui.GetWindowRect",
+            "vrcpilot.win32.win32gui.GetWindowRect",
             return_value=(-1920, 0, -1120, 600),
         )
 
@@ -72,10 +72,10 @@ class TestGetWindowRect:
         # surfaces this as ``None`` so callers can degrade gracefully.
         import pywintypes
 
-        from vrcpilot._win32 import get_window_rect
+        from vrcpilot.win32 import get_window_rect
 
         mocker.patch(
-            "vrcpilot._win32.win32gui.GetWindowRect",
+            "vrcpilot.win32.win32gui.GetWindowRect",
             side_effect=pywintypes.error(
                 1400, "GetWindowRect", "Invalid window handle."
             ),
@@ -98,9 +98,9 @@ class TestGetWindowRect:
         rect: tuple[int, int, int, int],
         mock_set_thread_dpi,
     ):
-        from vrcpilot._win32 import get_window_rect
+        from vrcpilot.win32 import get_window_rect
 
-        mocker.patch("vrcpilot._win32.win32gui.GetWindowRect", return_value=rect)
+        mocker.patch("vrcpilot.win32.win32gui.GetWindowRect", return_value=rect)
 
         assert get_window_rect(12345) is None
 
@@ -113,10 +113,10 @@ class TestGetWindowRect:
         # implementation detail and intentionally not asserted here.
         import pywintypes
 
-        from vrcpilot._win32 import get_window_rect
+        from vrcpilot.win32 import get_window_rect
 
         mocker.patch(
-            "vrcpilot._win32.win32gui.GetWindowRect",
+            "vrcpilot.win32.win32gui.GetWindowRect",
             side_effect=pywintypes.error(
                 1400, "GetWindowRect", "Invalid window handle."
             ),

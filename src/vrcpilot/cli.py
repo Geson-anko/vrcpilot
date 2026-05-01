@@ -18,8 +18,7 @@ from argcomplete.completers import FilesCompleter
 from PIL import Image
 
 from vrcpilot import CaptureLoop
-from vrcpilot._steam import SteamNotFoundError
-from vrcpilot.capture._sinks import Mp4FrameSink
+from vrcpilot.capture.sinks import Mp4FrameSink
 from vrcpilot.process import (
     VRCHAT_STEAM_APP_ID,
     OscConfig,
@@ -28,6 +27,7 @@ from vrcpilot.process import (
     terminate,
 )
 from vrcpilot.screenshot import take_screenshot
+from vrcpilot.steam import SteamNotFoundError
 from vrcpilot.window import focus, unfocus
 
 

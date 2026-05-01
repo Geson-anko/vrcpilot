@@ -1,4 +1,4 @@
-"""Tests for :mod:`vrcpilot._x11`."""
+"""Tests for :mod:`vrcpilot.x11`."""
 
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ class TestOpenX11Display:
     def test_returns_display_on_success(
         self, mocker: MockerFixture, monkeypatch: pytest.MonkeyPatch
     ):
-        from vrcpilot._x11 import open_x11_display
+        from vrcpilot.x11 import open_x11_display
 
         monkeypatch.setenv("DISPLAY", ":0")
         fake_display = mocker.Mock()
-        mocker.patch("vrcpilot._x11.Xlib.display.Display", return_value=fake_display)
+        mocker.patch("vrcpilot.x11.Xlib.display.Display", return_value=fake_display)
 
         assert open_x11_display() is fake_display
 
@@ -28,11 +28,11 @@ class TestOpenX11Display:
         # XAUTHORITY, etc.) raise into the open call; the helper
         # converts them to ``None`` so long-lived callers can fall back
         # rather than crash.
-        from vrcpilot._x11 import open_x11_display
+        from vrcpilot.x11 import open_x11_display
 
         monkeypatch.setenv("DISPLAY", ":99")
         mocker.patch(
-            "vrcpilot._x11.Xlib.display.Display", side_effect=OSError("unreachable")
+            "vrcpilot.x11.Xlib.display.Display", side_effect=OSError("unreachable")
         )
 
         assert open_x11_display() is None
@@ -42,12 +42,12 @@ class TestOpenX11Display:
     ):
         # ``DisplayError`` covers malformed DISPLAY values (parser
         # failures); should also degrade to ``None``.
-        import vrcpilot._x11 as x11_mod
-        from vrcpilot._x11 import open_x11_display
+        import vrcpilot.x11 as x11_mod
+        from vrcpilot.x11 import open_x11_display
 
         monkeypatch.setenv("DISPLAY", "garbage")
         mocker.patch(
-            "vrcpilot._x11.Xlib.display.Display",
+            "vrcpilot.x11.Xlib.display.Display",
             side_effect=x11_mod.Xlib.error.DisplayError("garbage"),
         )
 
@@ -61,7 +61,7 @@ class TestGetWindowRect:
         # screen-space origin under python-xlib (see commit 77a6422),
         # so the helper sign-flips ``coords.x`` / ``coords.y`` to give
         # callers an origin in the conventional sense.
-        from vrcpilot._x11 import get_window_rect
+        from vrcpilot.x11 import get_window_rect
 
         fake_display = mocker.Mock()
         fake_window = mocker.Mock()
@@ -74,8 +74,8 @@ class TestGetWindowRect:
         # Defining a tiny ``XError`` subclass with a no-arg ``__init__``
         # bypasses the real protocol-payload requirement; only the type
         # hierarchy matters for the except clause.
-        import vrcpilot._x11 as x11_mod
-        from vrcpilot._x11 import get_window_rect
+        import vrcpilot.x11 as x11_mod
+        from vrcpilot.x11 import get_window_rect
 
         class _FakeXError(x11_mod.Xlib.error.XError):
             def __init__(self) -> None:  # noqa: D401
@@ -95,7 +95,7 @@ class TestGetWindowRect:
     def test_returns_none_on_degenerate_geometry(
         self, mocker: MockerFixture, width: int, height: int
     ):
-        from vrcpilot._x11 import get_window_rect
+        from vrcpilot.x11 import get_window_rect
 
         fake_display = mocker.Mock()
         fake_window = mocker.Mock()

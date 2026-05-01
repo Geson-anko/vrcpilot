@@ -1,4 +1,4 @@
-"""Tests for :class:`vrcpilot.capture._sinks.Mp4FrameSink`.
+"""Tests for :class:`vrcpilot.capture.sinks.Mp4FrameSink`.
 
 cv2 is exercised against the real filesystem (``tmp_path``) rather than
 mocked: the sink's job is to emit a valid mp4, and the only useful
@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 import pytest
 
-from vrcpilot.capture._sinks import Mp4FrameSink
+from vrcpilot.capture.sinks import Mp4FrameSink
 
 
 def _frame(h: int = 16, w: int = 16) -> np.ndarray:

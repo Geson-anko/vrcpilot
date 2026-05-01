@@ -147,7 +147,7 @@ class TestFocusX11:
     ):
         monkeypatch.setenv("DISPLAY", ":0")
         mocker.patch("vrcpilot.window.x11.find_pid", return_value=4242)
-        mocker.patch("vrcpilot._x11.Xlib.display.Display")
+        mocker.patch("vrcpilot.x11.Xlib.display.Display")
         mocker.patch("vrcpilot.window.x11.find_vrchat_window", return_value=None)
 
         assert vrcpilot.window.focus() is False
@@ -159,7 +159,7 @@ class TestFocusX11:
         monkeypatch.setenv("DISPLAY", ":0")
         mocker.patch("vrcpilot.window.x11.find_pid", return_value=4242)
         mocker.patch(
-            "vrcpilot._x11.Xlib.display.Display",
+            "vrcpilot.x11.Xlib.display.Display",
             side_effect=_x11_backend.Xlib.error.DisplayError(":0"),
         )
 
@@ -177,7 +177,7 @@ class TestFocusX11:
         fake_screen = mocker.Mock(root=fake_root)
         fake_display = mocker.Mock()
         fake_display.screen.return_value = fake_screen
-        mocker.patch("vrcpilot._x11.Xlib.display.Display", return_value=fake_display)
+        mocker.patch("vrcpilot.x11.Xlib.display.Display", return_value=fake_display)
         mocker.patch("vrcpilot.window.x11.find_vrchat_window", return_value=fake_window)
         # ``ClientMessage`` packs its arguments into a struct on
         # construction; the mocked window cannot satisfy that, so we
@@ -214,7 +214,7 @@ class TestUnfocusX11:
     ):
         monkeypatch.setenv("DISPLAY", ":0")
         mocker.patch("vrcpilot.window.x11.find_pid", return_value=4242)
-        mocker.patch("vrcpilot._x11.Xlib.display.Display")
+        mocker.patch("vrcpilot.x11.Xlib.display.Display")
         mocker.patch("vrcpilot.window.x11.find_vrchat_window", return_value=None)
 
         assert vrcpilot.window.unfocus() is False
@@ -228,7 +228,7 @@ class TestUnfocusX11:
 
         fake_window = mocker.Mock()
         fake_display = mocker.Mock()
-        mocker.patch("vrcpilot._x11.Xlib.display.Display", return_value=fake_display)
+        mocker.patch("vrcpilot.x11.Xlib.display.Display", return_value=fake_display)
         mocker.patch("vrcpilot.window.x11.find_vrchat_window", return_value=fake_window)
 
         assert vrcpilot.window.unfocus() is True

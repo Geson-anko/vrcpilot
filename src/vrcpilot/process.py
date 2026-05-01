@@ -10,7 +10,7 @@ from typing import Final
 
 import psutil
 
-from vrcpilot._steam import find_steam_executable
+from vrcpilot.steam import find_steam_executable
 
 #: Steam application id for VRChat.
 VRCHAT_STEAM_APP_ID: Final[int] = 438100

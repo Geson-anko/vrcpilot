@@ -22,8 +22,8 @@ from Xlib.ext import composite
 from Xlib.xobject.drawable import Window as _XWindow
 
 from vrcpilot._session import is_wayland_native
-from vrcpilot._x11 import find_vrchat_window, open_x11_display
 from vrcpilot.process import find_pid
+from vrcpilot.x11 import find_vrchat_window, open_x11_display
 
 from .base import CaptureBackend
 
