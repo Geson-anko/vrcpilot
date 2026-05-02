@@ -66,8 +66,10 @@ def run(args: argparse.Namespace) -> int:
             ``None`` waits for ``Ctrl+C`` (KeyboardInterrupt).
 
     Returns:
-        ``0`` on success, ``1`` if recording failed or no frames were
-        captured.
+        ``0`` on success — the absolute path of the saved mp4 (a
+        single line) is written to stdout. ``1`` if recording failed
+        or no frames were captured. Progress messages go to stderr so
+        stdout stays parseable.
     """
     output: Path | None = args.output
     fps: float = args.fps
@@ -81,7 +83,14 @@ def run(args: argparse.Namespace) -> int:
         with _cli.Mp4FrameSink(output, fps) as sink:
             with _cli.CaptureLoop(sink.write, fps=fps) as loop:
                 loop.start()
-                print(f"Recording to {output} (fps={fps}). Press Ctrl+C to stop.")
+                # Progress messages go to stderr so stdout stays
+                # parseable as a single absolute-path line. Callers
+                # like ``out=$(vrcpilot capture --duration 5)`` get the
+                # path without having to filter out chatter.
+                print(
+                    f"Recording to {output} (fps={fps}). Press Ctrl+C to stop.",
+                    file=sys.stderr,
+                )
                 try:
                     if duration is not None:
                         time.sleep(duration)
@@ -98,5 +107,5 @@ def run(args: argparse.Namespace) -> int:
     if saved_frames == 0:
         print("vrcpilot: no frames captured.", file=sys.stderr)
         return 1
-    print(f"Saved capture to {output} (frames={saved_frames}).")
+    print(str(output.resolve()))
     return 0
