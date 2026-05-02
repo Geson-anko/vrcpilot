@@ -7,10 +7,12 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import yaml
 from argcomplete.completers import FilesCompleter
 from PIL import Image
 
 from vrcpilot import cli as _cli
+from vrcpilot.screenshot import Screenshot
 
 from ._common import SubParsersAction, attach_completer
 
@@ -47,16 +49,28 @@ def run(args: argparse.Namespace) -> int:
             determines the on-disk format via :func:`PIL.Image.save`.
 
     Returns:
-        ``0`` on success, ``1`` if capture failed.
+        ``0`` on success with a YAML dump of the :class:`Screenshot`
+        metadata (image replaced by the absolute ``path``) written to
+        stdout, ``1`` if capture failed.
     """
     output: Path | None = args.output
-    shot = _cli.take_screenshot()
+    shot: Screenshot | None = _cli.take_screenshot()
     if shot is None:
-        print("Could not capture VRChat screenshot.", file=sys.stderr)
+        print("vrcpilot: could not capture VRChat screenshot", file=sys.stderr)
         return 1
     if output is None:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output = Path.cwd() / f"vrcpilot_screenshot_{stamp}.png"
     Image.fromarray(shot.image).save(output)
-    print(f"Saved screenshot to {output}.")
+
+    payload: dict[str, object] = {
+        "path": str(output.resolve()),
+        "x": shot.x,
+        "y": shot.y,
+        "width": shot.width,
+        "height": shot.height,
+        "monitor_index": shot.monitor_index,
+        "captured_at": shot.captured_at.isoformat(),
+    }
+    sys.stdout.write(yaml.safe_dump(payload, sort_keys=False, default_flow_style=False))
     return 0
