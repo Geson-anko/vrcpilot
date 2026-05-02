@@ -25,7 +25,7 @@ if sys.platform != "win32":
 import pywintypes
 from pytest_mock import MockerFixture
 
-from vrcpilot.window.win32 import focus_window, unfocus_window
+from vrcpilot.window.win32 import focus_window, is_window_foreground, unfocus_window
 
 
 class TestFocusWindow:
@@ -56,3 +56,60 @@ class TestUnfocusWindow:
         )
 
         assert unfocus_window() is False
+
+
+class TestIsWindowForeground:
+    def test_returns_false_when_vrchat_not_running(self):
+        # Autouse fixture pins ``find_pid()`` to ``None``; the helper
+        # must short-circuit before touching any Win32 API.
+        assert is_window_foreground() is False
+
+    def test_returns_false_when_hwnd_not_found(self, mocker: MockerFixture):
+        # VRChat process is running but the top-level HWND owned by it
+        # could not be located (e.g. the window is not yet created).
+        # The helper must report ``False`` without invoking
+        # ``GetForegroundWindow``.
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=None)
+
+        assert is_window_foreground() is False
+
+    def test_returns_true_when_hwnd_matches_foreground(self, mocker: MockerFixture):
+        # Happy path: the located HWND equals the OS-reported
+        # foreground HWND, so the helper reports ``True``.
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=12345)
+        mocker.patch(
+            "vrcpilot.window.win32.win32gui.GetForegroundWindow",
+            return_value=12345,
+        )
+
+        assert is_window_foreground() is True
+
+    def test_returns_false_when_hwnd_does_not_match_foreground(
+        self, mocker: MockerFixture
+    ):
+        # A different window owns the foreground - the helper reports
+        # ``False`` so callers know to call ``focus()``.
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=12345)
+        mocker.patch(
+            "vrcpilot.window.win32.win32gui.GetForegroundWindow",
+            return_value=99999,
+        )
+
+        assert is_window_foreground() is False
+
+    def test_returns_false_on_pywintypes_error(self, mocker: MockerFixture):
+        # Any pywintypes failure during the foreground check must be
+        # converted to a ``False`` return rather than propagated, so
+        # the helper plays the same defensive contract as
+        # ``focus_window`` / ``unfocus_window``.
+        mocker.patch("vrcpilot.window.win32.find_pid", return_value=4242)
+        mocker.patch("vrcpilot.window.win32.find_vrchat_hwnd", return_value=12345)
+        mocker.patch(
+            "vrcpilot.window.win32.win32gui.GetForegroundWindow",
+            side_effect=pywintypes.error(0, "GetForegroundWindow", "msg"),
+        )
+
+        assert is_window_foreground() is False

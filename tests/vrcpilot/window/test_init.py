@@ -58,20 +58,9 @@ class TestDispatchOnCurrentPlatform:
             assert vrcpilot.window.unfocus() is False
 
     def test_is_foreground_returns_false_when_vrchat_not_running(self):
-        # Linux-only dispatch in this iteration: the win32 branch
-        # raises ``NotImplementedError`` and is verified separately.
-        if sys.platform != "linux":
-            pytest.skip("is_foreground() is Linux-only in this iteration")
+        if sys.platform not in ("win32", "linux"):
+            pytest.skip("dispatch only wired for Windows and Linux")
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", RuntimeWarning)
             assert vrcpilot.window.is_foreground() is False
-
-    def test_is_foreground_raises_on_win32(self):
-        # The Win32 backend isn't wired yet — the dispatch surfaces
-        # ``NotImplementedError`` so callers fail loudly rather than
-        # silently falling through.
-        if sys.platform != "win32":
-            pytest.skip("Win32-only assertion")
-        with pytest.raises(NotImplementedError):
-            vrcpilot.window.is_foreground()

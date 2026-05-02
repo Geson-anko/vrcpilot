@@ -49,6 +49,22 @@ def focus_window() -> bool:
     return True
 
 
+def is_window_foreground() -> bool:
+    """Win32 implementation of :func:`vrcpilot.window.is_foreground`."""
+    pid = find_pid()
+    if pid is None:
+        return False
+
+    hwnd = find_vrchat_hwnd(pid)
+    if hwnd is None:
+        return False
+
+    try:
+        return win32gui.GetForegroundWindow() == hwnd
+    except pywintypes.error:
+        return False
+
+
 def unfocus_window() -> bool:
     """Win32 implementation of :func:`vrcpilot.window.unfocus`."""
     pid = find_pid()
