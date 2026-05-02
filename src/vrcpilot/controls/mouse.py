@@ -10,7 +10,7 @@ from typing import Any, Literal, override
 
 from .guard import ensure_target
 
-ButtonName = Literal["left", "right", "middle"]
+type ButtonName = Literal["left", "right", "middle"]
 
 
 class Mouse(ABC):
