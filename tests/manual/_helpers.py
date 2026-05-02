@@ -42,8 +42,13 @@ __all__ = [
     "warmup",
 ]
 
-# Fixed wait after a PID first appears, to let VRChat finish initializing.
-WARMUP_SECONDS: float = 15.0
+# Fixed wait after a PID first appears, to let VRChat finish
+# initializing -- not just spawning the process but also loading the
+# default world and settling into a stable foreground state. 15s was
+# enough for focus/unfocus probes that only need the window to exist,
+# but synthetic input scenarios race the world load otherwise; 45s
+# leaves headroom even on first-run shader compilation.
+WARMUP_SECONDS: float = 45.0
 
 #: Directory used by manual scenarios to drop visual artifacts (PNGs).
 #:

@@ -11,7 +11,7 @@ type: feedback
 **How to apply:**
 
 - 実装ステップで manual シナリオを書いたら、続けて `just manual <NAME>` を実行する
-- SSH 越しに動かす場合は `DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" just manual <NAME>` を使う (justfile の fallback も効くが明示すると確実)
+- SSH 越しでも `just manual <NAME>` だけで OK。justfile が `DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" uv run python ...` の形でデフォルトフォールバックを持っているため、env を自分で前置する必要はない
 - 出力 `_manual_artifacts/<scenario>_<label>_<timestamp>.png` を `Read` ツールで開いて期待通りか検証する
 - `PASS:` で終わっていてもスクリーンショット内容に異常があれば failure 扱いで再修正する
 - 実機都合 (Steam 起動忘れ、Wayland native セッション、uinput 権限不足など) で失敗したらユーザーに環境を依頼するが、それは「人手検証」ではなく「環境セットアップ依頼」として明確に区別する
