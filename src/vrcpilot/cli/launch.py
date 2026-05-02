@@ -9,9 +9,14 @@ from pathlib import Path
 from argcomplete.completers import FilesCompleter
 
 from vrcpilot.process import (
+    PID_WAIT_TIMEOUT,
     VRCHAT_STEAM_APP_ID,
     OscConfig,
     launch,
+    # Imported by name (rather than referenced via ``vrcpilot.process``)
+    # so tests can patch ``vrcpilot.cli.launch.wait_for_pid`` to control
+    # the wait outcome without touching the rest of the process module.
+    wait_for_pid,
 )
 from vrcpilot.steam import SteamNotFoundError
 
@@ -78,6 +83,16 @@ def register(subparsers: SubParsersAction) -> None:
         default=9001,
         help="OSC outbound port. Only meaningful with --osc-in-port (default 9001).",
     )
+    launch_parser.add_argument(
+        "--wait-timeout",
+        type=float,
+        default=PID_WAIT_TIMEOUT,
+        help=(
+            "Seconds to wait for VRChat to appear after launch. "
+            f"Default {PID_WAIT_TIMEOUT}. Pass 0 (or any non-positive "
+            "value) to skip the wait and exit immediately after spawning."
+        ),
+    )
 
 
 def run(args: argparse.Namespace) -> int:
@@ -88,8 +103,15 @@ def run(args: argparse.Namespace) -> int:
     are silently ignored. Keeps the CLI ergonomic at the cost of
     accepting unused flags without warning.
 
+    When ``--wait-timeout`` is positive the command blocks until a
+    VRChat PID is observed, then prints it on stdout. ``--wait-timeout
+    0`` (or any non-positive value) spawns and returns immediately
+    without waiting; callers can use ``vrcpilot pid`` to discover the
+    PID later.
+
     Returns:
-        ``0`` on launch, ``2`` if Steam was not found.
+        ``0`` on launch (PID printed when waited), ``1`` if the wait
+        timed out before VRChat appeared, ``2`` if Steam was not found.
     """
     osc = (
         OscConfig(
@@ -112,5 +134,17 @@ def run(args: argparse.Namespace) -> int:
     except SteamNotFoundError as exc:
         print(f"vrcpilot: {exc}", file=sys.stderr)
         return 2
-    print("Launched VRChat.")
+
+    timeout: float = args.wait_timeout
+    if timeout <= 0:
+        return 0
+
+    pid = wait_for_pid(timeout=timeout)
+    if pid is None:
+        print(
+            f"vrcpilot: VRChat did not start within {timeout}s",
+            file=sys.stderr,
+        )
+        return 1
+    print(pid, flush=True)
     return 0
