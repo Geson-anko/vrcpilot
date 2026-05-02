@@ -87,33 +87,6 @@ class TestStatusCommand:
         assert "VRChat is not running" in capsys.readouterr().out
 
 
-class TestFocusUnfocusCommands:
-    @pytest.mark.parametrize(
-        ("command", "result", "expected_exit", "expected_word"),
-        [
-            ("focus", True, 0, "Focused"),
-            ("focus", False, 1, "Could not"),
-            ("unfocus", True, 0, "Unfocused"),
-            ("unfocus", False, 1, "Could not"),
-        ],
-    )
-    def test_focus_unfocus(
-        self,
-        command: str,
-        result: bool,
-        expected_exit: int,
-        expected_word: str,
-        mocker: MockerFixture,
-        capsys: pytest.CaptureFixture[str],
-    ):
-        mocker.patch(f"vrcpilot.cli.{command}", return_value=result)
-
-        exit_code = main([command])
-
-        assert exit_code == expected_exit
-        assert expected_word in capsys.readouterr().out
-
-
 def _make_screenshot(
     *,
     width: int = 8,

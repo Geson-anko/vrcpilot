@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 from vrcpilot import cli as _cli
 
@@ -20,13 +21,16 @@ def register(subparsers: SubParsersAction) -> None:
 def run(args: argparse.Namespace) -> int:
     """Execute the ``unfocus`` subcommand.
 
+    Silent on success so callers can ``vrcpilot unfocus && ...`` without
+    parsing stdout. On failure, a single ``vrcpilot: ...`` line is
+    written to stderr.
+
     Returns:
         ``0`` on success, ``1`` on any failure (VRChat not running,
         window unavailable, native Wayland).
     """
     del args
     if _cli.unfocus():
-        print("Unfocused VRChat.")
         return 0
-    print("Could not unfocus VRChat.")
+    print("vrcpilot: could not unfocus VRChat", file=sys.stderr)
     return 1
