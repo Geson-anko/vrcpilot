@@ -8,6 +8,11 @@ geometry, for GUI automation).
 from importlib import metadata
 
 from vrcpilot.capture import Capture, CaptureLoop
+from vrcpilot.controls import (
+    VRChatNotFocusedError,
+    VRChatNotRunningError,
+    ensure_target,
+)
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
@@ -32,6 +37,7 @@ __all__ = [
     "build_vrchat_launch_args",
     "Capture",
     "CaptureLoop",
+    "ensure_target",
     "find_pid",
     "focus",
     "is_foreground",
@@ -42,6 +48,8 @@ __all__ = [
     "take_screenshot",
     "terminate",
     "unfocus",
+    "VRChatNotFocusedError",
+    "VRChatNotRunningError",
     "VRCHAT_PROCESS_NAME",
     "VRCHAT_STEAM_APP_ID",
 ]
