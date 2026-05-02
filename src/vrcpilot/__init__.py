@@ -20,7 +20,7 @@ from vrcpilot.process import (
 )
 from vrcpilot.screenshot import Screenshot, take_screenshot
 from vrcpilot.steam import SteamNotFoundError
-from vrcpilot.window import focus, unfocus
+from vrcpilot.window import focus, is_foreground, unfocus
 
 #: Resolved from distribution metadata so it stays in sync with
 #: ``pyproject.toml`` without being hard-coded here.
@@ -34,6 +34,7 @@ __all__ = [
     "CaptureLoop",
     "find_pid",
     "focus",
+    "is_foreground",
     "launch",
     "OscConfig",
     "Screenshot",

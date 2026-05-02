@@ -58,6 +58,41 @@ def focus_window() -> bool:
         return True
 
 
+def is_window_foreground() -> bool:
+    """X11/XWayland implementation of :func:`vrcpilot.window.is_foreground`."""
+    if is_wayland_native():
+        warnings.warn(
+            "Wayland native session detected; "
+            "is_foreground() requires X11 or XWayland.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return False
+
+    pid = find_pid()
+    if pid is None:
+        return False
+
+    with x11_display() as display:
+        if display is None:
+            return False
+        window = find_vrchat_window(display, pid)
+        if window is None:
+            return False
+        try:
+            net_active = display.intern_atom("_NET_ACTIVE_WINDOW")
+            root = display.screen().root
+            active_prop = root.get_full_property(net_active, X.AnyPropertyType)
+        except Xlib.error.XError:
+            return False
+        if active_prop is None:
+            return False
+        values = active_prop.value
+        if len(values) == 0:
+            return False
+        return int(values[0]) == int(window.id)
+
+
 def unfocus_window() -> bool:
     """X11/XWayland implementation of :func:`vrcpilot.window.unfocus`."""
     if is_wayland_native():

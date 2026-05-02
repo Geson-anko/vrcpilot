@@ -1,7 +1,8 @@
-"""VRChat window z-order control (focus / unfocus).
+"""VRChat window z-order control (focus / unfocus / is_foreground).
 
 Windows and Linux (X11 / XWayland). Native Wayland is unsupported -
-``focus()`` / ``unfocus()`` warn and return ``False``.
+``focus()`` / ``unfocus()`` / ``is_foreground()`` warn and return
+``False``.
 """
 
 from __future__ import annotations
@@ -34,6 +35,29 @@ def focus() -> bool:
 
         return _impl()
     raise NotImplementedError(f"focus() is not supported on {sys.platform}")
+
+
+def is_foreground() -> bool:
+    """Return ``True`` when the running VRChat window is foreground.
+
+    Compares the OS-reported active window against the one owned by the
+    running VRChat process.
+
+    Raises:
+        NotImplementedError: Platform other than Linux. The Win32
+            backend is not wired in this iteration.
+
+    Returns:
+        ``True`` when VRChat is the active window. ``False`` when
+        VRChat is not running, the window cannot be located, the
+        platform call fails, or the session is native Wayland (also
+        emits :class:`RuntimeWarning`).
+    """
+    if sys.platform == "linux":
+        from .x11 import is_window_foreground as _impl
+
+        return _impl()
+    raise NotImplementedError(f"is_foreground() is not supported on {sys.platform}")
 
 
 def unfocus() -> bool:
