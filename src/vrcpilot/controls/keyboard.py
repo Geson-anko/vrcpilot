@@ -1,4 +1,4 @@
-"""Synthetic keyboard input for VRChat (Linux backend, inputtino).
+"""Synthetic keyboard input for VRChat.
 
 Keys are passed as :class:`Key` (a :class:`enum.StrEnum`) so pyright
 and IDE completion catch typos. Combos are explicit ``down`` /
@@ -8,9 +8,10 @@ and IDE completion catch typos. Combos are explicit ``down`` /
 from __future__ import annotations
 
 import sys
+import time
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import override
+from typing import Any, override
 
 from .guard import ensure_target
 
@@ -18,8 +19,8 @@ from .guard import ensure_target
 class Key(StrEnum):
     """Normalized key identifiers.
 
-    Values follow the pydirectinput naming convention so a future Win32
-    backend can pass ``key.value`` straight through; the Linux backend
+    Values follow the pydirectinput naming convention so the Win32
+    backend forwards ``key.value`` straight through; the Linux backend
     maps each member via :data:`_INPUTTINO_CODES`.
     """
 
@@ -131,10 +132,9 @@ class Keyboard(ABC):
     def press(self, key: Key, *, duration: float = 0.1, focus: bool = True) -> None:
         """Tap ``key`` (down then up).
 
-        ``duration`` is the down-to-up hold in seconds, forwarded to
-        inputtino's ``type``. The default matches inputtino's own
-        default and is tuned to be reliably picked up by Unity / VRChat
-        -- shorter holds (including ``0.0``) get dropped in practice.
+        ``duration`` is the down-to-up hold in seconds. The default of
+        0.1 is tuned to be reliably picked up by Unity / VRChat --
+        shorter holds (including ``0.0``) get dropped in practice.
         """
         if focus:
             ensure_target()
@@ -295,16 +295,66 @@ if sys.platform == "linux":
             self._imp.release(_INPUTTINO_CODES[key])
 
 
+# Win32 backend ------------------------------------------------------------
+
+if sys.platform == "win32":
+    # pydirectinput ships no stubs; alias to Any once so call sites stay
+    # clean instead of needing reportUnknownMemberType ignores per call.
+    import pydirectinput as _pydirectinput_module  # pyright: ignore[reportMissingTypeStubs]
+
+    pydirectinput: Any = _pydirectinput_module
+
+    # Disable pydirectinput's "cursor at (0, 0) panic" — VRChat workflows
+    # legitimately move the cursor to corners and we do not want a hard
+    # exit from a synthetic input call. Idempotent with mouse.py setting
+    # the same flag (they share the same module reference).
+    pydirectinput.FAILSAFE = False
+
+    class Win32Keyboard(Keyboard):
+        """``pydirectinput``-backed :class:`Keyboard`.
+
+        :class:`Key` values are forwarded as ``key.value`` directly into
+        ``pydirectinput.KEYBOARD_MAPPING``; add a translation table here
+        if any member turns out to be unsupported.
+        """
+
+        @override
+        def _do_press(self, key: Key, *, duration: float) -> None:
+            if duration > 0:
+                # Older pydirectinput versions inject MINIMUM_DURATION
+                # sleeps when press() is called with duration kwarg, so
+                # split the down/up path manually instead of passing
+                # duration through.
+                pydirectinput.keyDown(key.value)
+                time.sleep(duration)
+                pydirectinput.keyUp(key.value)
+            else:
+                pydirectinput.press(key.value)
+
+        @override
+        def _do_down(self, key: Key) -> None:
+            pydirectinput.keyDown(key.value)
+
+        @override
+        def _do_up(self, key: Key) -> None:
+            pydirectinput.keyUp(key.value)
+
+
 # Lazy singleton -----------------------------------------------------------
 
 _instance: Keyboard | None = None
 
 
 def _get() -> Keyboard:
-    """Return the lazily-built platform backend (deferred uinput open)."""
+    """Return the platform backend, constructing it on first call.
+
+    Deferred so import does not eagerly open ``/dev/uinput`` (Linux).
+    """
     global _instance
     if _instance is None:
-        if sys.platform == "linux":
+        if sys.platform == "win32":
+            _instance = Win32Keyboard()
+        elif sys.platform == "linux":
             _instance = LinuxKeyboard()
         else:
             raise NotImplementedError(

@@ -1,10 +1,12 @@
-"""Synthetic mouse input for VRChat (Linux backend, inputtino)."""
+"""Synthetic mouse input for VRChat."""
 
 from __future__ import annotations
 
+import ctypes
 import sys
+import time
 from abc import ABC, abstractmethod
-from typing import Literal, override
+from typing import Any, Literal, override
 
 from .guard import ensure_target
 
@@ -58,11 +60,7 @@ class Mouse(ABC):
         self._do_release(button)
 
     def scroll(self, amount: int, *, focus: bool = True) -> None:
-        """Scroll vertically by ``amount`` notches (positive = down).
-
-        Each notch is multiplied by 120 inside the Linux backend before
-        being forwarded to inputtino's high-resolution scroll API.
-        """
+        """Scroll vertically by ``amount`` notches (positive = down)."""
         if focus:
             ensure_target()
         self._do_scroll(amount)
@@ -147,16 +145,102 @@ if sys.platform == "linux":
             self._imp.scroll_vertical(amount * _SCROLL_NOTCH)
 
 
+# Win32 backend ------------------------------------------------------------
+
+if sys.platform == "win32":
+    # pydirectinput ships no stubs; alias to Any once so call sites stay
+    # clean instead of needing reportUnknownMemberType ignores per call.
+    import pydirectinput as _pydirectinput_module  # pyright: ignore[reportMissingTypeStubs]
+
+    pydirectinput: Any = _pydirectinput_module
+
+    # Disable pydirectinput's "cursor at (0, 0) panic" — VRChat workflows
+    # legitimately move the cursor to corners and we do not want a hard
+    # exit from a synthetic input call.
+    pydirectinput.FAILSAFE = False
+
+    # MOUSEEVENTF_WHEEL is the SendInput flag for vertical wheel events.
+    # pydirectinput 1.0.4 does not ship a scroll() helper, so we
+    # synthesize the event using its already-imported ctypes structures.
+    _MOUSEEVENTF_WHEEL = 0x0800
+    _WHEEL_DELTA = 120
+
+    def _scroll_wheel(amount: int) -> None:
+        """Synthesize a vertical wheel event via ``SendInput``.
+
+        Win32 wheel sign convention: positive = up. Caller is expected
+        to have already sign-flipped to match the public API
+        (positive = down).
+        """
+        extra = ctypes.c_ulong(0)
+        ii = pydirectinput.Input_I()
+        ii.mi = pydirectinput.MouseInput(
+            0,
+            0,
+            ctypes.c_ulong(amount * _WHEEL_DELTA).value,
+            _MOUSEEVENTF_WHEEL,
+            0,
+            ctypes.pointer(extra),
+        )
+        inp = pydirectinput.Input(ctypes.c_ulong(0), ii)
+        pydirectinput.SendInput(1, ctypes.pointer(inp), ctypes.sizeof(inp))
+
+    class Win32Mouse(Mouse):
+        """``pydirectinput``-backed :class:`Mouse`.
+
+        Uses Windows screen coordinates directly (no mss capture).
+        """
+
+        @override
+        def _do_move(self, x: int, y: int, *, relative: bool) -> None:
+            if relative:
+                pydirectinput.moveRel(x, y)
+            else:
+                pydirectinput.moveTo(x, y)
+
+        @override
+        def _do_click(self, button: ButtonName, *, count: int, duration: float) -> None:
+            for _ in range(count):
+                if duration > 0:
+                    # Older pydirectinput versions inject MINIMUM_DURATION
+                    # sleeps when click() is called with duration=0, so
+                    # split the down/up path manually instead of passing
+                    # duration through.
+                    pydirectinput.mouseDown(button=button)
+                    time.sleep(duration)
+                    pydirectinput.mouseUp(button=button)
+                else:
+                    pydirectinput.click(button=button)
+
+        @override
+        def _do_press(self, button: ButtonName) -> None:
+            pydirectinput.mouseDown(button=button)
+
+        @override
+        def _do_release(self, button: ButtonName) -> None:
+            pydirectinput.mouseUp(button=button)
+
+        @override
+        def _do_scroll(self, amount: int) -> None:
+            # Public API: positive = down. Win32: positive = up. Flip.
+            _scroll_wheel(-amount)
+
+
 # Lazy singleton -----------------------------------------------------------
 
 _instance: Mouse | None = None
 
 
 def _get() -> Mouse:
-    """Return the lazily-built platform backend (deferred uinput open)."""
+    """Return the platform backend, constructing it on first call.
+
+    Deferred so import does not eagerly open ``/dev/uinput`` (Linux).
+    """
     global _instance
     if _instance is None:
-        if sys.platform == "linux":
+        if sys.platform == "win32":
+            _instance = Win32Mouse()
+        elif sys.platform == "linux":
             _instance = LinuxMouse()
         else:
             raise NotImplementedError(
