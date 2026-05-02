@@ -139,11 +139,11 @@ def fake_inputtino_mouse(mocker: MockerFixture) -> FakeInputtinoMouse:
     fake = FakeInputtinoMouse()
     mocker.patch("vrcpilot.controls.mouse.inputtino.Mouse", return_value=fake)
     # Pin screen size so move_abs assertions are deterministic. The
-    # production code calls mss.mss() / .monitors / .close() directly
+    # production code calls mss.MSS() / .monitors / .close() directly
     # (no context manager), so a plain mock instance is enough.
     fake_sct = mocker.MagicMock()
     fake_sct.monitors = [{"left": 0, "top": 0, "width": 1920, "height": 1080}]
-    mocker.patch("vrcpilot.controls.mouse.mss.mss", return_value=fake_sct)
+    mocker.patch("vrcpilot.controls.mouse.mss.MSS", return_value=fake_sct)
     return fake
 
 

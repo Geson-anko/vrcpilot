@@ -157,10 +157,10 @@ if sys.platform == "linux":
         """``inputtino``-backed :class:`Mouse` for Linux.
 
         The screen size used for absolute moves is read once from
-        :func:`mss.mss` at construction time -- mss returns the union
-        bounding box of every monitor at index 0, which is what
-        inputtino's ``move_abs`` expects when the user passes
-        whole-desktop coordinates.
+        :class:`mss.MSS` at construction time -- ``monitors[0]`` is the
+        union bounding box of every monitor, which is what inputtino's
+        ``move_abs`` expects when the user passes whole-desktop
+        coordinates.
 
         Construction opens a uinput device via inputtino and will raise
         :class:`RuntimeError` from inputtino if the calling process
@@ -169,12 +169,12 @@ if sys.platform == "linux":
 
         def __init__(self) -> None:
             self._imp = inputtino.Mouse()
-            # mss is untyped; mss.monitors[0] is the union bounding
-            # box of all monitors, which is what inputtino's move_abs
-            # expects for whole-desktop coordinates.
-            sct = mss.mss()
+            # Match screenshot.py: explicit instantiate / close (not
+            # the context manager) so test fakes can be plain mocks
+            # without implementing __enter__ / __exit__.
+            sct = mss.MSS()
             try:
-                bbox: dict[str, int] = sct.monitors[0]  # type: ignore[assignment]
+                bbox = sct.monitors[0]
                 self._screen_w = int(bbox["width"])
                 self._screen_h = int(bbox["height"])
             finally:

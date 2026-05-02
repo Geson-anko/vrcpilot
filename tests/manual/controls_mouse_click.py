@@ -52,10 +52,13 @@ def _screen_center() -> tuple[int, int]:
 
     Computed at runtime via ``mss`` so no resolution is hard-coded.
     """
-    with mss.mss() as sct:
+    sct = mss.MSS()
+    try:
         bbox = sct.monitors[0]
         cx = int(bbox["width"]) // 2
         cy = int(bbox["height"]) // 2
+    finally:
+        sct.close()
     return cx, cy
 
 
