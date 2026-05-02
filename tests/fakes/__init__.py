@@ -27,6 +27,7 @@ from .capture import (
 )
 from .inputtino import FakeInputtinoKeyboard, FakeInputtinoMouse, FakeMouseButton
 from .process import FakePopen, FakeProcess
+from .pydirectinput import FakePyDirectInput
 from .x11 import (
     FakePixmap,
     FakePixmapImage,
@@ -48,6 +49,7 @@ __all__ = [
     "FakePixmapImage",
     "FakePopen",
     "FakeProcess",
+    "FakePyDirectInput",
     "FakeWindowsCapture",
     "FakeWindowsCaptureControl",
     "FakeWindowsFrame",

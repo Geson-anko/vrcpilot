@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 
 [[package]]
@@ -350,6 +350,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pydirectinput"
+version = "1.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/c0/cbcc5f1653d956ee2109b604747b7eaf37d59e50b41cc9dedabedf70aec6/PyDirectInput-1.0.4.tar.gz", hash = "sha256:bebe65102c69208688402f9f4cbd2ae7afc174fd2123e156e178b1304e7f80a2", size = 7486, upload-time = "2021-02-02T22:23:30.859Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c9/8e/f909defe798270afc2241d3a8986d51459e70c37f02d2ba549627b781b2c/PyDirectInput-1.0.4-py3-none-any.whl", hash = "sha256:238bbe97f505f9c8728a47ea6a787750dbe834ec1fb42b98b3d703d827eda83e", size = 8879, upload-time = "2021-02-02T22:23:28.115Z" },
+]
+
+[[package]]
 name = "pyright"
 version = "1.1.398"
 source = { registry = "https://pypi.org/simple" }
@@ -518,6 +527,7 @@ dependencies = [
     { name = "opencv-python" },
     { name = "pillow" },
     { name = "psutil" },
+    { name = "pydirectinput", marker = "sys_platform == 'win32'" },
     { name = "python-xlib", marker = "sys_platform == 'linux'" },
     { name = "pywin32", marker = "sys_platform == 'win32'" },
     { name = "windows-capture", marker = "sys_platform == 'win32'" },
@@ -543,6 +553,7 @@ requires-dist = [
     { name = "opencv-python", specifier = ">=4.10" },
     { name = "pillow", specifier = ">=12.2.0" },
     { name = "psutil", specifier = ">=7.2.2" },
+    { name = "pydirectinput", marker = "sys_platform == 'win32'", specifier = ">=1.0.4" },
     { name = "python-xlib", marker = "sys_platform == 'linux'", specifier = ">=0.33" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=306" },
     { name = "windows-capture", marker = "sys_platform == 'win32'", specifier = ">=2.0.0" },

@@ -27,8 +27,8 @@ from typing import override
 import pytest
 from pytest_mock import MockerFixture
 
-from tests.fakes import FakeInputtinoMouse
-from tests.helpers import ImplMouse, only_linux
+from tests.fakes import FakeInputtinoMouse, FakePyDirectInput
+from tests.helpers import ImplMouse, only_linux, only_windows
 from vrcpilot.controls import mouse as mouse_mod
 from vrcpilot.controls.mouse import Mouse
 
@@ -252,6 +252,159 @@ class TestLinuxMouse:
         assert fake_inputtino_mouse.scroll_vertical_calls == [
             {"distance": expected_distance}
         ]
+
+
+# --- Win32Mouse tests (Windows-only) --------------------------------------
+
+
+@pytest.fixture
+def fake_pydirectinput(mocker: MockerFixture) -> FakePyDirectInput:
+    """Patch the module-level ``pydirectinput`` symbol with a fake.
+
+    Windows-only fixture: substituted via ``mocker.patch.object`` so the
+    fake intercepts the same call sites the production code uses (the
+    ``import pydirectinput`` is wrapped in ``if sys.platform == 'win32'``,
+    so it is only present on Windows runners).
+    """
+    fake = FakePyDirectInput()
+    mocker.patch.object(mouse_mod, "pydirectinput", fake)
+    return fake
+
+
+@only_windows
+class TestWin32Mouse:
+    """Exercise the pydirectinput backend without touching real ``SendInput``.
+
+    The Windows-only mark prevents collection on Linux; the
+    ``fake_pydirectinput`` fixture replaces the module-level
+    ``pydirectinput`` symbol so the production code runs end-to-end
+    against a fake.
+    """
+
+    def test_move_absolute_calls_move_to(self, fake_pydirectinput: FakePyDirectInput):
+        from vrcpilot.controls.mouse import Win32Mouse
+
+        m = Win32Mouse()
+        m._do_move(100, 200, relative=False)
+
+        assert fake_pydirectinput.move_to_calls == [{"x": 100, "y": 200}]
+        assert fake_pydirectinput.move_rel_calls == []
+
+    def test_move_relative_calls_move_rel(self, fake_pydirectinput: FakePyDirectInput):
+        from vrcpilot.controls.mouse import Win32Mouse
+
+        m = Win32Mouse()
+        m._do_move(15, -7, relative=True)
+
+        assert fake_pydirectinput.move_rel_calls == [{"x": 15, "y": -7}]
+        assert fake_pydirectinput.move_to_calls == []
+
+    @pytest.mark.parametrize("button", ["left", "right", "middle"])
+    @pytest.mark.parametrize("count", [1, 3])
+    def test_click_zero_duration_uses_click_helper(
+        self,
+        fake_pydirectinput: FakePyDirectInput,
+        mocker: MockerFixture,
+        button: str,
+        count: int,
+    ):
+        from vrcpilot.controls.mouse import Win32Mouse
+
+        # Spy on time.sleep to confirm the zero-duration path skips it.
+        sleep_spy = mocker.patch.object(mouse_mod.time, "sleep")
+
+        m = Win32Mouse()
+        m._do_click(button, count=count, duration=0.0)  # type: ignore[arg-type]
+
+        assert fake_pydirectinput.click_calls == [{"button": button}] * count
+        assert fake_pydirectinput.mouse_down_calls == []
+        assert fake_pydirectinput.mouse_up_calls == []
+        sleep_spy.assert_not_called()
+
+    def test_click_with_duration_decomposes_to_down_sleep_up(
+        self,
+        fake_pydirectinput: FakePyDirectInput,
+        mocker: MockerFixture,
+    ):
+        from vrcpilot.controls.mouse import Win32Mouse
+
+        sleep_spy = mocker.patch.object(mouse_mod.time, "sleep")
+
+        m = Win32Mouse()
+        m._do_click("left", count=2, duration=0.05)
+
+        # The click() helper must NOT be used when duration > 0, to
+        # avoid pydirectinput's MINIMUM_DURATION sleep injection.
+        assert fake_pydirectinput.click_calls == []
+        assert fake_pydirectinput.mouse_down_calls == [{"button": "left"}] * 2
+        assert fake_pydirectinput.mouse_up_calls == [{"button": "left"}] * 2
+        # Interleaved: down -> sleep -> up -> down -> sleep -> up.
+        assert [name for name, _ in fake_pydirectinput.calls] == [
+            "mouseDown",
+            "mouseUp",
+            "mouseDown",
+            "mouseUp",
+        ]
+        assert sleep_spy.call_count == 2
+        for call in sleep_spy.call_args_list:
+            assert call.args == (0.05,)
+
+    def test_click_count_zero_emits_nothing(
+        self, fake_pydirectinput: FakePyDirectInput
+    ):
+        from vrcpilot.controls.mouse import Win32Mouse
+
+        m = Win32Mouse()
+        m._do_click("left", count=0, duration=0.0)
+
+        assert fake_pydirectinput.calls == []
+
+    @pytest.mark.parametrize("button", ["left", "right", "middle"])
+    def test_press_routes_to_mouse_down(
+        self, fake_pydirectinput: FakePyDirectInput, button: str
+    ):
+        from vrcpilot.controls.mouse import Win32Mouse
+
+        m = Win32Mouse()
+        m._do_press(button)  # type: ignore[arg-type]
+
+        assert fake_pydirectinput.mouse_down_calls == [{"button": button}]
+        assert fake_pydirectinput.mouse_up_calls == []
+
+    @pytest.mark.parametrize("button", ["left", "right", "middle"])
+    def test_release_routes_to_mouse_up(
+        self, fake_pydirectinput: FakePyDirectInput, button: str
+    ):
+        from vrcpilot.controls.mouse import Win32Mouse
+
+        m = Win32Mouse()
+        m._do_release(button)  # type: ignore[arg-type]
+
+        assert fake_pydirectinput.mouse_up_calls == [{"button": button}]
+        assert fake_pydirectinput.mouse_down_calls == []
+
+    @pytest.mark.parametrize(
+        "amount,expected_wheel_arg",
+        [(2, -2), (-3, 3), (0, 0)],
+    )
+    def test_scroll_sign_flips_for_win32_wheel_convention(
+        self,
+        mocker: MockerFixture,
+        amount: int,
+        expected_wheel_arg: int,
+    ):
+        from vrcpilot.controls.mouse import Win32Mouse
+
+        # Patch the helper directly: Win32Mouse._do_scroll's sole
+        # responsibility is the sign flip. The helper itself wraps
+        # SendInput, which is verified separately by exercising the
+        # real Win32 path in the e2e scenario.
+        scroll_spy = mocker.patch.object(mouse_mod, "_scroll_wheel")
+
+        m = Win32Mouse()
+        m._do_scroll(amount)
+
+        scroll_spy.assert_called_once_with(expected_wheel_arg)
 
 
 # --- _get() lazy-init tests ----------------------------------------------
