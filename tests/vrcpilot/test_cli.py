@@ -59,34 +59,6 @@ def fake_popen(mocker: MockerFixture, tmp_path: Path) -> type[FakePopen]:
     return FakePopen
 
 
-class TestStatusCommand:
-    def test_reports_running(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
-    ):
-        # Override the autouse empty default with a real ``FakeProcess``
-        # so the live ``find_pid`` -> ``psutil.process_iter`` path runs
-        # for real.
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[FakeProcess(name=VRCHAT_PROCESS_NAME, pid=12345)],
-        )
-
-        exit_code = main(["status"])
-
-        assert exit_code == 0
-        out = capsys.readouterr().out
-        assert "VRChat is running" in out
-        assert "12345" in out
-
-    def test_reports_not_running(self, capsys: pytest.CaptureFixture[str]):
-        # The conftest autouse fixture already empties ``process_iter``,
-        # so no patch is needed for the negative path.
-        exit_code = main(["status"])
-
-        assert exit_code == 1
-        assert "VRChat is not running" in capsys.readouterr().out
-
-
 def _make_screenshot(
     *,
     width: int = 8,
@@ -340,11 +312,12 @@ class TestMain:
 
 class TestArgcompleteIntegration:
     def test_autocomplete_invoked_with_parser(self, mocker: MockerFixture):
-        # Use the ``status`` subcommand since the autouse conftest
-        # makes it an honest, mock-free run all the way through.
+        # Use the ``pid`` subcommand since the autouse conftest empties
+        # ``process_iter``, making it an honest, mock-free run all the
+        # way through.
         autocomplete_mock = mocker.patch("vrcpilot.cli.argcomplete.autocomplete")
 
-        exit_code = main(["status"])
+        exit_code = main(["pid"])
 
         assert exit_code == 1
         autocomplete_mock.assert_called_once()
@@ -372,13 +345,13 @@ class TestArgcompleteIntegration:
         self,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        # ``status`` against the autouse empty ``process_iter`` is the
-        # cheapest fully-real path through ``main`` — it confirms the
+        # ``pid`` against the autouse empty ``process_iter`` is the
+        # cheapest fully-real path through ``main`` - it confirms the
         # ``argcomplete`` hook does not abort regular (non-completion)
         # invocations without needing a Steam launch fake.
         monkeypatch.delenv("_ARGCOMPLETE", raising=False)
 
-        exit_code = main(["status"])
+        exit_code = main(["pid"])
 
         assert exit_code == 1
 
