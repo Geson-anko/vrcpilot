@@ -1,4 +1,4 @@
-"""Manual scenario: drive CaptureLoop at 30fps and save the output as mp4.
+"""E2E scenario: drive CaptureLoop at 30fps and save the output as mp4.
 
 Drives :class:`vrcpilot.CaptureLoop` against a real running VRChat
 client to confirm the fixed-FPS API works end-to-end. The scenario
@@ -16,7 +16,7 @@ hitting the target.
 
 Run with::
 
-    just manual capture
+    just e2e-test capture
 
 VRChat is launched in Desktop mode with a 1280x720 window so the
 captured frames land at a familiar resolution and so cropping
@@ -25,7 +25,7 @@ regression -- the WGC / X11 Composite paths capture the window region
 only).
 
 The captured video is written to
-``_manual_artifacts/capture_<YYYYMMDD_HHMMSS>.mp4``.
+``_e2e_artifacts/capture_<YYYYMMDD_HHMMSS>.mp4``.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _helpers  # noqa: E402
 
 #: Wall-clock duration of the recording. ~10 s is long enough to see
-#: the cadence and any glitches, short enough that the manual scenario
+#: the cadence and any glitches, short enough that the e2e scenario
 #: stays brisk.
 _DURATION_SECONDS: float = 10.0
 

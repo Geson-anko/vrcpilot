@@ -1,4 +1,4 @@
-"""Manual scenario: launch VRChat with the ``--no-vr`` flag.
+"""E2E scenario: launch VRChat with the ``--no-vr`` flag.
 
 Verifies that :func:`vrcpilot.launch` succeeds with ``no_vr=True`` on a
 machine that may not have an HMD attached, that a PID becomes visible,

@@ -1,7 +1,7 @@
 set windows-shell := ["C:/Program Files/Git/bin/bash.exe", "-c"]
 
 # Auto-load `.env` (gitignored) for per-developer overrides such as
-# DISPLAY / XAUTHORITY consumed by `just manual` on Linux SSH sessions.
+# DISPLAY / XAUTHORITY consumed by `just e2e-test` on Linux SSH sessions.
 # `.env.example` documents the defaults; existing shell environment
 # variables take precedence over `.env` (dotenv-override = false).
 set dotenv-load := true
@@ -44,7 +44,7 @@ type:
 # Run all workflow (format, test, type)
 run: format test type
 
-# Run a manual end-to-end scenario script (default: all scenarios; e.g. `just manual launch_terminate`)
+# Run an end-to-end scenario script (default: all scenarios; e.g. `just e2e-test launch_terminate`)
 # On Linux SSH sessions, falls back to the active local X11 display so GUI apps render on the desktop.
-manual NAME="all":
-    DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" uv run python tests/manual/{{NAME}}.py
+e2e-test NAME="all":
+    DISPLAY="${DISPLAY:-:0}" XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}" uv run python tests/e2e/{{NAME}}.py

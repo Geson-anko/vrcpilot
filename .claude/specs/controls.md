@@ -348,7 +348,7 @@ ABC の template-method（guard 配線）テストは `tests/helpers.py` に `Im
 手動シナリオ:
 
 ```
-tests/manual/
+tests/e2e/
 ├── controls_mouse_click.py     # Step 2 検証用
 └── controls_keyboard_combo.py  # Step 3 検証用（修飾子コンボの down→press→up）
 ```
@@ -371,8 +371,8 @@ tests/manual/
 
 - 追加: `controls/mouse.py`（Mouse ABC + Win32Mouse + LinuxMouse + モジュール関数 click/move/press/release/scroll、lazy `_get()` 含む）
 - 追加: `tests/vrcpilot/controls/test_mouse.py`
-- 追加: `tests/manual/controls_mouse_click.py`
-- 検証: `just manual controls_mouse_click` を Win / Linux 双方で実機通し
+- 追加: `tests/e2e/controls_mouse_click.py`
+- 検証: `just e2e-test controls_mouse_click` を Win / Linux 双方で実機通し
 
 ### Step 3: keyboard
 
@@ -380,8 +380,8 @@ tests/manual/
 - 更新: `controls/__init__.py` で `Key` を再公開
 - 更新: トップ `vrcpilot/__init__.py` で `Key` 等を再公開
 - 追加: `tests/vrcpilot/controls/test_keyboard.py`
-- 追加: `tests/manual/controls_keyboard_combo.py`（修飾子コンボの down→press→up を VRChat 上で目視確認、例: `Ctrl+Tab` で UI 切替など）
-- 検証: `just manual controls_keyboard_combo` を Win / Linux 双方で実機通し
+- 追加: `tests/e2e/controls_keyboard_combo.py`（修飾子コンボの down→press→up を VRChat 上で目視確認、例: `Ctrl+Tab` で UI 切替など）
+- 検証: `just e2e-test controls_keyboard_combo` を Win / Linux 双方で実機通し
 
 ## 10. 検証手順
 

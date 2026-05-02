@@ -43,7 +43,7 @@ addopts = [
   "--durations=0",
   "--strict-markers",
   "--doctest-modules",
-  "--ignore=tests/manual",
+  "--ignore=tests/e2e",
 ]
 filterwarnings = [
   "ignore::DeprecationWarning",
@@ -56,7 +56,7 @@ minversion = "6.0"
 testpaths = "tests/"
 asyncio_default_fixture_loop_scope = "function"
 markers = [
-  "manual: scenarios that require a real VRChat instance; not collected by default",
+  "e2e: scenarios that require a real VRChat instance; not collected by default",
 ]
 
 [tool.pyright]

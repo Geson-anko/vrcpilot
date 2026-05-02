@@ -1,8 +1,8 @@
 """Shared test helpers.
 
 Skip markers, environment probes, and lightweight polling utilities
-shared between the automated test suite and the manual scenarios under
-``tests/manual/``. Anything platform- or display-specific lives here so
+shared between the automated test suite and the e2e scenarios under
+``tests/e2e/``. Anything platform- or display-specific lives here so
 that individual test modules can decide at file scope whether to run.
 """
 
@@ -84,7 +84,7 @@ def wait_for_pid(
     """Poll for a VRChat PID until one appears or ``timeout`` elapses.
 
     Returns the observed PID, or ``None`` if the deadline expires
-    first. Suitable for both manual scenarios (waiting for VRChat to
+    first. Suitable for both e2e scenarios (waiting for VRChat to
     finish launching) and automated tests that drive a real launcher.
     """
     deadline = time.monotonic() + timeout

@@ -1,4 +1,4 @@
-"""Manual scenario: drive ``vrcpilot.mouse`` against real VRChat.
+"""E2E scenario: drive ``vrcpilot.mouse`` against real VRChat.
 
 Launches VRChat in Desktop mode, warms up, then exercises ``move``,
 ``click``, ``press``/``release``, and ``scroll`` so a human can verify
@@ -7,15 +7,15 @@ the synthetic events actually reach the VRChat window. The
 ``vrcpilot.unfocus()`` and then issues a click, which must bring
 VRChat back to the foreground before the click lands.
 
-The pattern follows :mod:`tests.manual.focus_unfocus`: alternating
+The pattern follows :mod:`tests.e2e.focus_unfocus`: alternating
 operations (move-left -> click, move-right -> click, etc.) so two
 back-to-back identical calls do not look like a no-op, and a
-screenshot per step is dropped under ``_manual_artifacts/`` for
+screenshot per step is dropped under ``_e2e_artifacts/`` for
 review.
 
 Run with::
 
-    just manual mouse
+    just e2e-test mouse
 
 Prerequisites:
 

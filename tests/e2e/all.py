@@ -1,10 +1,10 @@
-"""Run every manual scenario in this directory and aggregate the results.
+"""Run every e2e scenario in this directory and aggregate the results.
 
 Discovers sibling ``*.py`` files (excluding underscore-prefixed helpers
 and this script itself), launches each as a subprocess, and prints a
 final ``PASS: all`` / ``FAIL: all: <names>`` line plus a non-zero exit
-code if any scenario failed. Invoked by ``just manual`` when no scenario
-name is given.
+code if any scenario failed. Invoked by ``just e2e-test`` when no
+scenario name is given.
 """
 
 from __future__ import annotations

@@ -280,7 +280,7 @@ class TestLinuxKeyboard:
         self, fake_inputtino_keyboard: FakeInputtinoKeyboard
     ):
         # Spec name `Key.ESCAPE` -> inputtino name `KeyCode.ESC`. The
-        # mapping must bridge that gap, otherwise the manual ESC
+        # mapping must bridge that gap, otherwise the e2e ESC
         # toggle scenario would silently send the wrong code.
         import inputtino
 
