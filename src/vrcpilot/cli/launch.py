@@ -1,0 +1,116 @@
+"""``vrcpilot launch`` subcommand."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from argcomplete.completers import FilesCompleter
+
+from vrcpilot.process import (
+    VRCHAT_STEAM_APP_ID,
+    OscConfig,
+    launch,
+)
+from vrcpilot.steam import SteamNotFoundError
+
+from ._common import SubParsersAction, attach_completer
+
+
+def register(subparsers: SubParsersAction) -> None:
+    """Add the ``launch`` subparser to the top-level subparsers."""
+    launch_parser = subparsers.add_parser(
+        "launch",
+        help="Launch VRChat through Steam.",
+    )
+    launch_parser.add_argument(
+        "--app-id",
+        type=int,
+        default=VRCHAT_STEAM_APP_ID,
+        help="Steam app id to launch (default: VRChat's app id).",
+    )
+    steam_path_action = launch_parser.add_argument(
+        "--steam-path",
+        type=Path,
+        default=None,
+        help="Override the auto-detected Steam executable path.",
+    )
+    attach_completer(
+        steam_path_action, FilesCompleter(allowednames=("exe",), directories=True)
+    )
+    launch_parser.add_argument(
+        "--no-vr",
+        action="store_true",
+        help="Force desktop mode (passes --no-vr to VRChat).",
+    )
+    launch_parser.add_argument(
+        "--screen-width",
+        type=int,
+        default=None,
+        help="Window width passed to Unity as -screen-width.",
+    )
+    launch_parser.add_argument(
+        "--screen-height",
+        type=int,
+        default=None,
+        help="Window height passed to Unity as -screen-height.",
+    )
+    launch_parser.add_argument(
+        "--osc-in-port",
+        type=int,
+        default=None,
+        help=(
+            "OSC inbound port. When set, OSC config (including --osc-out-ip "
+            "and --osc-out-port) is forwarded to VRChat. When unset, all "
+            "--osc-out-* flags are ignored."
+        ),
+    )
+    launch_parser.add_argument(
+        "--osc-out-ip",
+        type=str,
+        default="127.0.0.1",
+        help="OSC outbound IP. Only meaningful with --osc-in-port (default 127.0.0.1).",
+    )
+    launch_parser.add_argument(
+        "--osc-out-port",
+        type=int,
+        default=9001,
+        help="OSC outbound port. Only meaningful with --osc-in-port (default 9001).",
+    )
+
+
+def run(args: argparse.Namespace) -> int:
+    """Execute the ``launch`` subcommand.
+
+    ``osc_in_port`` gates the entire OSC triple: when ``None`` no
+    ``--osc`` flag is forwarded and ``osc_out_ip`` / ``osc_out_port``
+    are silently ignored. Keeps the CLI ergonomic at the cost of
+    accepting unused flags without warning.
+
+    Returns:
+        ``0`` on launch, ``2`` if Steam was not found.
+    """
+    osc = (
+        OscConfig(
+            in_port=args.osc_in_port,
+            out_ip=args.osc_out_ip,
+            out_port=args.osc_out_port,
+        )
+        if args.osc_in_port is not None
+        else None
+    )
+    try:
+        launch(
+            app_id=args.app_id,
+            steam_path=args.steam_path,
+            no_vr=args.no_vr,
+            screen_width=args.screen_width,
+            screen_height=args.screen_height,
+            osc=osc,
+        )
+    except SteamNotFoundError as exc:
+        print(f"vrcpilot: {exc}", file=sys.stderr)
+        return 2
+    print("Launched VRChat.")
+    return 0
