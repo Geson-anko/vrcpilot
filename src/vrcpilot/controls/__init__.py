@@ -8,13 +8,14 @@ Linux backend only (inputtino over uinput); Windows / macOS raise
 
 Usage::
 
-    from vrcpilot.controls import mouse, keyboard, Key
-    mouse.click()
-    keyboard.down(Key.CTRL)
-    keyboard.press(Key.C)
-    keyboard.up(Key.CTRL)
+    import vrcpilot
+    vrcpilot.mouse.click()
+    vrcpilot.keyboard.down(vrcpilot.Key.CTRL)
+    vrcpilot.keyboard.press(vrcpilot.Key.C)
+    vrcpilot.keyboard.up(vrcpilot.Key.CTRL)
 """
 
+from . import keyboard, mouse
 from .errors import VRChatNotFocusedError, VRChatNotRunningError
 from .guard import ensure_target
 from .keyboard import Key
@@ -22,6 +23,8 @@ from .keyboard import Key
 __all__ = [
     "ensure_target",
     "Key",
+    "keyboard",
+    "mouse",
     "VRChatNotFocusedError",
     "VRChatNotRunningError",
 ]

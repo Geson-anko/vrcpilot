@@ -13,6 +13,8 @@ from vrcpilot.controls import (
     VRChatNotFocusedError,
     VRChatNotRunningError,
     ensure_target,
+    keyboard,
+    mouse,
 )
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
@@ -43,7 +45,9 @@ __all__ = [
     "focus",
     "is_foreground",
     "Key",
+    "keyboard",
     "launch",
+    "mouse",
     "OscConfig",
     "Screenshot",
     "SteamNotFoundError",

@@ -15,6 +15,7 @@ from enum import StrEnum
 
 import vrcpilot
 import vrcpilot.controls
+from vrcpilot.controls import keyboard as keyboard_mod, mouse as mouse_mod
 
 
 class TestSubpackageSurface:
@@ -28,6 +29,13 @@ class TestSubpackageSurface:
     def test_exposes_key_enum(self):
         assert issubclass(vrcpilot.controls.Key, StrEnum)
 
+    def test_exposes_input_submodules(self):
+        # Submodules are accessible as attributes of the subpackage so
+        # callers can write ``vrcpilot.controls.mouse.click()`` without
+        # an explicit ``import vrcpilot.controls.mouse``.
+        assert vrcpilot.controls.mouse is mouse_mod
+        assert vrcpilot.controls.keyboard is keyboard_mod
+
 
 class TestTopLevelReexport:
     def test_ensure_target_is_same_object(self):
@@ -39,3 +47,11 @@ class TestTopLevelReexport:
 
     def test_key_is_same_object(self):
         assert vrcpilot.Key is vrcpilot.controls.Key
+
+    def test_input_submodules_are_same_objects(self):
+        # ``vrcpilot.mouse`` / ``vrcpilot.keyboard`` are the same
+        # module objects as the canonical ones under
+        # ``vrcpilot.controls`` -- the top-level alias is a convenience
+        # rebinding, not a copy.
+        assert vrcpilot.mouse is mouse_mod
+        assert vrcpilot.keyboard is keyboard_mod
