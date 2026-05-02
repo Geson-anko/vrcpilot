@@ -11,10 +11,12 @@ from __future__ import annotations
 import functools
 import sys
 import time
+from typing import override
 
 import pytest
 
 import vrcpilot
+from vrcpilot.controls.mouse import ButtonName, Mouse
 
 #: Skip a test on non-Windows platforms.
 #:
@@ -110,3 +112,42 @@ def wait_for_no_pid(
         if time.monotonic() >= deadline:
             return False
         time.sleep(interval)
+
+
+class ImplMouse(Mouse):
+    """Concrete :class:`Mouse` for ABC template-method tests.
+
+    Records every ``_do_*`` invocation in :attr:`calls` as
+    ``(method_name, kwargs_dict)`` tuples. Tests use this in place of
+    a mock so the real ABC plumbing (focus guard, kwarg forwarding) is
+    exercised end-to-end -- per the project rule that ABC wiring tests
+    use a real impl rather than ``mocker.Mock``.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, object]]] = []
+
+    @override
+    def _do_move(self, x: int, y: int, *, relative: bool) -> None:
+        self.calls.append(("_do_move", {"x": x, "y": y, "relative": relative}))
+
+    @override
+    def _do_click(self, button: ButtonName, *, count: int, duration: float) -> None:
+        self.calls.append(
+            (
+                "_do_click",
+                {"button": button, "count": count, "duration": duration},
+            )
+        )
+
+    @override
+    def _do_press(self, button: ButtonName) -> None:
+        self.calls.append(("_do_press", {"button": button}))
+
+    @override
+    def _do_release(self, button: ButtonName) -> None:
+        self.calls.append(("_do_release", {"button": button}))
+
+    @override
+    def _do_scroll(self, amount: int) -> None:
+        self.calls.append(("_do_scroll", {"amount": amount}))

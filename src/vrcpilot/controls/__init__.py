@@ -1,8 +1,8 @@
 """VRChat-targeted synthetic mouse and keyboard input.
 
-This iteration provides only the safety guard
-(:func:`ensure_target`) and its error types. The ``mouse`` and
-``keyboard`` submodules are added in subsequent steps.
+This iteration exposes the safety guard (:func:`ensure_target`) and
+the :mod:`vrcpilot.controls.mouse` submodule (Linux backend only).
+The ``keyboard`` submodule is added in a subsequent step.
 """
 
 from .errors import VRChatNotFocusedError, VRChatNotRunningError
