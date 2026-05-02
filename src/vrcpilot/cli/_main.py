@@ -1,5 +1,12 @@
 # PYTHON_ARGCOMPLETE_OK
-"""Top-level argv parsing and dispatch for :mod:`vrcpilot.cli`."""
+"""Top-level argv parsing and dispatch for :mod:`vrcpilot.cli`.
+
+The :data:`_COMMANDS` table is the single dispatch point: every
+subcommand module registers its parser and contributes one
+``run(args) -> int`` entry. The top-level subparsers use
+``required=True`` so bare ``vrcpilot`` (no subcommand) fails fast with
+a usage error instead of silently exiting 0.
+"""
 
 from __future__ import annotations
 

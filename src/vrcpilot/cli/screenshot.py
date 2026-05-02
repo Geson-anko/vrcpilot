@@ -1,4 +1,18 @@
-"""``vrcpilot screenshot`` subcommand."""
+"""``vrcpilot screenshot`` subcommand.
+
+Writes the PNG to disk and dumps the :class:`Screenshot` metadata as a
+YAML document on stdout. The schema (stable, grep-able):
+
+- ``path`` — absolute path of the PNG that was written
+- ``x`` / ``y`` — window top-left in absolute desktop pixels
+- ``width`` / ``height`` — window size in physical pixels
+- ``monitor_index`` — index into ``mss.MSS().monitors`` (``0`` is the
+  composite, ``1..N`` are individual monitors)
+- ``captured_at`` — ISO-8601 UTC timestamp of the grab
+
+Keys are emitted in the order above (``sort_keys=False``) so callers
+can rely on it for line-oriented parsing.
+"""
 
 from __future__ import annotations
 
@@ -42,16 +56,14 @@ def register(subparsers: SubParsersAction) -> None:
 def run(args: argparse.Namespace) -> int:
     """Execute the ``screenshot`` subcommand.
 
-    Args:
-        args: Parsed argparse namespace. Reads ``args.output`` —
-            destination path. ``None`` writes
-            ``./vrcpilot_screenshot_<YYYYMMDD_HHMMSS>.png``. Extension
-            determines the on-disk format via :func:`PIL.Image.save`.
+    Writes the PNG to ``args.output`` (or ``./vrcpilot_screenshot_
+    <YYYYMMDD_HHMMSS>.png`` when unset) and emits the YAML metadata
+    document described in the module docstring on stdout. The output
+    extension drives the on-disk format via :func:`PIL.Image.save`.
 
     Returns:
-        ``0`` on success with a YAML dump of the :class:`Screenshot`
-        metadata (image replaced by the absolute ``path``) written to
-        stdout, ``1`` if capture failed.
+        ``0`` on success, ``1`` if capture failed (with a single
+        ``vrcpilot: ...`` line on stderr and no stdout output).
     """
     output: Path | None = args.output
     shot: Screenshot | None = _cli.take_screenshot()

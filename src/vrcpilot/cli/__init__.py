@@ -2,7 +2,18 @@
 """Command line interface for vrcpilot.
 
 Thin wrapper that translates the public Python API into exit codes;
-behavioural logic stays in the library.
+behavioural logic stays in the library. Each subcommand lives in
+``vrcpilot.cli.<name>`` and exposes a ``register(subparsers)`` /
+``run(args) -> int`` pair which :mod:`._main` wires together.
+:func:`main` is the entry point for both the ``vrcpilot`` console
+script and ``python -m vrcpilot``.
+
+The ``time`` / ``argcomplete`` / ``focus`` / ``unfocus`` /
+``take_screenshot`` / ``CaptureLoop`` / ``Mp4FrameSink`` re-exports
+exist solely as stable patch targets for tests; production callsites
+inside subcommand modules read them as ``vrcpilot.cli.<name>`` so
+``mocker.patch`` can substitute fakes without monkeying the underlying
+library modules.
 """
 
 from __future__ import annotations
