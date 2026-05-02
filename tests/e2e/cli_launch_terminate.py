@@ -1,8 +1,12 @@
 """E2E scenario: drive VRChat through the ``vrcpilot`` CLI.
 
-Runs ``vrcpilot launch`` / ``status`` / ``terminate`` via ``uv run`` and
+Runs ``vrcpilot launch`` / ``pid`` / ``terminate`` via ``uv run`` and
 verifies each subcommand's exit code and stdout. ``_helpers.run_scenario``
 ensures VRChat is killed before and after the run regardless of outcome.
+
+The CLI exposes machine-readable output (PIDs on their own lines, exit
+code 0 = running / 1 = absent), so this scenario validates the contract
+that shell pipelines depend on (e.g. ``pid=$(vrcpilot launch)``).
 """
 
 from __future__ import annotations
@@ -29,48 +33,49 @@ def _vrcpilot(*args: str) -> subprocess.CompletedProcess[str]:
 
 
 def _scenario() -> None:
-    status = _vrcpilot("status")
+    initial_pid = _vrcpilot("pid")
     assert (
-        status.returncode == 1
-    ), f"initial status exit code: expected 1, got {status.returncode}"
+        initial_pid.returncode == 1
+    ), f"initial pid exit code: expected 1, got {initial_pid.returncode}"
     assert (
-        "VRChat is not running" in status.stdout
-    ), f"initial status stdout missing 'VRChat is not running': {status.stdout!r}"
+        initial_pid.stdout == ""
+    ), f"initial pid stdout should be empty, got {initial_pid.stdout!r}"
 
     launch = _vrcpilot("launch")
     assert (
         launch.returncode == 0
     ), f"launch exit code: expected 0, got {launch.returncode}"
+    launch_stdout = launch.stdout.strip()
     assert (
-        "Launched VRChat." in launch.stdout
-    ), f"launch stdout missing 'Launched VRChat.': {launch.stdout!r}"
-
-    pid = _helpers.wait_for_pid()
-    assert isinstance(pid, int), f"expected a VRChat PID after launch, got {pid!r}"
-    _helpers.log(f"VRChat PID = {pid}")
+        launch_stdout.isdigit()
+    ), f"launch stdout should be a single PID, got {launch.stdout!r}"
+    launched_pid = int(launch_stdout)
+    _helpers.log(f"launch reported PID = {launched_pid}")
 
     _helpers.warmup()
 
-    running = _vrcpilot("status")
+    running = _vrcpilot("pid")
     assert (
         running.returncode == 0
-    ), f"running status exit code: expected 0, got {running.returncode}"
+    ), f"running pid exit code: expected 0, got {running.returncode}"
+    running_pids = [int(line) for line in running.stdout.strip().splitlines()]
     assert (
-        "VRChat is running" in running.stdout
-    ), f"running status stdout missing 'VRChat is running': {running.stdout!r}"
+        launched_pid in running_pids
+    ), f"launch PID {launched_pid} not in running pids {running_pids}"
 
     terminate = _vrcpilot("terminate")
     assert (
         terminate.returncode == 0
     ), f"terminate exit code: expected 0, got {terminate.returncode}"
+    killed_pids = [int(line) for line in terminate.stdout.strip().splitlines()]
     assert (
-        "Terminated VRChat." in terminate.stdout
-    ), f"terminate stdout missing 'Terminated VRChat.': {terminate.stdout!r}"
+        launched_pid in killed_pids
+    ), f"launch PID {launched_pid} not in killed pids {killed_pids}"
 
-    final = _vrcpilot("status")
+    final = _vrcpilot("pid")
     assert (
         final.returncode == 1
-    ), f"final status exit code: expected 1, got {final.returncode}"
+    ), f"final pid exit code: expected 1, got {final.returncode}"
 
 
 def main() -> int:
