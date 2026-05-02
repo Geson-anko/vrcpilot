@@ -8,17 +8,26 @@ scenarios stay readable.
 
 from __future__ import annotations
 
+import sys
 import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-import mss
-import mss.tools
-from PIL import Image
+# Manual scenarios run as scripts (``python tests/manual/foo.py``) rather
+# than via pytest, so the repo root is not on ``sys.path`` -- ``uv run``
+# only injects ``src``. Bootstrap it here so ``from tests.helpers`` below
+# resolves without each scenario having to repeat the dance.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
-import vrcpilot
-from tests.helpers import wait_for_no_pid, wait_for_pid
+import mss  # noqa: E402
+import mss.tools  # noqa: E402
+from PIL import Image  # noqa: E402
+
+import vrcpilot  # noqa: E402
+from tests.helpers import wait_for_no_pid, wait_for_pid  # noqa: E402
 
 __all__ = [
     "ARTIFACT_DIR",
@@ -33,8 +42,13 @@ __all__ = [
     "warmup",
 ]
 
-# Fixed wait after a PID first appears, to let VRChat finish initializing.
-WARMUP_SECONDS: float = 15.0
+# Fixed wait after a PID first appears, to let VRChat finish
+# initializing -- not just spawning the process but also loading the
+# default world and settling into a stable foreground state. 15s was
+# enough for focus/unfocus probes that only need the window to exist,
+# but synthetic input scenarios race the world load otherwise; 45s
+# leaves headroom even on first-run shader compilation.
+WARMUP_SECONDS: float = 45.0
 
 #: Directory used by manual scenarios to drop visual artifacts (PNGs).
 #:

@@ -38,6 +38,35 @@ echo $XDG_SESSION_TYPE   # x11 または wayland
 echo $DISPLAY            # XWayland 経由時もセットされていれば OK
 ```
 
+### vrcpilot.controls (合成入力) の追加要件
+
+`vrcpilot.controls` は VRChat への合成 mouse / keyboard 入力を Linux 上で
+[inputtino](https://github.com/games-on-whales/inputtino) (`/dev/uinput`
+経由) で送出する。`uv sync` 時に inputtino が git ソースからネイティブ
+ビルドされるため、以下のシステム依存とランタイム要件が必要になる。
+
+- **ビルド依存** (Ubuntu / Debian の例。他ディストリは
+  [inputtino bindings/python](https://github.com/games-on-whales/inputtino/tree/stable/bindings/python)
+  を参照):
+
+  ```bash
+  sudo apt-get install -y cmake build-essential pkg-config libevdev-dev
+  ```
+
+- **`/dev/uinput` への書き込み権限**: 通常は `input` グループに所属するか、
+  udev rule で許可する。
+
+  ```bash
+  sudo usermod -aG input $USER
+  # ログインし直してグループ反映
+  ```
+
+- **`uinput` カーネルモジュール**: 多くのディストリでは標準で有効。
+  無効な場合 `sudo modprobe uinput` で読み込む。
+
+- **distribution name vs import name**: PyPI 上は `inputtino-python`、
+  Python の import 名は `inputtino`。`pyproject.toml` の依存名は前者。
+
 ### macOS
 
 サポート対象外。
