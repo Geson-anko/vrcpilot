@@ -3,11 +3,14 @@
 The CLI calls into :mod:`vrcpilot.controls.keyboard` via the
 ``keyboard_api`` re-export. Patching :func:`vrcpilot.controls.keyboard._get`
 to return an :class:`~tests.helpers.ImplKeyboard` lets the real public
-``keyboard.up`` / ``keyboard.down`` / ``keyboard.press`` functions run
-end-to-end (focus guard included) while keeping the backend out of the
-test. The guard itself is stubbed to a no-op so tests do not need a
-live VRChat process; the guard-failure tests deliberately re-arm the
-stub to raise.
+``keyboard.press`` function run end-to-end (focus guard included) while
+keeping the backend out of the test. The guard itself is stubbed to a
+no-op so tests do not need a live VRChat process; the guard-failure
+tests deliberately re-arm the stub to raise.
+
+Only ``press`` is exposed by the CLI: ``up`` / ``down`` cannot work
+across separate ``vrcpilot`` invocations because each process opens
+and closes its own backend, and the kernel auto-releases on close.
 """
 
 from __future__ import annotations
@@ -35,60 +38,6 @@ def fake_keyboard(mocker: MockerFixture) -> ImplKeyboard:
     return impl
 
 
-class TestKeyboardUp:
-    @pytest.mark.parametrize(
-        ("key_arg", "expected_key"),
-        [
-            ("a", Key.A),
-            ("ctrl", Key.CTRL),
-            ("escape", Key.ESCAPE),
-            ("f1", Key.F1),
-        ],
-    )
-    def test_dispatches_single_key(
-        self,
-        fake_keyboard: ImplKeyboard,
-        key_arg: str,
-        expected_key: Key,
-    ):
-        exit_code = main(["keyboard", "up", key_arg])
-
-        assert exit_code == 0
-        assert fake_keyboard.calls == [("_do_up", {"key": expected_key})]
-
-    def test_silent_on_success(
-        self, fake_keyboard: ImplKeyboard, capsys: pytest.CaptureFixture[str]
-    ):
-        del fake_keyboard
-        exit_code = main(["keyboard", "up", "a"])
-
-        assert exit_code == 0
-        captured = capsys.readouterr()
-        assert captured.out == ""
-        assert captured.err == ""
-
-
-class TestKeyboardDown:
-    @pytest.mark.parametrize(
-        ("key_arg", "expected_key"),
-        [
-            ("a", Key.A),
-            ("shift", Key.SHIFT),
-            ("space", Key.SPACE),
-        ],
-    )
-    def test_dispatches_single_key(
-        self,
-        fake_keyboard: ImplKeyboard,
-        key_arg: str,
-        expected_key: Key,
-    ):
-        exit_code = main(["keyboard", "down", key_arg])
-
-        assert exit_code == 0
-        assert fake_keyboard.calls == [("_do_down", {"key": expected_key})]
-
-
 class TestKeyboardPress:
     @pytest.mark.parametrize(
         ("key_arg", "expected_key"),
@@ -113,7 +62,7 @@ class TestKeyboardPress:
 
     def test_default_duration_is_0_1(self, fake_keyboard: ImplKeyboard):
         # Match the API default in vrcpilot.controls.keyboard.Keyboard.press
-        # (Unity / VRChat drops shorter holds — see
+        # (Unity / VRChat drops shorter holds - see
         # .claude/memory/project_keyboard_press_duration.md).
         exit_code = main(["keyboard", "press", "a"])
 
@@ -129,29 +78,18 @@ class TestKeyboardPress:
         assert exit_code == 0
         assert fake_keyboard.calls == [("_do_press", {"key": Key.A, "duration": 0.5})]
 
-
-class TestKeyboardMultipleKeys:
-    def test_up_processes_keys_in_order(self, fake_keyboard: ImplKeyboard):
-        exit_code = main(["keyboard", "up", "a", "b", "c"])
-
-        assert exit_code == 0
-        assert fake_keyboard.calls == [
-            ("_do_up", {"key": Key.A}),
-            ("_do_up", {"key": Key.B}),
-            ("_do_up", {"key": Key.C}),
-        ]
-
-    def test_down_processes_keys_in_order(self, fake_keyboard: ImplKeyboard):
-        exit_code = main(["keyboard", "down", "ctrl", "shift", "a"])
+    def test_silent_on_success(
+        self, fake_keyboard: ImplKeyboard, capsys: pytest.CaptureFixture[str]
+    ):
+        del fake_keyboard
+        exit_code = main(["keyboard", "press", "a"])
 
         assert exit_code == 0
-        assert fake_keyboard.calls == [
-            ("_do_down", {"key": Key.CTRL}),
-            ("_do_down", {"key": Key.SHIFT}),
-            ("_do_down", {"key": Key.A}),
-        ]
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
 
-    def test_press_processes_keys_in_order_with_shared_duration(
+    def test_processes_keys_in_order_with_shared_duration(
         self, fake_keyboard: ImplKeyboard
     ):
         exit_code = main(["keyboard", "press", "a", "b", "c", "--duration", "0.2"])
@@ -174,28 +112,26 @@ class TestKeyboardArgparseValidation:
         captured = capsys.readouterr()
         assert captured.err != ""
 
-    def test_up_requires_at_least_one_key(self, capsys: pytest.CaptureFixture[str]):
-        with pytest.raises(SystemExit) as excinfo:
-            main(["keyboard", "up"])
-
-        assert excinfo.value.code != 0
-        captured = capsys.readouterr()
-        assert captured.err != ""
-
-    def test_down_requires_at_least_one_key(self, capsys: pytest.CaptureFixture[str]):
-        with pytest.raises(SystemExit) as excinfo:
-            main(["keyboard", "down"])
-
-        assert excinfo.value.code != 0
-        captured = capsys.readouterr()
-        assert captured.err != ""
-
     def test_argparse_rejects_unknown_key(self, capsys: pytest.CaptureFixture[str]):
         with pytest.raises(SystemExit) as excinfo:
             main(["keyboard", "press", "not_a_real_key"])
 
         assert excinfo.value.code != 0
         # argparse writes its error to stderr; just ensure something landed.
+        captured = capsys.readouterr()
+        assert captured.err != ""
+
+    @pytest.mark.parametrize("removed", ["up", "down"])
+    def test_up_and_down_subcommands_are_not_exposed(
+        self, removed: str, capsys: pytest.CaptureFixture[str]
+    ):
+        # The CLI deliberately drops up / down: each invocation opens and
+        # closes its own backend so a held key would auto-release as the
+        # process exits.
+        with pytest.raises(SystemExit) as excinfo:
+            main(["keyboard", removed, "a"])
+
+        assert excinfo.value.code != 0
         captured = capsys.readouterr()
         assert captured.err != ""
 
@@ -233,7 +169,7 @@ class TestKeyboardGuardErrors:
             side_effect=VRChatNotFocusedError("VRChat is not focused"),
         )
 
-        exit_code = main(["keyboard", "down", "a"])
+        exit_code = main(["keyboard", "press", "a"])
 
         assert exit_code == 1
         captured = capsys.readouterr()
@@ -247,13 +183,13 @@ class TestKeyboardGuardErrors:
         mocker: MockerFixture,
     ):
         # ``ensure_target`` raises on the very first call -> the second
-        # key must not be processed (no second ``_do_up`` recorded).
+        # key must not be processed (no second ``_do_press`` recorded).
         mocker.patch(
             "vrcpilot.controls.keyboard.ensure_target",
             side_effect=VRChatNotRunningError("VRChat is not running"),
         )
 
-        exit_code = main(["keyboard", "up", "a", "b"])
+        exit_code = main(["keyboard", "press", "a", "b"])
 
         assert exit_code == 1
         assert fake_keyboard.calls == []
