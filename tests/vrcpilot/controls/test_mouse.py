@@ -364,7 +364,9 @@ class TestWin32Mouse:
         m = Win32Mouse()
         m._do_click(button, count=count, duration=0.0)
 
-        # pydirectinput is fed the literal string value, not the enum.
+        # pydirectinput is fed the MouseButton (a StrEnum, hence a str
+        # subclass that equals its value), so {"button": "left"} matches
+        # {"button": MouseButton.LEFT}.
         assert fake_pydirectinput.click_calls == [{"button": button.value}] * count
         assert fake_pydirectinput.mouse_down_calls == []
         assert fake_pydirectinput.mouse_up_calls == []

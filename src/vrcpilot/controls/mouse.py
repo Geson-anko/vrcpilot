@@ -225,29 +225,25 @@ if sys.platform == "win32":
         def _do_click(
             self, button: MouseButton, *, count: int, duration: float
         ) -> None:
-            # Pass the literal string (button.value) to pydirectinput;
-            # while StrEnum stringifies to its value, being explicit
-            # avoids any pydirectinput surprises around enum input.
-            name = button.value
             for _ in range(count):
                 if duration > 0:
                     # Older pydirectinput versions inject MINIMUM_DURATION
                     # sleeps when click() is called with duration=0, so
                     # split the down/up path manually instead of passing
                     # duration through.
-                    pydirectinput.mouseDown(button=name)
+                    pydirectinput.mouseDown(button=button)
                     time.sleep(duration)
-                    pydirectinput.mouseUp(button=name)
+                    pydirectinput.mouseUp(button=button)
                 else:
-                    pydirectinput.click(button=name)
+                    pydirectinput.click(button=button)
 
         @override
         def _do_press(self, button: MouseButton) -> None:
-            pydirectinput.mouseDown(button=button.value)
+            pydirectinput.mouseDown(button=button)
 
         @override
         def _do_release(self, button: MouseButton) -> None:
-            pydirectinput.mouseUp(button=button.value)
+            pydirectinput.mouseUp(button=button)
 
         @override
         def _do_scroll(self, amount: int) -> None:
