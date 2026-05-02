@@ -15,6 +15,7 @@ import argcomplete
 import vrcpilot.cli.capture as _cmd_capture
 import vrcpilot.cli.focus as _cmd_focus
 import vrcpilot.cli.launch as _cmd_launch
+import vrcpilot.cli.mouse as _cmd_mouse
 import vrcpilot.cli.pid as _cmd_pid
 import vrcpilot.cli.screenshot as _cmd_screenshot
 import vrcpilot.cli.terminate as _cmd_terminate
@@ -28,6 +29,7 @@ _COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "unfocus": _cmd_unfocus.run,
     "screenshot": _cmd_screenshot.run,
     "capture": _cmd_capture.run,
+    "mouse": _cmd_mouse.run,
 }
 
 
@@ -50,6 +52,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _cmd_unfocus.register(subparsers)
     _cmd_screenshot.register(subparsers)
     _cmd_capture.register(subparsers)
+    _cmd_mouse.register(subparsers)
 
     return parser
 
