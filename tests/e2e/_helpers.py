@@ -1,6 +1,6 @@
-"""Shared utilities for the manual end-to-end VRChat scenarios.
+"""Shared utilities for the end-to-end VRChat test scenarios.
 
-Each script in ``tests/manual/`` follows the same pattern: ensure no
+Each script in ``tests/e2e/`` follows the same pattern: ensure no
 VRChat is running, drive the API or CLI, verify, and always clean up.
 The helpers here keep that boilerplate in one place so individual
 scenarios stay readable.
@@ -14,7 +14,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-# Manual scenarios run as scripts (``python tests/manual/foo.py``) rather
+# E2E scenarios run as scripts (``python tests/e2e/foo.py``) rather
 # than via pytest, so the repo root is not on ``sys.path`` -- ``uv run``
 # only injects ``src``. Bootstrap it here so ``from tests.helpers`` below
 # resolves without each scenario having to repeat the dance.
@@ -50,14 +50,14 @@ __all__ = [
 # leaves headroom even on first-run shader compilation.
 WARMUP_SECONDS: float = 45.0
 
-#: Directory used by manual scenarios to drop visual artifacts (PNGs).
+#: Directory used by e2e scenarios to drop visual artifacts (PNGs).
 #:
-#: Located at ``<repo>/_manual_artifacts/`` and gitignored. Scenarios may
+#: Located at ``<repo>/_e2e_artifacts/`` and gitignored. Scenarios may
 #: write directly with :func:`save_monitor_screenshot` /
 #: :func:`save_image`, or read this constant when they need a custom
 #: filename pattern. The directory is created lazily by the helpers
 #: themselves, so callers do not need to ensure existence first.
-ARTIFACT_DIR: Path = Path(__file__).resolve().parents[2] / "_manual_artifacts"
+ARTIFACT_DIR: Path = Path(__file__).resolve().parents[2] / "_e2e_artifacts"
 
 
 def log(msg: str) -> None:
@@ -91,12 +91,12 @@ def warmup(seconds: float = WARMUP_SECONDS) -> None:
 
 
 def save_monitor_screenshot(scenario: str, label: str) -> Path:
-    """Capture all monitors and save under ``_manual_artifacts/``.
+    """Capture all monitors and save under ``_e2e_artifacts/``.
 
     For a VRChat-window-only screenshot, use :func:`vrcpilot.take_screenshot`
     instead; this helper is for whole-desktop visual records.
 
-    Use this in manual scenarios to leave a visual record at key steps
+    Use this in e2e scenarios to leave a visual record at key steps
     so a human can review what VRChat looked like after the action ran.
     The save location is also emitted via :func:`log`.
 

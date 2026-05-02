@@ -1,0 +1,74 @@
+# tests/e2e
+
+実 VRChat を起動して end-to-end の振る舞いを確認するためのスクリプト群。
+
+## 目的
+
+`tests/` 配下の通常のユニットテストは `pytest` で完結する高速・自動な検証だが、
+`vrcpilot` は最終的に Steam 経由で実 VRChat プロセスを起動・終了する必要があ
+り、その経路はモックでは検証しきれない。本ディレクトリのスクリプトは、実機で
+VRChat を起こして PID を確認し、`terminate` まで通すことで、ライブラリ全体が
+本物の環境で期待通り動くことを人間または Claude Code が確かめるための入口で
+ある。
+
+各スクリプトは終了時に必ず以下のいずれかを標準出力へ出す。
+
+- `PASS: <name>` (exit code 0)
+- `FAIL: <name>: <reason>` (exit code 1)
+
+これにより、自走中の Claude Code でもユーザーでも、出力 1 行で成否を判別でき
+る。
+
+## 前提条件
+
+- Windows 環境を想定（launcher が動作すれば Linux でも実行可能）。
+- VRChat と Steam がインストール済みで、Steam にログイン済みであること。
+- `just setup` 済みで `uv` 環境が整っていること。
+
+## 警告
+
+スクリプトを実行すると、その時点で起動している VRChat セッションが pre-cleanup
+で強制終了される。VRChat を使った作業中には実行しないこと。各シナリオは
+post-cleanup でも VRChat を落とすため、終了後の環境はクリーンな状態に戻る。
+
+## 実行方法
+
+`just` レシピを使うのが標準。引数なしで全シナリオを順に実行する。
+
+```sh
+just e2e-test                       # 全シナリオを順に実行
+just e2e-test launch_terminate      # 単一シナリオを指定
+just e2e-test cli_launch_terminate
+just e2e-test launch_no_vr
+just e2e-test focus_unfocus
+just e2e-test screenshot
+```
+
+直接実行も可能。
+
+```sh
+uv run python tests/e2e/all.py
+uv run python tests/e2e/launch_terminate.py
+```
+
+## シナリオ一覧
+
+| 名前                   | 内容                                                                                                                                                                                                                                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `all`                  | 同ディレクトリ内の全シナリオを subprocess で順に実行し、PASS/FAIL を集約する。                                                                                                                                                                                                           |
+| `launch_terminate`     | API (`vrcpilot.launch` / `find_pid` / `terminate`) のハッピーパス。                                                                                                                                                                                                                      |
+| `cli_launch_terminate` | `uv run vrcpilot` の `launch` / `status` / `terminate` を subprocess で叩く CLI 経路の検証。                                                                                                                                                                                             |
+| `launch_no_vr`         | `vrcpilot.launch(no_vr=True)` でデスクトップモード起動を確認。HMD 非装着のマシンでも動く想定。                                                                                                                                                                                           |
+| `focus_unfocus`        | `vrcpilot.focus()` で最前面化、`vrcpilot.unfocus()` で z-order 最下層化。各操作後に `_e2e_artifacts/` へスクリーンショットを保存し、Claude / 人間が目視確認する。                                                                                                                        |
+| `screenshot`           | `vrcpilot.take_screenshot()` で VRChat ウィンドウだけのスクリーンショットが取れることを確認。1280x720 で起動した VRChat に対して撮影し、`_e2e_artifacts/screenshot_vrchat_<timestamp>.png` にウィンドウのみが写った PNG が保存される（デスクトップ背景や他アプリが混入していないこと）。 |
+
+## 実行時間の目安
+
+各シナリオおよそ 30 秒前後。内訳は PID 検出 (~数秒) + warmup (15-20 秒) +
+terminate / cleanup (数秒) 程度。
+
+## CI への影響
+
+`pyproject.toml` の pytest 設定で `--ignore=tests/e2e` を指定しているため、
+`just test` および CI の pytest 収集対象から除外される。実機を要する end-to-end
+の動作確認スクリプトという位置付け。

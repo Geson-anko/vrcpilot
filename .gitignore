@@ -173,5 +173,5 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
-# Manual verification artifacts
-_manual_artifacts/
+# End-to-end verification artifacts
+_e2e_artifacts/

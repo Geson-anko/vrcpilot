@@ -102,8 +102,8 @@ class TestGetWindowRect:
     to drive degenerate-geometry and XError branches.
 
     The success path depends on a specific real window's geometry and
-    is covered end-to-end by the manual scenarios under
-    ``tests/manual/`` rather than re-stubbed here.
+    is covered end-to-end by the e2e scenarios under
+    ``tests/e2e/`` rather than re-stubbed here.
     """
 
     def test_returns_none_on_xerror(self):

@@ -1,8 +1,8 @@
-"""Frame sinks shared by the CLI ``capture`` command and manual scenarios.
+"""Frame sinks shared by the CLI ``capture`` command and e2e scenarios.
 
 Package-private (underscore-prefixed module) and intentionally absent
 from :mod:`vrcpilot.capture`'s ``__all__``: the writer machinery is an
-implementation detail of the bundled CLI / manual scripts, not a public
+implementation detail of the bundled CLI / e2e scripts, not a public
 API. External users should compose :class:`vrcpilot.CaptureLoop` with
 their own sink.
 """

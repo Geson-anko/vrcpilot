@@ -234,7 +234,7 @@ ______________________________________________________________________
 
 1. `coords = window.translate_coords(display.screen().root, 0, 0)` を呼ぶ。
 2. `coords.x` / `coords.y` は **「親 (この場合 root) における window の原点の座標」** ではなく、translate_coords の意味として **「`(0, 0)` を window 座標系から root 座標系に翻訳した結果」** を返す。
-3. 過去コミット `77a6422` の `_get_vrchat_rect_x11` では `-int(coords.x)` していた (符号反転)。これは python-xlib の `translate_coords` の戻り値が「逆向き」になるケースがあるため。**現行設計でも符号は反転して `(-int(coords.x), -int(coords.y))` を使う** (MUST)。判断根拠: 過去動作実績のあるロジックを尊重する。実装後に manual シナリオで実際のスクリーン座標と一致するか目視検証 (`tests/manual/screenshot.py`) すること。
+3. 過去コミット `77a6422` の `_get_vrchat_rect_x11` では `-int(coords.x)` していた (符号反転)。これは python-xlib の `translate_coords` の戻り値が「逆向き」になるケースがあるため。**現行設計でも符号は反転して `(-int(coords.x), -int(coords.y))` を使う** (MUST)。判断根拠: 過去動作実績のあるロジックを尊重する。実装後に manual シナリオで実際のスクリーン座標と一致するか目視検証 (`tests/e2e/screenshot.py`) すること。
 4. `geom = window.get_geometry()` で `width`, `height` を取得。
 5. width \<= 0 または height \<= 0 なら `None` を返す。
 6. `Xlib.error.XError` を catch して `None` を返す (BadWindow 等)。
@@ -469,10 +469,10 @@ ______________________________________________________________________
 | Composite XError (X11)           | `query_version` で XError → `RuntimeError`                                                                  |
 | WGC 設定パラメータ               | `last_kwargs == {"cursor_capture": False, "draw_border": False, "window_hwnd": ...}`                        |
 
-#### 4.1.4 `tests/manual/capture.py` (新規)
+#### 4.1.4 `tests/e2e/capture.py` (新規)
 
 - `Capture` を with で開き、ループで 30 フレーム取得 (約 1 秒分相当、`time.sleep(0.033)` で 30fps を模擬)
-- 最初と最後のフレームを `_manual_artifacts/` に PNG 保存 (numpy → PIL Image 変換、`Image.fromarray(arr)`)
+- 最初と最後のフレームを `_e2e_artifacts/` に PNG 保存 (numpy → PIL Image 変換、`Image.fromarray(arr)`)
 - フレーム間隔の最大・最小・平均を log
 - `_helpers.run_scenario` で wrap
 
@@ -518,7 +518,7 @@ fake_sct.monitors = fake_monitors
 | frozen                          | `Screenshot(...).x = 999` で `FrozenInstanceError`                                                                                                           |
 | 順序保証                        | focus → sleep → grab の順で呼ばれることを `mocker.call_order` 系で確認 (SHOULD、最低限 focus が grab より前を確認)                                           |
 
-#### 4.2.4 `tests/manual/screenshot.py` の更新
+#### 4.2.4 `tests/e2e/screenshot.py` の更新
 
 既存ファイルを新 API に書き換える:
 
@@ -543,8 +543,8 @@ ______________________________________________________________________
 | `src/vrcpilot/cli.py`        | 触らない                                                                | `_run_screenshot` 書き換え (所有)            |
 | `tests/test_capture.py`      | 全面書き換え (所有)                                                     | 触らない                                     |
 | `tests/test_screenshot.py`   | 触らない                                                                | 新規作成 (所有)                              |
-| `tests/manual/capture.py`    | 新規作成 (所有)                                                         | 触らない                                     |
-| `tests/manual/screenshot.py` | 触らない                                                                | 書き換え (所有)                              |
+| `tests/e2e/capture.py`       | 新規作成 (所有)                                                         | 触らない                                     |
+| `tests/e2e/screenshot.py`    | 触らない                                                                | 書き換え (所有)                              |
 | `pyproject.toml`             | (ジョイント部)                                                          | (ジョイント部、`mss` / `numpy` の prod 昇格) |
 
 ### 5.2 ジョイント部の調整
@@ -581,7 +581,7 @@ ______________________________________________________________________
 07. X11 側は `__init__` で Display 接続と redirect を確立し、`read()` のたびに `name_window_pixmap` → `get_image` → `pixmap.free()` を実行する (本書 1.3.2)。unredirect は呼ばない。
 08. `close()` の冪等性、`__exit__` の例外非抑制、close 後 `read()` の `RuntimeError` を MUST 実装する。
 09. `tests/test_capture.py` を `class TestCapture:` 構造で全面書き直し、本書 4.1.3 のカバレッジ項目をすべてカバーする。`_FakeWindowsCapture` を `emit_frame` ベースに進化させる。
-10. `tests/manual/capture.py` を新規作成 (本書 4.1.4)。30 フレーム取得 + 最初・最後の PNG 保存。
+10. `tests/e2e/capture.py` を新規作成 (本書 4.1.4)。30 フレーム取得 + 最初・最後の PNG 保存。
 11. コミット前に `just run` がすべてパスすることを確認する。コミットは `feat(_win32, _x11): ウィンドウ矩形取得ヘルパを追加` → `feat(capture): Capture クラスで連続フレーム取得を提供` の 2 段階で行う。
 
 ### Screenshot トラック チェックリスト
@@ -596,5 +596,5 @@ ______________________________________________________________________
 08. `src/vrcpilot/__init__.py` の `__all__` に `Capture`, `Screenshot`, `take_screenshot` を追加し、import 文を追加する (Capture トラックの成果物を import に含めること)。
 09. `src/vrcpilot/cli.py` の `_run_screenshot` を新 API に書き換える: `Screenshot.image` (ndarray) を PIL Image に変換 (`Image.fromarray(arr)`) → PNG 保存。
 10. `tests/test_screenshot.py` を新規作成し、本書 4.2.3 のカバレッジ項目をすべてカバーする。`mss.mss` / `vrcpilot.window.focus` / `time.sleep` をモックする。
-11. `tests/manual/screenshot.py` を新 API に書き換える (本書 4.2.4)。メタデータ assertion と PNG 保存を含む。log 出力は cp932 互換の ASCII のみ使用。
+11. `tests/e2e/screenshot.py` を新 API に書き換える (本書 4.2.4)。メタデータ assertion と PNG 保存を含む。log 出力は cp932 互換の ASCII のみ使用。
 12. コミット前に `just run` がすべてパスすることを確認する。コミットは `chore(deps): mss と numpy を production 依存に昇格` → `feat(screenshot): take_screenshot を Screenshot メタデータ付き API に置き換え` → `refactor(__init__, cli): Capture / Screenshot を公開 API に追加し CLI を新型に対応` → `test(manual): screenshot manual シナリオを Screenshot API へ更新` の 4 段階で行う。

@@ -1,4 +1,4 @@
-"""Manual scenario: capture a VRChat-only screenshot via ``vrcpilot.take_screenshot()``.
+"""E2E scenario: capture a VRChat-only screenshot via ``vrcpilot.take_screenshot()``.
 
 Drives ``vrcpilot.take_screenshot()`` against a real running VRChat
 client to confirm that the returned :class:`vrcpilot.Screenshot`
@@ -14,10 +14,10 @@ borders.
 
 Run with::
 
-    just manual screenshot
+    just e2e-test screenshot
 
 The captured image is written to
-``_manual_artifacts/screenshot_vrchat_<YYYYMMDD_HHMMSS>.png`` for the
+``_e2e_artifacts/screenshot_vrchat_<YYYYMMDD_HHMMSS>.png`` for the
 human or Claude Code to open and verify. The window geometry and the
 captured-at timestamp are also logged.
 """
@@ -55,7 +55,7 @@ def _scenario() -> None:
 
     # ASCII-only log lines: cp932 (Windows + JP locale) cannot encode
     # em-dash / arrow / ellipsis, so any unicode escape leaks here would
-    # crash the manual run.
+    # crash the e2e run.
     _helpers.log(
         "captured: "
         f"x={shot.x} y={shot.y} "

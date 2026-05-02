@@ -60,13 +60,13 @@
 
 - stdout に出力されうる文字列（`print` / `_helpers.log` / `assert` のメッセージ）は ASCII で代替する: `—` → `-`、`→` → `->`、`…` → `...`
 - docstring / コメント / 日本語本文の cp932 範囲文字は問題ない
-- pre-commit や pyright では検出できない（実機 print で初めて死ぬ）。`tests/manual/` のシナリオで実機実行して気付くタイプの罠
+- pre-commit や pyright では検出できない（実機 print で初めて死ぬ）。`tests/e2e/` のシナリオで実機実行して気付くタイプの罠
 
-### Linux で SSH 越しに manual シナリオを動かす
+### Linux で SSH 越しに e2e シナリオを動かす
 
-同一ユーザーでローカルにデスクトップセッション（X11）が出ている前提なら、SSH からでも `just manual <NAME>` でそのデスクトップに VRChat を出して検証できる。`justfile` は `set dotenv-load := true` を有効化済みで、`.env`（gitignore 済み・`.env.example` をコピーして作る）から `DISPLAY` / `XAUTHORITY` を読む。`.env` も既存のシェル env も無い場合は、`manual` レシピが `DISPLAY` 未設定時に `:0` / `~/.Xauthority` にフォールバックする。Wayland セッションの場合はこの fallback では繋がらないので、明示的に `WAYLAND_DISPLAY` を渡すこと。
+同一ユーザーでローカルにデスクトップセッション（X11）が出ている前提なら、SSH からでも `just e2e-test <NAME>` でそのデスクトップに VRChat を出して検証できる。`justfile` は `set dotenv-load := true` を有効化済みで、`.env`（gitignore 済み・`.env.example` をコピーして作る）から `DISPLAY` / `XAUTHORITY` を読む。`.env` も既存のシェル env も無い場合は、`e2e-test` レシピが `DISPLAY` 未設定時に `:0` / `~/.Xauthority` にフォールバックする。Wayland セッションの場合はこの fallback では繋がらないので、明示的に `WAYLAND_DISPLAY` を渡すこと。
 
-- **Steam を先に起動しておく**: `vrcpilot.launch()` は Steam が落ちている状態だと裏で Steam 本体の起動から始まり、`_helpers.wait_for_pid` の 30 秒タイムアウトを超えて `VRChat PID was not observed before timeout` で落ちる。SSH から manual を流す前にデスクトップ側で Steam を起動して常駐させておく
+- **Steam を先に起動しておく**: `vrcpilot.launch()` は Steam が落ちている状態だと裏で Steam 本体の起動から始まり、`_helpers.wait_for_pid` の 30 秒タイムアウトを超えて `VRChat PID was not observed before timeout` で落ちる。SSH から e2e を流す前にデスクトップ側で Steam を起動して常駐させておく
 - 画面ロック中は window 操作系（`focus_unfocus` 等）の挙動が安定しないので、検証中は lock を外しておく
 
 ## テスト方針
@@ -126,14 +126,14 @@
 - 内部実装の詳細（例: 特定のメソッドが呼ばれたか）
 - 初期化時のプロパティ設定などの内部動作
 
-### 手動検証シナリオ（tests/manual/）
+### end-to-end シナリオ（tests/e2e/）
 
-実 VRChat を起動して end-to-end で振る舞いを確認するスクリプト群。`pytest --ignore=tests/manual` で自動収集対象外。`just manual <NAME>` で実行する。
+実 VRChat を起動して end-to-end で振る舞いを確認するスクリプト群。`pytest --ignore=tests/e2e` で自動収集対象外。`just e2e-test <NAME>` で実行する。
 
 - 各シナリオは `_helpers.run_scenario(name, body)` でラップし、`PASS:` / `FAIL:` の 1 行で成否を出す
 - 起動 → `_helpers.warmup()` で安定待ち → 検証 → `_helpers.run_scenario` 側が pre/post で VRChat を terminate
-- 状態を変える対称 API（focus/unfocus, show/hide 等）を検証する場合は、起動直後の自然な状態から本命操作を呼んでも no-op と区別できないため、**逆操作 → 本操作 → 逆 → 本** の 4 step で書く。同じペアを 2 回繰り返すことで idempotence も確認できる。`tests/manual/focus_unfocus.py` がこのパターンの例
-- スクリーンショットを残す場合は `_helpers.save_monitor_screenshot(scenario, label)` を使い、`_manual_artifacts/`（gitignore 済み）に PNG が保存される。Claude Code はその PNG を Read で開いて目視確認できる
+- 状態を変える対称 API（focus/unfocus, show/hide 等）を検証する場合は、起動直後の自然な状態から本命操作を呼んでも no-op と区別できないため、**逆操作 → 本操作 → 逆 → 本** の 4 step で書く。同じペアを 2 回繰り返すことで idempotence も確認できる。`tests/e2e/focus_unfocus.py` がこのパターンの例
+- スクリーンショットを残す場合は `_helpers.save_monitor_screenshot(scenario, label)` を使い、`_e2e_artifacts/`（gitignore 済み）に PNG が保存される。Claude Code はその PNG を Read で開いて目視確認できる
 
 ## コーディング規約
 

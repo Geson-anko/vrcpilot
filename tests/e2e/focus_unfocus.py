@@ -1,4 +1,4 @@
-"""Manual scenario: launch VRChat in Desktop mode and verify focus/unfocus.
+"""E2E scenario: launch VRChat in Desktop mode and verify focus/unfocus.
 
 Drives ``vrcpilot.focus()`` and ``vrcpilot.unfocus()`` against a real
 running VRChat client to confirm that the window can be brought to the
@@ -10,11 +10,11 @@ VRChat is naturally in the foreground, so calling ``focus()`` first
 would not prove anything; starting with ``unfocus()`` makes the very
 first transition meaningful, and repeating the pair verifies the calls
 are idempotent. A screenshot is saved after each step under
-``_manual_artifacts/`` for visual inspection.
+``_e2e_artifacts/`` for visual inspection.
 
 Run with::
 
-    just manual focus_unfocus
+    just e2e-test focus_unfocus
 
 VRChat is launched with ``no_vr=True`` (Desktop mode) so the focus /
 unfocus effects are observable without an HMD.

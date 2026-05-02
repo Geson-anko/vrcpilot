@@ -1,4 +1,4 @@
-"""Manual scenario: launch VRChat via the API and terminate it cleanly.
+"""E2E scenario: launch VRChat via the API and terminate it cleanly.
 
 Drives the public ``vrcpilot`` API through a single happy-path round trip
 (``launch`` -> wait for PID -> warmup -> ``find_pid`` again -> ``terminate``)
@@ -6,7 +6,7 @@ to confirm the default launch flow works against a real VRChat install.
 
 Run with::
 
-    uv run python tests/manual/launch_terminate.py
+    uv run python tests/e2e/launch_terminate.py
 """
 
 from __future__ import annotations

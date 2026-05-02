@@ -1,4 +1,4 @@
-"""Manual end-to-end scenario: drive VRChat through the ``vrcpilot`` CLI.
+"""E2E scenario: drive VRChat through the ``vrcpilot`` CLI.
 
 Runs ``vrcpilot launch`` / ``status`` / ``terminate`` via ``uv run`` and
 verifies each subcommand's exit code and stdout. ``_helpers.run_scenario``

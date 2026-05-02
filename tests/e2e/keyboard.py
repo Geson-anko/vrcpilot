@@ -1,4 +1,4 @@
-"""Manual scenario: drive ``vrcpilot.keyboard`` against real VRChat.
+"""E2E scenario: drive ``vrcpilot.keyboard`` against real VRChat.
 
 Launches VRChat in Desktop mode, warms up, then exercises the
 keyboard module across two angles a human can verify by eye:
@@ -8,7 +8,7 @@ keyboard module across two angles a human can verify by eye:
   shows it; another press hides it again. Repeating the pair across
   4 alternating steps proves the call is idempotent (same as the
   ``focus_unfocus`` pattern), and a screenshot is dropped after each
-  step under ``_manual_artifacts/`` for review.
+  step under ``_e2e_artifacts/`` for review.
 * **A modifier combo** (``down(SHIFT_LEFT)`` -> ``press(A)`` ->
   ``up(SHIFT_LEFT)``) is sandwiched between the toggle steps. Whether
   or not VRChat has a focused text field at that moment, the call
@@ -18,7 +18,7 @@ keyboard module across two angles a human can verify by eye:
 
 Run with::
 
-    just manual keyboard
+    just e2e-test keyboard
 
 Prerequisites:
 
