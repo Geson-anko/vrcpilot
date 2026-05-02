@@ -16,7 +16,7 @@ import pytest
 
 from vrcpilot import process
 from vrcpilot.controls.keyboard import Key, Keyboard
-from vrcpilot.controls.mouse import ButtonName, Mouse
+from vrcpilot.controls.mouse import Mouse, MouseButton
 
 #: Skip a test on non-Windows platforms.
 #:
@@ -123,7 +123,7 @@ class ImplMouse(Mouse):
         self.calls.append(("_do_move", {"x": x, "y": y, "relative": relative}))
 
     @override
-    def _do_click(self, button: ButtonName, *, count: int, duration: float) -> None:
+    def _do_click(self, button: MouseButton, *, count: int, duration: float) -> None:
         self.calls.append(
             (
                 "_do_click",
@@ -132,11 +132,11 @@ class ImplMouse(Mouse):
         )
 
     @override
-    def _do_press(self, button: ButtonName) -> None:
+    def _do_press(self, button: MouseButton) -> None:
         self.calls.append(("_do_press", {"button": button}))
 
     @override
-    def _do_release(self, button: ButtonName) -> None:
+    def _do_release(self, button: MouseButton) -> None:
         self.calls.append(("_do_release", {"button": button}))
 
     @override

@@ -30,7 +30,7 @@ from pytest_mock import MockerFixture
 from tests.fakes import FakeInputtinoMouse, FakePyDirectInput
 from tests.helpers import ImplMouse, only_linux, only_windows
 from vrcpilot.controls import mouse as mouse_mod
-from vrcpilot.controls.mouse import Mouse
+from vrcpilot.controls.mouse import Mouse, MouseButton
 
 
 @pytest.fixture(autouse=True)
@@ -39,6 +39,48 @@ def _reset_mouse_singleton() -> Iterator[None]:
     mouse_mod._instance = None
     yield
     mouse_mod._instance = None
+
+
+# --- MouseButton enum tests -----------------------------------------------
+
+
+class TestMouseButton:
+    """Verify the :class:`MouseButton` StrEnum contract.
+
+    The CLI plumbing (``argparse(type=MouseButton)``) and pydirectinput
+    interop both rely on the StrEnum semantics being preserved here.
+    """
+
+    def test_members_have_expected_values(self):
+        assert MouseButton.LEFT.value == "left"
+        assert MouseButton.RIGHT.value == "right"
+        assert MouseButton.MIDDLE.value == "middle"
+
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("left", MouseButton.LEFT),
+            ("right", MouseButton.RIGHT),
+            ("middle", MouseButton.MIDDLE),
+        ],
+    )
+    def test_value_lookup_returns_singleton_member(
+        self, raw: str, expected: MouseButton
+    ):
+        # MouseButton("left") must return the LEFT singleton, not a
+        # fresh instance — argparse(type=MouseButton) relies on this.
+        assert MouseButton(raw) is expected
+
+    def test_member_compares_equal_to_its_string_value(self):
+        # StrEnum equality with the underlying str is the property the
+        # CLI parser leans on when comparing user input.
+        assert MouseButton.LEFT == "left"
+        assert MouseButton.RIGHT == "right"
+        assert MouseButton.MIDDLE == "middle"
+
+    def test_invalid_value_raises_value_error(self):
+        with pytest.raises(ValueError):
+            MouseButton("center")
 
 
 # --- ABC template-method tests (cross-platform) ---------------------------
@@ -94,12 +136,12 @@ class TestMouseGuardWiring:
         mocker.patch("vrcpilot.controls.mouse.ensure_target")
         impl = ImplMouse()
 
-        impl.click("right", count=2, duration=0.05)
+        impl.click(MouseButton.RIGHT, count=2, duration=0.05)
 
         assert impl.calls == [
             (
                 "_do_click",
-                {"button": "right", "count": 2, "duration": 0.05},
+                {"button": MouseButton.RIGHT, "count": 2, "duration": 0.05},
             )
         ]
 
@@ -107,12 +149,12 @@ class TestMouseGuardWiring:
         mocker.patch("vrcpilot.controls.mouse.ensure_target")
         impl = ImplMouse()
 
-        impl.press("middle")
-        impl.release("middle")
+        impl.press(MouseButton.MIDDLE)
+        impl.release(MouseButton.MIDDLE)
 
         assert impl.calls == [
-            ("_do_press", {"button": "middle"}),
-            ("_do_release", {"button": "middle"}),
+            ("_do_press", {"button": MouseButton.MIDDLE}),
+            ("_do_release", {"button": MouseButton.MIDDLE}),
         ]
 
     def test_scroll_forwards_amount(self, mocker: MockerFixture):
@@ -185,19 +227,23 @@ class TestLinuxMouse:
         assert fake_inputtino_mouse.move_calls == []
 
     @pytest.mark.parametrize(
-        "name,expected_value",
-        [("left", 0), ("middle", 1), ("right", 2)],
+        "button,expected_value",
+        [
+            (MouseButton.LEFT, 0),
+            (MouseButton.MIDDLE, 1),
+            (MouseButton.RIGHT, 2),
+        ],
     )
     def test_click_maps_button_and_repeats_count(
         self,
         fake_inputtino_mouse: FakeInputtinoMouse,
-        name: str,
+        button: MouseButton,
         expected_value: int,
     ):
         from vrcpilot.controls.mouse import LinuxMouse
 
         m = LinuxMouse()
-        m._do_click(name, count=3, duration=0.05)  # type: ignore[arg-type]
+        m._do_click(button, count=3, duration=0.05)
 
         assert len(fake_inputtino_mouse.click_calls) == 3
         for call in fake_inputtino_mouse.click_calls:
@@ -212,7 +258,7 @@ class TestLinuxMouse:
         from vrcpilot.controls.mouse import LinuxMouse
 
         m = LinuxMouse()
-        m._do_click("left", count=0, duration=0.0)
+        m._do_click(MouseButton.LEFT, count=0, duration=0.0)
 
         assert fake_inputtino_mouse.click_calls == []
 
@@ -220,7 +266,7 @@ class TestLinuxMouse:
         from vrcpilot.controls.mouse import LinuxMouse
 
         m = LinuxMouse()
-        m._do_press("right")
+        m._do_press(MouseButton.RIGHT)
 
         assert len(fake_inputtino_mouse.press_calls) == 1
         assert int(fake_inputtino_mouse.press_calls[0]["button"]) == 2  # type: ignore[arg-type]
@@ -229,7 +275,7 @@ class TestLinuxMouse:
         from vrcpilot.controls.mouse import LinuxMouse
 
         m = LinuxMouse()
-        m._do_release("middle")
+        m._do_release(MouseButton.MIDDLE)
 
         assert len(fake_inputtino_mouse.release_calls) == 1
         assert int(fake_inputtino_mouse.release_calls[0]["button"]) == 1  # type: ignore[arg-type]
@@ -299,13 +345,15 @@ class TestWin32Mouse:
         assert fake_pydirectinput.move_rel_calls == [{"x": 15, "y": -7}]
         assert fake_pydirectinput.move_to_calls == []
 
-    @pytest.mark.parametrize("button", ["left", "right", "middle"])
+    @pytest.mark.parametrize(
+        "button", [MouseButton.LEFT, MouseButton.RIGHT, MouseButton.MIDDLE]
+    )
     @pytest.mark.parametrize("count", [1, 3])
     def test_click_zero_duration_uses_click_helper(
         self,
         fake_pydirectinput: FakePyDirectInput,
         mocker: MockerFixture,
-        button: str,
+        button: MouseButton,
         count: int,
     ):
         from vrcpilot.controls.mouse import Win32Mouse
@@ -314,9 +362,10 @@ class TestWin32Mouse:
         sleep_spy = mocker.patch.object(mouse_mod.time, "sleep")
 
         m = Win32Mouse()
-        m._do_click(button, count=count, duration=0.0)  # type: ignore[arg-type]
+        m._do_click(button, count=count, duration=0.0)
 
-        assert fake_pydirectinput.click_calls == [{"button": button}] * count
+        # pydirectinput is fed the literal string value, not the enum.
+        assert fake_pydirectinput.click_calls == [{"button": button.value}] * count
         assert fake_pydirectinput.mouse_down_calls == []
         assert fake_pydirectinput.mouse_up_calls == []
         sleep_spy.assert_not_called()
@@ -331,7 +380,7 @@ class TestWin32Mouse:
         sleep_spy = mocker.patch.object(mouse_mod.time, "sleep")
 
         m = Win32Mouse()
-        m._do_click("left", count=2, duration=0.05)
+        m._do_click(MouseButton.LEFT, count=2, duration=0.05)
 
         # The click() helper must NOT be used when duration > 0, to
         # avoid pydirectinput's MINIMUM_DURATION sleep injection.
@@ -355,32 +404,36 @@ class TestWin32Mouse:
         from vrcpilot.controls.mouse import Win32Mouse
 
         m = Win32Mouse()
-        m._do_click("left", count=0, duration=0.0)
+        m._do_click(MouseButton.LEFT, count=0, duration=0.0)
 
         assert fake_pydirectinput.calls == []
 
-    @pytest.mark.parametrize("button", ["left", "right", "middle"])
+    @pytest.mark.parametrize(
+        "button", [MouseButton.LEFT, MouseButton.RIGHT, MouseButton.MIDDLE]
+    )
     def test_press_routes_to_mouse_down(
-        self, fake_pydirectinput: FakePyDirectInput, button: str
+        self, fake_pydirectinput: FakePyDirectInput, button: MouseButton
     ):
         from vrcpilot.controls.mouse import Win32Mouse
 
         m = Win32Mouse()
-        m._do_press(button)  # type: ignore[arg-type]
+        m._do_press(button)
 
-        assert fake_pydirectinput.mouse_down_calls == [{"button": button}]
+        assert fake_pydirectinput.mouse_down_calls == [{"button": button.value}]
         assert fake_pydirectinput.mouse_up_calls == []
 
-    @pytest.mark.parametrize("button", ["left", "right", "middle"])
+    @pytest.mark.parametrize(
+        "button", [MouseButton.LEFT, MouseButton.RIGHT, MouseButton.MIDDLE]
+    )
     def test_release_routes_to_mouse_up(
-        self, fake_pydirectinput: FakePyDirectInput, button: str
+        self, fake_pydirectinput: FakePyDirectInput, button: MouseButton
     ):
         from vrcpilot.controls.mouse import Win32Mouse
 
         m = Win32Mouse()
-        m._do_release(button)  # type: ignore[arg-type]
+        m._do_release(button)
 
-        assert fake_pydirectinput.mouse_up_calls == [{"button": button}]
+        assert fake_pydirectinput.mouse_up_calls == [{"button": button.value}]
         assert fake_pydirectinput.mouse_down_calls == []
 
     @pytest.mark.parametrize(
@@ -462,7 +515,7 @@ class _SpyMouse(Mouse):
     @override
     def click(
         self,
-        button: str = "left",  # type: ignore[override]
+        button: MouseButton = MouseButton.LEFT,
         *,
         count: int = 1,
         duration: float = 0.0,
@@ -483,7 +536,7 @@ class _SpyMouse(Mouse):
     @override
     def press(
         self,
-        button: str = "left",  # type: ignore[override]
+        button: MouseButton = MouseButton.LEFT,
         *,
         focus: bool = True,
     ) -> None:
@@ -492,7 +545,7 @@ class _SpyMouse(Mouse):
     @override
     def release(
         self,
-        button: str = "left",  # type: ignore[override]
+        button: MouseButton = MouseButton.LEFT,
         *,
         focus: bool = True,
     ) -> None:
@@ -508,13 +561,15 @@ class _SpyMouse(Mouse):
         ...
 
     @override
-    def _do_click(self, button: str, *, count: int, duration: float) -> None: ...
+    def _do_click(
+        self, button: MouseButton, *, count: int, duration: float
+    ) -> None: ...
 
     @override
-    def _do_press(self, button: str) -> None: ...
+    def _do_press(self, button: MouseButton) -> None: ...
 
     @override
-    def _do_release(self, button: str) -> None: ...
+    def _do_release(self, button: MouseButton) -> None: ...
 
     @override
     def _do_scroll(self, amount: int) -> None: ...
@@ -543,13 +598,13 @@ class TestModuleFunctions:
         spy = _SpyMouse()
         mouse_mod._instance = spy
 
-        mouse_mod.click("right", count=2, duration=0.1, focus=False)
+        mouse_mod.click(MouseButton.RIGHT, count=2, duration=0.1, focus=False)
 
         assert spy.calls == [
             (
                 "click",
                 {
-                    "button": "right",
+                    "button": MouseButton.RIGHT,
                     "count": 2,
                     "duration": 0.1,
                     "focus": False,
@@ -561,12 +616,12 @@ class TestModuleFunctions:
         spy = _SpyMouse()
         mouse_mod._instance = spy
 
-        mouse_mod.press("middle")
-        mouse_mod.release("middle", focus=False)
+        mouse_mod.press(MouseButton.MIDDLE)
+        mouse_mod.release(MouseButton.MIDDLE, focus=False)
 
         assert spy.calls == [
-            ("press", {"button": "middle", "focus": True}),
-            ("release", {"button": "middle", "focus": False}),
+            ("press", {"button": MouseButton.MIDDLE, "focus": True}),
+            ("release", {"button": MouseButton.MIDDLE, "focus": False}),
         ]
 
     def test_scroll_forwards(self):
