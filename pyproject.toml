@@ -16,6 +16,7 @@ dependencies = [
     "pydirectinput>=1.0.4 ; sys_platform == 'win32'",
     "python-xlib>=0.33 ; sys_platform == 'linux'",
     "pywin32>=306 ; sys_platform == 'win32'",
+    "pyyaml>=6.0.2",
     "windows-capture>=2.0.0 ; sys_platform == 'win32'",
 ]
 
@@ -35,6 +36,7 @@ dev = [
     "pytest-mock>=3.14.0",
     "types-python-xlib>=0.33; sys_platform == 'linux'",
     "types-pywin32>=311.0.0.20260408 ; sys_platform == 'win32'",
+    "types-pyyaml>=6.0.12.20260408",
 ]
 
 

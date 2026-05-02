@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -493,6 +493,15 @@ wheels = [
 ]
 
 [[package]]
+name = "types-pyyaml"
+version = "6.0.12.20260408"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/74/73/b759b1e413c31034cc01ecdfb96b38115d0ab4db55a752a3929f0cd449fd/types_pyyaml-6.0.12.20260408.tar.gz", hash = "sha256:92a73f2b8d7f39ef392a38131f76b970f8c66e4c42b3125ae872b7c93b556307", size = 17735, upload-time = "2026-04-08T04:30:50.974Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/f0/c391068b86abb708882c6d75a08cd7d25b2c7227dab527b3a3685a3c635b/types_pyyaml-6.0.12.20260408-py3-none-any.whl", hash = "sha256:fbc42037d12159d9c801ebfcc79ebd28335a7c13b08a4cfbc6916df78fee9384", size = 20339, upload-time = "2026-04-08T04:30:50.113Z" },
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.13.1"
 source = { registry = "https://pypi.org/simple" }
@@ -530,6 +539,7 @@ dependencies = [
     { name = "pydirectinput", marker = "sys_platform == 'win32'" },
     { name = "python-xlib", marker = "sys_platform == 'linux'" },
     { name = "pywin32", marker = "sys_platform == 'win32'" },
+    { name = "pyyaml" },
     { name = "windows-capture", marker = "sys_platform == 'win32'" },
 ]
 
@@ -542,6 +552,7 @@ dev = [
     { name = "pytest-mock" },
     { name = "types-python-xlib", marker = "sys_platform == 'linux'" },
     { name = "types-pywin32", marker = "sys_platform == 'win32'" },
+    { name = "types-pyyaml" },
 ]
 
 [package.metadata]
@@ -556,6 +567,7 @@ requires-dist = [
     { name = "pydirectinput", marker = "sys_platform == 'win32'", specifier = ">=1.0.4" },
     { name = "python-xlib", marker = "sys_platform == 'linux'", specifier = ">=0.33" },
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=306" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "windows-capture", marker = "sys_platform == 'win32'", specifier = ">=2.0.0" },
 ]
 
@@ -568,6 +580,7 @@ dev = [
     { name = "pytest-mock", specifier = ">=3.14.0" },
     { name = "types-python-xlib", marker = "sys_platform == 'linux'", specifier = ">=0.33" },
     { name = "types-pywin32", marker = "sys_platform == 'win32'", specifier = ">=311.0.0.20260408" },
+    { name = "types-pyyaml", specifier = ">=6.0.12.20260408" },
 ]
 
 [[package]]
