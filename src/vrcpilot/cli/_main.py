@@ -15,6 +15,7 @@ import argcomplete
 import vrcpilot.cli.capture as _cmd_capture
 import vrcpilot.cli.focus as _cmd_focus
 import vrcpilot.cli.launch as _cmd_launch
+import vrcpilot.cli.pid as _cmd_pid
 import vrcpilot.cli.screenshot as _cmd_screenshot
 import vrcpilot.cli.status as _cmd_status
 import vrcpilot.cli.terminate as _cmd_terminate
@@ -22,6 +23,7 @@ import vrcpilot.cli.unfocus as _cmd_unfocus
 
 _COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "launch": _cmd_launch.run,
+    "pid": _cmd_pid.run,
     "status": _cmd_status.run,
     "terminate": _cmd_terminate.run,
     "focus": _cmd_focus.run,
@@ -44,6 +46,7 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _cmd_launch.register(subparsers)
+    _cmd_pid.register(subparsers)
     _cmd_status.register(subparsers)
     _cmd_terminate.register(subparsers)
     _cmd_focus.register(subparsers)
