@@ -262,18 +262,19 @@ def wait_for_no_pid(
         time.sleep(interval)
 
 
-def terminate(*, timeout: float = 5.0) -> bool:
+def terminate(*, timeout: float = 5.0) -> list[int]:
     """Forcefully ``kill`` every running VRChat process.
 
     Args:
         timeout: Seconds to wait for the killed processes to disappear
-            before returning. The function returns ``True`` even if a
-            process is still listed after the timeout - the kill was
-            issued, only the wait did not observe completion.
+            before returning. The function returns the killed PIDs even
+            if a process is still listed after the timeout - the kill
+            was issued, only the wait did not observe completion.
 
     Returns:
-        ``True`` if at least one process was killed, ``False`` if none
-        were running.
+        The list of PIDs that were issued ``kill()``. Empty when no
+        VRChat instance was running. The order matches
+        :func:`psutil.process_iter` enumeration (OS-defined).
     """
     procs = [
         p
@@ -281,7 +282,10 @@ def terminate(*, timeout: float = 5.0) -> bool:
         if p.info["name"] == VRCHAT_PROCESS_NAME
     ]
     if not procs:
-        return False
+        return []
+    # Snapshot pids before kill: psutil keeps ``pid`` valid post-kill,
+    # but reading it eagerly is the defensive choice.
+    killed_pids = [p.pid for p in procs]
     for proc in procs:
         try:
             proc.kill()
@@ -289,4 +293,4 @@ def terminate(*, timeout: float = 5.0) -> bool:
             # Process exited between enumeration and kill - treat as success.
             pass
     psutil.wait_procs(procs, timeout=timeout)
-    return True
+    return killed_pids

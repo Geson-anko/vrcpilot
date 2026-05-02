@@ -359,22 +359,22 @@ class TestWaitForNoPid:
 
 class TestTerminate:
     def test_kills_matching_process(self, mocker: MockerFixture):
-        proc = FakeProcess(name=VRCHAT_PROCESS_NAME)
+        proc = FakeProcess(name=VRCHAT_PROCESS_NAME, pid=4242)
         _process_iter_returning(mocker, proc)
         mocker.patch("vrcpilot.process.psutil.wait_procs")
 
         result = terminate()
 
-        assert result is True
+        assert result == [4242]
         assert proc.kill_calls == 1
 
-    def test_returns_false_when_not_running(self, mocker: MockerFixture):
+    def test_returns_empty_list_when_not_running(self, mocker: MockerFixture):
         _process_iter_returning(mocker, FakeProcess(name="explorer.exe"))
         mocker.patch("vrcpilot.process.psutil.wait_procs")
 
         result = terminate()
 
-        assert result is False
+        assert result == []
 
     def test_kills_all_matching(self, mocker: MockerFixture):
         p1 = FakeProcess(name=VRCHAT_PROCESS_NAME, pid=10)
@@ -385,7 +385,7 @@ class TestTerminate:
 
         result = terminate()
 
-        assert result is True
+        assert result == [10, 20]
         assert p1.kill_calls == 1
         assert p2.kill_calls == 1
         assert other.kill_calls == 0
@@ -393,6 +393,7 @@ class TestTerminate:
     def test_swallows_no_such_process(self, mocker: MockerFixture):
         proc = FakeProcess(
             name=VRCHAT_PROCESS_NAME,
+            pid=9999,
             kill_raises=psutil.NoSuchProcess(pid=9999),
         )
         _process_iter_returning(mocker, proc)
@@ -400,4 +401,4 @@ class TestTerminate:
 
         result = terminate()
 
-        assert result is True
+        assert result == [9999]
