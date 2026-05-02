@@ -18,8 +18,11 @@ from vrcpilot.process import (
     build_launch_command,
     build_vrchat_launch_args,
     find_pid,
+    find_pids,
     launch,
     terminate,
+    wait_for_no_pid,
+    wait_for_pid,
 )
 
 
@@ -275,6 +278,83 @@ class TestFindPid:
         )
 
         assert find_pid() == 111
+
+
+class TestFindPids:
+    def test_returns_empty_when_not_running(self):
+        # autouse fixture already empties ``process_iter``; no setup needed.
+        assert find_pids() == []
+
+    def test_returns_single_match(self, mocker: MockerFixture):
+        _process_iter_returning(mocker, FakeProcess(name=VRCHAT_PROCESS_NAME, pid=4242))
+
+        assert find_pids() == [4242]
+
+    def test_returns_all_matches_in_iter_order(self, mocker: MockerFixture):
+        _process_iter_returning(
+            mocker,
+            FakeProcess(name=VRCHAT_PROCESS_NAME, pid=111),
+            FakeProcess(name="explorer.exe", pid=222),
+            FakeProcess(name=VRCHAT_PROCESS_NAME, pid=333),
+        )
+
+        assert find_pids() == [111, 333]
+
+    def test_ignores_other_processes(self, mocker: MockerFixture):
+        _process_iter_returning(mocker, FakeProcess(name="explorer.exe", pid=1))
+
+        assert find_pids() == []
+
+
+class TestWaitForPid:
+    def test_returns_immediately_when_pid_exists(self, mocker: MockerFixture):
+        _process_iter_returning(mocker, FakeProcess(name=VRCHAT_PROCESS_NAME, pid=42))
+        # Sleep should never be called when the pid is already there.
+        sleep_spy = mocker.patch("vrcpilot.process.time.sleep")
+
+        result = wait_for_pid(timeout=5.0, interval=1.0)
+
+        assert result == 42
+        assert sleep_spy.call_count == 0
+
+    def test_returns_none_on_timeout(self, mocker: MockerFixture):
+        # autouse fixture leaves ``process_iter`` empty -> find_pid is None.
+        # Use a tiny timeout/interval so the real wall-clock loop exits
+        # within milliseconds without any monkeypatching of time.
+        result = wait_for_pid(timeout=0.05, interval=0.01)
+
+        assert result is None
+
+    def test_uses_module_defaults(self):
+        # Sanity: defaults match the documented constants.
+        from vrcpilot.process import PID_WAIT_INTERVAL, PID_WAIT_TIMEOUT
+
+        defaults = wait_for_pid.__defaults__
+        assert defaults == (PID_WAIT_TIMEOUT, PID_WAIT_INTERVAL)
+
+
+class TestWaitForNoPid:
+    def test_returns_true_immediately_when_absent(self, mocker: MockerFixture):
+        # autouse fixture: process_iter is empty -> find_pid is None.
+        sleep_spy = mocker.patch("vrcpilot.process.time.sleep")
+
+        result = wait_for_no_pid(timeout=5.0, interval=1.0)
+
+        assert result is True
+        assert sleep_spy.call_count == 0
+
+    def test_returns_false_on_timeout(self, mocker: MockerFixture):
+        _process_iter_returning(mocker, FakeProcess(name=VRCHAT_PROCESS_NAME))
+
+        result = wait_for_no_pid(timeout=0.05, interval=0.01)
+
+        assert result is False
+
+    def test_uses_module_defaults(self):
+        from vrcpilot.process import PID_WAIT_INTERVAL, PID_WAIT_TIMEOUT
+
+        defaults = wait_for_no_pid.__defaults__
+        assert defaults == (PID_WAIT_TIMEOUT, PID_WAIT_INTERVAL)
 
 
 class TestTerminate:
