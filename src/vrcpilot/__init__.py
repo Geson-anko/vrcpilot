@@ -9,6 +9,7 @@ from importlib import metadata
 
 from vrcpilot.capture import Capture, CaptureLoop
 from vrcpilot.controls import (
+    Key,
     VRChatNotFocusedError,
     VRChatNotRunningError,
     ensure_target,
@@ -41,6 +42,7 @@ __all__ = [
     "find_pid",
     "focus",
     "is_foreground",
+    "Key",
     "launch",
     "OscConfig",
     "Screenshot",

@@ -25,7 +25,7 @@ from .capture import (
     FakeWindowsFrame,
     make_fresh_windows_capture_subclass,
 )
-from .inputtino import FakeInputtinoMouse, FakeMouseButton
+from .inputtino import FakeInputtinoKeyboard, FakeInputtinoMouse, FakeMouseButton
 from .process import FakePopen, FakeProcess
 from .x11 import (
     FakePixmap,
@@ -40,6 +40,7 @@ from .x11 import (
 __all__ = [
     "FakeCapture",
     "FakeCaptureLoop",
+    "FakeInputtinoKeyboard",
     "FakeInputtinoMouse",
     "FakeMouseButton",
     "FakeMp4Sink",

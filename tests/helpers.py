@@ -16,6 +16,7 @@ from typing import override
 import pytest
 
 import vrcpilot
+from vrcpilot.controls.keyboard import Key, Keyboard
 from vrcpilot.controls.mouse import ButtonName, Mouse
 
 #: Skip a test on non-Windows platforms.
@@ -151,3 +152,28 @@ class ImplMouse(Mouse):
     @override
     def _do_scroll(self, amount: int) -> None:
         self.calls.append(("_do_scroll", {"amount": amount}))
+
+
+class ImplKeyboard(Keyboard):
+    """Concrete :class:`Keyboard` for ABC template-method tests.
+
+    Records every ``_do_*`` invocation in :attr:`calls` as
+    ``(method_name, kwargs_dict)`` tuples. Mirrors :class:`ImplMouse`
+    so the keyboard ABC plumbing (focus guard, kwarg forwarding) can
+    be exercised end-to-end without the inputtino backend.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, dict[str, object]]] = []
+
+    @override
+    def _do_press(self, key: Key, *, duration: float) -> None:
+        self.calls.append(("_do_press", {"key": key, "duration": duration}))
+
+    @override
+    def _do_down(self, key: Key) -> None:
+        self.calls.append(("_do_down", {"key": key}))
+
+    @override
+    def _do_up(self, key: Key) -> None:
+        self.calls.append(("_do_up", {"key": key}))
