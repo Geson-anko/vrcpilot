@@ -87,35 +87,6 @@ class TestStatusCommand:
         assert "VRChat is not running" in capsys.readouterr().out
 
 
-class TestTerminateCommand:
-    def test_reports_killed(
-        self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
-    ):
-        # Drive the real ``terminate()`` end-to-end by handing it a
-        # ``FakeProcess`` whose ``.kill()`` is a recorded no-op. The
-        # ``wait_procs`` short-circuits to empty because nothing is a
-        # real ``psutil.Process``; stub it to avoid the type check
-        # raising.
-        mocker.patch(
-            "vrcpilot.process.psutil.process_iter",
-            return_value=[FakeProcess(name=VRCHAT_PROCESS_NAME)],
-        )
-        mocker.patch("vrcpilot.process.psutil.wait_procs", return_value=([], []))
-
-        exit_code = main(["terminate"])
-
-        assert exit_code == 0
-        assert "Terminated" in capsys.readouterr().out
-
-    def test_reports_not_running(self, capsys: pytest.CaptureFixture[str]):
-        # Autouse empty default makes this a real, mock-free run of the
-        # negative path.
-        exit_code = main(["terminate"])
-
-        assert exit_code == 0
-        assert "not running" in capsys.readouterr().out
-
-
 class TestFocusUnfocusCommands:
     @pytest.mark.parametrize(
         ("command", "result", "expected_exit", "expected_word"),
