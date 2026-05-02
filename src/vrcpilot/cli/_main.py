@@ -14,6 +14,7 @@ import argcomplete
 # test patching, while the subcommand modules live alongside them).
 import vrcpilot.cli.capture as _cmd_capture
 import vrcpilot.cli.focus as _cmd_focus
+import vrcpilot.cli.keyboard as _cmd_keyboard
 import vrcpilot.cli.launch as _cmd_launch
 import vrcpilot.cli.mouse as _cmd_mouse
 import vrcpilot.cli.pid as _cmd_pid
@@ -30,6 +31,7 @@ _COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "screenshot": _cmd_screenshot.run,
     "capture": _cmd_capture.run,
     "mouse": _cmd_mouse.run,
+    "keyboard": _cmd_keyboard.run,
 }
 
 
@@ -53,6 +55,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _cmd_screenshot.register(subparsers)
     _cmd_capture.register(subparsers)
     _cmd_mouse.register(subparsers)
+    _cmd_keyboard.register(subparsers)
 
     return parser
 
