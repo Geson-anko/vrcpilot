@@ -43,6 +43,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
 
+      # inputtino-python is fetched from git on Linux and built natively
+      # against libevdev. See https://github.com/games-on-whales/inputtino/tree/stable/bindings/python
+      - name: Install inputtino build dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake build-essential pkg-config libevdev-dev
+
       - name: Install dependencies
         run: uv sync --all-extras
 
