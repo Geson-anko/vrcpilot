@@ -40,18 +40,10 @@ def focus() -> bool:
 def is_foreground() -> bool:
     """Return ``True`` when the running VRChat window is foreground.
 
-    Compares the OS-reported active window against the one owned by the
-    running VRChat process.
-
-    Raises:
-        NotImplementedError: Platform other than Linux. The Win32
-            backend is not wired in this iteration.
-
-    Returns:
-        ``True`` when VRChat is the active window. ``False`` when
-        VRChat is not running, the window cannot be located, the
-        platform call fails, or the session is native Wayland (also
-        emits :class:`RuntimeWarning`).
+    Returns ``False`` on any failure (VRChat not running, window not
+    located, platform call failed, native Wayland which also emits a
+    :class:`RuntimeWarning`). Linux only for now; raises
+    :class:`NotImplementedError` on other platforms.
     """
     if sys.platform == "linux":
         from .x11 import is_window_foreground as _impl

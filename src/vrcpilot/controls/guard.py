@@ -1,11 +1,4 @@
-"""Pre-input safety check: VRChat must be running and foreground.
-
-Used by every guarded ``mouse`` / ``keyboard`` call (the
-``focus=True`` default) and exported as
-:func:`vrcpilot.controls.ensure_target` so callers can also invoke it
-explicitly once before a hot loop and then pass ``focus=False`` on
-the inner calls.
-"""
+"""Pre-input safety check: VRChat must be running and foreground."""
 
 from __future__ import annotations
 
@@ -29,28 +22,15 @@ _FOCUS_RECHECK_INTERVAL: float = 0.05
 def ensure_target() -> None:
     """Verify VRChat is running and the foreground window.
 
-    If VRChat is not foreground, repeatedly calls
-    :func:`vrcpilot.window.focus` and probes
-    :func:`vrcpilot.window.is_foreground` until the window surfaces or
-    a short deadline expires. The retry loop is needed because some
-    window managers drop the first ``_NET_ACTIVE_WINDOW`` request
-    (focus-stealing prevention) and honor only the second or later
-    one. Idempotent: returns silently when the target is already
-    correct, so it is safe to call before every input event or once
-    before a tight loop. Native Wayland is rejected up front rather
-    than warning-and-returning, because
-    :func:`vrcpilot.window.is_foreground` always returns ``False``
-    under native Wayland and the focus retry would never converge --
-    failing fast surfaces the misconfiguration to the caller instead
-    of silently dropping every input event.
+    Idempotent: safe to call before every input event or once before a
+    tight loop. Native Wayland fails fast with
+    :class:`NotImplementedError` because the focus retry loop would
+    never converge there.
 
     Raises:
-        NotImplementedError: Native Wayland session detected; controls
-            require X11 or XWayland.
+        NotImplementedError: Native Wayland session detected.
         VRChatNotRunningError: VRChat process was not found.
-        VRChatNotFocusedError: Window cannot be brought to the
-            foreground (focus call failed, or VRChat still is not
-            foreground after the retry window expired).
+        VRChatNotFocusedError: Window cannot be brought to foreground.
     """
     if is_wayland_native():
         raise NotImplementedError(

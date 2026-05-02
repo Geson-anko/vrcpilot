@@ -1,22 +1,4 @@
-"""Synthetic mouse input for VRChat (Linux backend).
-
-The :class:`Mouse` ABC owns a template-method that runs
-:func:`vrcpilot.controls.guard.ensure_target` before delegating the
-actual side-effects to ``_do_*`` abstract methods. Concrete backends
-implement only the side-effect half so the safety check cannot be
-forgotten.
-
-This iteration ships :class:`LinuxMouse` (backed by ``inputtino``).
-The Win32 backend is not yet implemented; calling :func:`_get` on a
-non-Linux platform raises :class:`NotImplementedError`. Backend
-instantiation is deferred to the first module-function call so that
-``import vrcpilot.controls`` itself stays free of side effects (in
-particular, opening ``/dev/uinput`` is delayed until actually needed).
-
-Module functions ``move`` / ``click`` / ``press`` / ``release`` /
-``scroll`` are the public surface; tests can also instantiate
-:class:`LinuxMouse` directly.
-"""
+"""Synthetic mouse input for VRChat (Linux backend, inputtino)."""
 
 from __future__ import annotations
 
@@ -30,31 +12,16 @@ ButtonName = Literal["left", "right", "middle"]
 
 
 class Mouse(ABC):
-    """Template-method base: applies the focus guard, then delegates.
-
-    Public methods ``move`` / ``click`` / ``press`` / ``release`` /
-    ``scroll`` call :func:`ensure_target` when ``focus=True`` (the
-    default) and then forward to the matching ``_do_*`` abstract method.
-    Concrete subclasses only implement the ``_do_*`` half so the guard
-    is centralised and cannot be skipped accidentally.
-    """
+    """Mouse ABC: runs :func:`ensure_target`, then delegates to ``_do_*``."""
 
     def move(
         self, x: int, y: int, *, relative: bool = False, focus: bool = True
     ) -> None:
-        """Move the cursor in absolute or relative coordinates.
+        """Move the cursor.
 
-        Absolute coordinates are pixels in the union bounding box of all
-        monitors (i.e. ``mss.monitors[0]``), so ``(0, 0)`` is the
-        top-left of the leftmost / topmost monitor.
-
-        Args:
-            x: Target X (absolute) or delta X (relative), in pixels.
-            y: Target Y (absolute) or delta Y (relative), in pixels.
-            relative: Treat ``(x, y)`` as a delta from the current
-                cursor position.
-            focus: Run :func:`ensure_target` first. Set ``False`` in
-                hot loops where the caller has already verified focus.
+        With ``relative=False`` (default), ``(x, y)`` are pixels in the
+        union bounding box of all monitors (``mss.monitors[0]``);
+        ``(0, 0)`` is the top-left of the leftmost / topmost monitor.
         """
         if focus:
             ensure_target()
@@ -68,60 +35,33 @@ class Mouse(ABC):
         duration: float = 0.0,
         focus: bool = True,
     ) -> None:
-        """Click ``button`` ``count`` times, holding ``duration`` per click.
+        """Click ``button`` ``count`` times.
 
-        The press/release hold is implemented by the backend (inputtino
-        sleeps internally). The ``count`` clicks run back-to-back with
-        no inter-click delay; insert your own sleep when targeting
-        applications that debounce rapid clicks.
-
-        Args:
-            button: Mouse button to click.
-            count: Number of clicks to perform; must be ``>= 0``.
-            duration: Hold time per click, in seconds. Use a small
-                non-zero value (``0.02``-``0.05``) when VRChat / Unity
-                is missing zero-length presses.
-            focus: Run :func:`ensure_target` first.
+        ``duration`` is the down-to-up hold per click, in seconds;
+        use ``0.02``-``0.05`` when VRChat / Unity drops zero-length
+        presses. Clicks run back-to-back with no inter-click delay.
         """
         if focus:
             ensure_target()
         self._do_click(button, count=count, duration=duration)
 
     def press(self, button: ButtonName = "left", *, focus: bool = True) -> None:
-        """Press and hold ``button`` until a matching :meth:`release`.
-
-        Always release inside a ``try`` / ``finally`` so a stuck
-        button never escapes a failure path.
-
-        Args:
-            button: Mouse button to press.
-            focus: Run :func:`ensure_target` first.
-        """
+        """Press and hold ``button`` until a matching :meth:`release`."""
         if focus:
             ensure_target()
         self._do_press(button)
 
     def release(self, button: ButtonName = "left", *, focus: bool = True) -> None:
-        """Release ``button`` previously pressed with :meth:`press`.
-
-        Args:
-            button: Mouse button to release.
-            focus: Run :func:`ensure_target` first.
-        """
+        """Release ``button`` previously pressed with :meth:`press`."""
         if focus:
             ensure_target()
         self._do_release(button)
 
     def scroll(self, amount: int, *, focus: bool = True) -> None:
-        """Scroll vertically by ``amount`` notches.
+        """Scroll vertically by ``amount`` notches (positive = down).
 
-        Positive values scroll *down*, negative values scroll *up*,
-        matching the inputtino convention. The Linux backend converts
-        each notch to 120 high-resolution units before forwarding.
-
-        Args:
-            amount: Number of notches; sign determines direction.
-            focus: Run :func:`ensure_target` first.
+        Each notch is multiplied by 120 inside the Linux backend before
+        being forwarded to inputtino's high-resolution scroll API.
         """
         if focus:
             ensure_target()
@@ -145,11 +85,8 @@ class Mouse(ABC):
 
 # Linux backend ------------------------------------------------------------
 
-#: Notch size in inputtino's high-resolution scroll units.
-#:
-#: ``scroll_vertical`` and ``scroll_horizontal`` accept distance in
-#: 120-per-notch units; we expose ``scroll(amount)`` in user-friendly
-#: notches and multiply on the way down.
+# inputtino's scroll API takes distance in 120-per-notch high-resolution
+# units; we expose plain notches and multiply on the way down.
 _SCROLL_NOTCH = 120
 
 if sys.platform == "linux":
@@ -163,17 +100,12 @@ if sys.platform == "linux":
     }
 
     class LinuxMouse(Mouse):
-        """``inputtino``-backed :class:`Mouse` for Linux.
+        """``inputtino``-backed :class:`Mouse`.
 
-        The screen size used for absolute moves is read once from
-        :class:`mss.MSS` at construction time -- ``monitors[0]`` is the
-        union bounding box of every monitor, which is what inputtino's
-        ``move_abs`` expects when the user passes whole-desktop
-        coordinates.
-
-        Construction opens a uinput device via inputtino and will raise
-        :class:`RuntimeError` from inputtino if the calling process
-        lacks permission on ``/dev/uinput``.
+        Opens ``/dev/uinput`` at construction; inputtino raises
+        :class:`RuntimeError` if the caller lacks permission. Screen
+        size for absolute moves is captured once from ``mss.monitors[0]``
+        (whole-desktop bounding box).
         """
 
         def __init__(self) -> None:
@@ -221,15 +153,7 @@ _instance: Mouse | None = None
 
 
 def _get() -> Mouse:
-    """Return the platform backend, creating it on the first call.
-
-    Deferring construction means ``import vrcpilot.controls.mouse`` has
-    no side effects (no uinput device, no X server connection) until
-    the user actually sends an input event.
-
-    Raises:
-        NotImplementedError: Current platform has no backend.
-    """
+    """Return the lazily-built platform backend (deferred uinput open)."""
     global _instance
     if _instance is None:
         if sys.platform == "linux":
@@ -245,7 +169,7 @@ def _get() -> Mouse:
 
 
 def move(x: int, y: int, *, relative: bool = False, focus: bool = True) -> None:
-    """Move the cursor; see :meth:`Mouse.move`."""
+    """See :meth:`Mouse.move`."""
     _get().move(x, y, relative=relative, focus=focus)
 
 
@@ -256,20 +180,20 @@ def click(
     duration: float = 0.0,
     focus: bool = True,
 ) -> None:
-    """Click ``button``; see :meth:`Mouse.click`."""
+    """See :meth:`Mouse.click`."""
     _get().click(button, count=count, duration=duration, focus=focus)
 
 
 def press(button: ButtonName = "left", *, focus: bool = True) -> None:
-    """Press ``button`` and hold; see :meth:`Mouse.press`."""
+    """See :meth:`Mouse.press`."""
     _get().press(button, focus=focus)
 
 
 def release(button: ButtonName = "left", *, focus: bool = True) -> None:
-    """Release ``button``; see :meth:`Mouse.release`."""
+    """See :meth:`Mouse.release`."""
     _get().release(button, focus=focus)
 
 
 def scroll(amount: int, *, focus: bool = True) -> None:
-    """Scroll vertically by ``amount`` notches; see :meth:`Mouse.scroll`."""
+    """See :meth:`Mouse.scroll`."""
     _get().scroll(amount, focus=focus)

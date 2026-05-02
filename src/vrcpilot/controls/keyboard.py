@@ -1,24 +1,8 @@
-"""Synthetic keyboard input for VRChat (Linux backend).
+"""Synthetic keyboard input for VRChat (Linux backend, inputtino).
 
-Same shape as :mod:`vrcpilot.controls.mouse`: the :class:`Keyboard`
-ABC owns a template-method that runs
-:func:`vrcpilot.controls.guard.ensure_target` before delegating the
-actual side-effects to ``_do_*`` abstract methods. Concrete backends
-implement only the side-effect half so the safety check cannot be
-forgotten.
-
-This iteration ships :class:`LinuxKeyboard` (backed by ``inputtino``).
-The Win32 backend is not yet implemented; calling :func:`_get` on a
-non-Linux platform raises :class:`NotImplementedError`. Backend
-instantiation is deferred to the first module-function call so that
-``import vrcpilot.controls`` itself stays free of side effects (in
-particular, opening ``/dev/uinput`` is delayed until actually needed).
-
-Module functions :func:`press` / :func:`down` / :func:`up` are the
-public surface; tests can also instantiate :class:`LinuxKeyboard`
-directly. Keys are passed as :class:`Key` (a :class:`enum.StrEnum`)
-so IDE completion and pyright catch typos. Combos are expressed as
-explicit ``down`` / ``press`` / ``up`` triples (no string parsing).
+Keys are passed as :class:`Key` (a :class:`enum.StrEnum`) so pyright
+and IDE completion catch typos. Combos are explicit ``down`` /
+``press`` / ``up`` triples; there is no ``"ctrl+c"`` string parsing.
 """
 
 from __future__ import annotations
@@ -35,17 +19,8 @@ class Key(StrEnum):
     """Normalized key identifiers.
 
     Values follow the pydirectinput naming convention so a future Win32
-    backend can pass ``key.value`` directly. The Linux backend
-    translates each member to the corresponding ``inputtino.KeyCode``
-    via :data:`_INPUTTINO_CODES` (Linux only).
-
-    Examples:
-        >>> Key.A
-        <Key.A: 'a'>
-        >>> Key.A == "a"
-        True
-        >>> Key.SHIFT_LEFT.value
-        'shiftleft'
+    backend can pass ``key.value`` straight through; the Linux backend
+    maps each member via :data:`_INPUTTINO_CODES`.
     """
 
     # Letters
@@ -151,29 +126,14 @@ class Key(StrEnum):
 
 
 class Keyboard(ABC):
-    """Template-method base: applies the focus guard, then delegates.
-
-    Public methods :meth:`press` / :meth:`down` / :meth:`up` call
-    :func:`ensure_target` when ``focus=True`` (the default) and then
-    forward to the matching ``_do_*`` abstract method. Concrete
-    subclasses only implement the ``_do_*`` half so the guard is
-    centralised and cannot be skipped accidentally.
-    """
+    """Keyboard ABC: runs :func:`ensure_target`, then delegates to ``_do_*``."""
 
     def press(self, key: Key, *, duration: float = 0.0, focus: bool = True) -> None:
-        """Tap ``key`` (down then up) holding ``duration`` seconds.
+        """Tap ``key`` (down then up).
 
-        ``duration`` is forwarded to the backend; the Linux backend
-        uses inputtino's built-in press/release with the same
-        parameter, so ``0.0`` releases immediately.
-
-        Args:
-            key: The :class:`Key` to tap.
-            duration: Hold time in seconds; ``0.0`` for an immediate
-                release. Useful (`0.02`-`0.05`) when VRChat / Unity
-                drops events that are too short.
-            focus: Run :func:`ensure_target` first. Set ``False`` in
-                hot loops where the caller has already verified focus.
+        ``duration`` is the down-to-up hold in seconds, forwarded to
+        inputtino's ``type``; ``0.0`` releases immediately. Use
+        ``0.02``-``0.05`` when VRChat / Unity drops too-short events.
         """
         if focus:
             ensure_target()
@@ -184,24 +144,13 @@ class Keyboard(ABC):
 
         Pair with :meth:`up` to express modifier combos -- e.g.
         ``down(Key.CTRL); press(Key.C); up(Key.CTRL)`` for ``Ctrl+C``.
-        Always release inside a ``try`` / ``finally`` so a stuck key
-        never escapes a failure path.
-
-        Args:
-            key: The :class:`Key` to press.
-            focus: Run :func:`ensure_target` first.
         """
         if focus:
             ensure_target()
         self._do_down(key)
 
     def up(self, key: Key, *, focus: bool = True) -> None:
-        """Release ``key`` previously pressed with :meth:`down`.
-
-        Args:
-            key: The :class:`Key` to release.
-            focus: Run :func:`ensure_target` first.
-        """
+        """Release ``key`` previously pressed with :meth:`down`."""
         if focus:
             ensure_target()
         self._do_up(key)
@@ -221,23 +170,9 @@ class Keyboard(ABC):
 if sys.platform == "linux":
     import inputtino
 
-    #: Map every :class:`Key` member to the matching ``inputtino.KeyCode``.
-    #:
-    #: The mapping is exhaustive — :func:`tests.vrcpilot.controls.test_keyboard`
-    #: enforces ``set(_INPUTTINO_CODES) == set(Key)`` so that a missing
-    #: entry does not surface as a runtime ``KeyError`` in production.
-    #:
-    #: Notable name differences vs the spec (§4.2):
-    #:
-    #: * ``Key.ESCAPE`` -> ``KeyCode.ESC``
-    #: * ``Key.EQUALS`` -> ``KeyCode.PLUS`` (Win32 VK 187 is the ``=`` key)
-    #: * ``Key.BACKTICK`` -> ``KeyCode.TILDE`` (Win32 VK 192)
-    #: * ``Key.LBRACKET`` / ``Key.RBRACKET`` ->
-    #:   ``KeyCode.OPEN_BRACKET`` / ``KeyCode.CLOSE_BRACKET``
-    #: * ``Key.NUM_0``..``NUM_9`` -> ``KeyCode.KEY_0``..``KEY_9``
-    #: * ``Key.SHIFT_LEFT`` / ``SHIFT_RIGHT`` ->
-    #:   ``KeyCode.LEFT_SHIFT`` / ``RIGHT_SHIFT`` (and similar for
-    #:   ``CTRL`` / ``ALT`` / ``WIN``)
+    # Exhaustive Key -> inputtino.KeyCode map; tests assert
+    # set(_INPUTTINO_CODES) == set(Key) so a missing entry surfaces
+    # at test time rather than as a production KeyError.
     _INPUTTINO_CODES: dict[Key, inputtino.KeyCode] = {
         # Letters
         Key.A: inputtino.KeyCode.A,
@@ -337,11 +272,10 @@ if sys.platform == "linux":
     }
 
     class LinuxKeyboard(Keyboard):
-        """``inputtino``-backed :class:`Keyboard` for Linux.
+        """``inputtino``-backed :class:`Keyboard`.
 
-        Construction opens a uinput device via inputtino and will
-        raise :class:`RuntimeError` from inputtino if the calling
-        process lacks permission on ``/dev/uinput``.
+        Opens ``/dev/uinput`` at construction; inputtino raises
+        :class:`RuntimeError` if the caller lacks permission.
         """
 
         def __init__(self) -> None:
@@ -349,9 +283,8 @@ if sys.platform == "linux":
 
         @override
         def _do_press(self, key: Key, *, duration: float) -> None:
-            # inputtino's `type(key, duration)` is press + release with
-            # an internal hold of `duration` seconds. duration=0.0 still
-            # produces a paired down/up event.
+            # inputtino's `type` is a paired down/up with an internal
+            # hold; duration=0.0 still emits both events.
             self._imp.type(_INPUTTINO_CODES[key], duration=duration)
 
         @override
@@ -369,15 +302,7 @@ _instance: Keyboard | None = None
 
 
 def _get() -> Keyboard:
-    """Return the platform backend, creating it on the first call.
-
-    Deferring construction means ``import vrcpilot.controls.keyboard``
-    has no side effects (no uinput device) until the user actually
-    sends an input event.
-
-    Raises:
-        NotImplementedError: Current platform has no backend.
-    """
+    """Return the lazily-built platform backend (deferred uinput open)."""
     global _instance
     if _instance is None:
         if sys.platform == "linux":
@@ -393,15 +318,15 @@ def _get() -> Keyboard:
 
 
 def press(key: Key, *, duration: float = 0.0, focus: bool = True) -> None:
-    """Tap ``key``; see :meth:`Keyboard.press`."""
+    """See :meth:`Keyboard.press`."""
     _get().press(key, duration=duration, focus=focus)
 
 
 def down(key: Key, *, focus: bool = True) -> None:
-    """Press and hold ``key``; see :meth:`Keyboard.down`."""
+    """See :meth:`Keyboard.down`."""
     _get().down(key, focus=focus)
 
 
 def up(key: Key, *, focus: bool = True) -> None:
-    """Release ``key``; see :meth:`Keyboard.up`."""
+    """See :meth:`Keyboard.up`."""
     _get().up(key, focus=focus)

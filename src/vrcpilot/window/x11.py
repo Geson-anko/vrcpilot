@@ -59,14 +59,7 @@ def focus_window() -> bool:
 
 
 def is_window_foreground() -> bool:
-    """X11/XWayland implementation of :func:`vrcpilot.window.is_foreground`.
-
-    Compares the root window's ``_NET_ACTIVE_WINDOW`` (EWMH) property
-    against the VRChat window id. Returns ``False`` (rather than
-    raising) on every failure mode -- VRChat not running, window not
-    found, X server hiccup (``XError``), or native Wayland (also emits
-    a :class:`RuntimeWarning`) -- so callers do not need a try/except.
-    """
+    """X11/XWayland implementation of :func:`vrcpilot.window.is_foreground`."""
     if is_wayland_native():
         warnings.warn(
             "Wayland native session detected; "
