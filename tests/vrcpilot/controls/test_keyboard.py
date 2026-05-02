@@ -29,8 +29,8 @@ from typing import override
 import pytest
 from pytest_mock import MockerFixture
 
-from tests.fakes import FakeInputtinoKeyboard
-from tests.helpers import ImplKeyboard, only_linux
+from tests.fakes import FakeInputtinoKeyboard, FakePyDirectInput
+from tests.helpers import ImplKeyboard, only_linux, only_windows
 from vrcpilot.controls import keyboard as keyboard_mod
 from vrcpilot.controls.keyboard import Key, Keyboard
 
@@ -342,6 +342,122 @@ class TestLinuxKeyboard:
             ("type", {"key_code": inputtino.KeyCode.A, "duration": 0.1}),
             ("release", {"key_code": inputtino.KeyCode.LEFT_SHIFT}),
         ]
+
+
+# --- Win32Keyboard tests (Windows-only) -----------------------------------
+
+
+@pytest.fixture
+def fake_pydirectinput(mocker: MockerFixture) -> FakePyDirectInput:
+    """Patch the module-level ``pydirectinput`` symbol with a fake.
+
+    Windows-only fixture: substituted via ``mocker.patch.object`` so the
+    fake intercepts the same call sites the production code uses (the
+    ``import pydirectinput`` is wrapped in ``if sys.platform == 'win32'``,
+    so it is only present on Windows runners).
+    """
+    fake = FakePyDirectInput()
+    mocker.patch.object(keyboard_mod, "pydirectinput", fake)
+    return fake
+
+
+@only_windows
+class TestWin32Keyboard:
+    """Exercise the pydirectinput backend without touching real ``SendInput``.
+
+    The Windows-only mark prevents collection on Linux; the
+    ``fake_pydirectinput`` fixture replaces the module-level
+    ``pydirectinput`` symbol so the production code runs end-to-end
+    against a fake.
+    """
+
+    @pytest.mark.parametrize(
+        "key", [Key.A, Key.SPACE, Key.F1, Key.SHIFT_LEFT, Key.ESCAPE]
+    )
+    def test_do_press_zero_duration_uses_press_helper(
+        self,
+        fake_pydirectinput: FakePyDirectInput,
+        mocker: MockerFixture,
+        key: Key,
+    ):
+        from vrcpilot.controls.keyboard import Win32Keyboard
+
+        # Spy on time.sleep to confirm the zero-duration path skips it.
+        sleep_spy = mocker.patch.object(keyboard_mod.time, "sleep")
+
+        kb = Win32Keyboard()
+        kb._do_press(key, duration=0.0)
+
+        assert fake_pydirectinput.press_calls == [{"keys": key.value}]
+        assert fake_pydirectinput.key_down_calls == []
+        assert fake_pydirectinput.key_up_calls == []
+        sleep_spy.assert_not_called()
+
+    def test_do_press_with_duration_decomposes_to_down_sleep_up(
+        self,
+        fake_pydirectinput: FakePyDirectInput,
+        mocker: MockerFixture,
+    ):
+        from vrcpilot.controls.keyboard import Win32Keyboard
+
+        sleep_spy = mocker.patch.object(keyboard_mod.time, "sleep")
+
+        kb = Win32Keyboard()
+        kb._do_press(Key.A, duration=0.05)
+
+        # The press() helper must NOT be used when duration > 0, to
+        # avoid pydirectinput's MINIMUM_DURATION sleep injection.
+        assert fake_pydirectinput.press_calls == []
+        assert fake_pydirectinput.key_down_calls == [{"key": "a"}]
+        assert fake_pydirectinput.key_up_calls == [{"key": "a"}]
+        # Interleaved: keyDown -> sleep -> keyUp.
+        assert [name for name, _ in fake_pydirectinput.calls] == [
+            "keyDown",
+            "keyUp",
+        ]
+        sleep_spy.assert_called_once_with(0.05)
+
+    @pytest.mark.parametrize(
+        "key", [Key.A, Key.SHIFT_LEFT, Key.CTRL_LEFT, Key.ALT_RIGHT]
+    )
+    def test_do_down_routes_to_key_down(
+        self, fake_pydirectinput: FakePyDirectInput, key: Key
+    ):
+        from vrcpilot.controls.keyboard import Win32Keyboard
+
+        kb = Win32Keyboard()
+        kb._do_down(key)
+
+        assert fake_pydirectinput.key_down_calls == [{"key": key.value}]
+        assert fake_pydirectinput.key_up_calls == []
+
+    @pytest.mark.parametrize(
+        "key", [Key.A, Key.SHIFT_LEFT, Key.CTRL_LEFT, Key.ALT_RIGHT]
+    )
+    def test_do_up_routes_to_key_up(
+        self, fake_pydirectinput: FakePyDirectInput, key: Key
+    ):
+        from vrcpilot.controls.keyboard import Win32Keyboard
+
+        kb = Win32Keyboard()
+        kb._do_up(key)
+
+        assert fake_pydirectinput.key_up_calls == [{"key": key.value}]
+        assert fake_pydirectinput.key_down_calls == []
+
+    @pytest.mark.parametrize("key", list(Key))
+    def test_every_key_member_reaches_pydirectinput_press(
+        self, fake_pydirectinput: FakePyDirectInput, key: Key
+    ):
+        # Coverage smoke: no Key member should crash the Win32 backend
+        # in unit tests. Real pydirectinput KEYBOARD_MAPPING compatibility
+        # is verified by the manual smoke / e2e scenario.
+        from vrcpilot.controls.keyboard import Win32Keyboard
+
+        kb = Win32Keyboard()
+        kb._do_press(key, duration=0.0)
+
+        assert fake_pydirectinput.press_calls == [{"keys": key.value}]
 
 
 # --- _get() lazy-init tests ----------------------------------------------

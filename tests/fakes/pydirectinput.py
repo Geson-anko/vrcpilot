@@ -35,7 +35,7 @@ class FakePyDirectInput:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, object]]] = []
 
-    # --- pydirectinput surface (mouse subset) ---------------------------
+    # --- mouse surface --------------------------------------------------
 
     def moveTo(self, x: int, y: int) -> None:
         self.calls.append(("moveTo", {"x": x, "y": y}))
@@ -51,6 +51,17 @@ class FakePyDirectInput:
 
     def mouseUp(self, *, button: str) -> None:
         self.calls.append(("mouseUp", {"button": button}))
+
+    # --- keyboard surface -----------------------------------------------
+
+    def press(self, keys: str) -> None:
+        self.calls.append(("press", {"keys": keys}))
+
+    def keyDown(self, key: str) -> None:
+        self.calls.append(("keyDown", {"key": key}))
+
+    def keyUp(self, key: str) -> None:
+        self.calls.append(("keyUp", {"key": key}))
 
     # --- convenience views ---------------------------------------------
 
@@ -73,3 +84,15 @@ class FakePyDirectInput:
     @property
     def mouse_up_calls(self) -> list[dict[str, object]]:
         return [args for name, args in self.calls if name == "mouseUp"]
+
+    @property
+    def press_calls(self) -> list[dict[str, object]]:
+        return [args for name, args in self.calls if name == "press"]
+
+    @property
+    def key_down_calls(self) -> list[dict[str, object]]:
+        return [args for name, args in self.calls if name == "keyDown"]
+
+    @property
+    def key_up_calls(self) -> list[dict[str, object]]:
+        return [args for name, args in self.calls if name == "keyUp"]

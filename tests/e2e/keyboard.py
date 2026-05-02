@@ -22,17 +22,20 @@ Run with::
 
 Prerequisites:
 
-* Desktop session must be reachable (X11 or XWayland; native Wayland
-  is rejected by ``ensure_target``).
+* Desktop session must be reachable (X11 or XWayland on Linux; native
+  Wayland is rejected by ``ensure_target``). On Windows, no display
+  setup is needed beyond a logged-in interactive session.
 * Steam must already be running -- ``vrcpilot.launch()`` will time out
   otherwise.
-* The current user needs write access to ``/dev/uinput`` for inputtino
-  to open its virtual device. If construction fails with a
+* On Linux, the current user needs write access to ``/dev/uinput`` for
+  inputtino to open its virtual device. If construction fails with a
   ``RuntimeError``, run::
 
       sudo usermod -aG input $USER
 
   and log out / back in (or follow your distro's udev rule guidance).
+* On Windows, no extra setup is required: ``pydirectinput`` drives
+  ``SendInput`` directly.
 """
 
 from __future__ import annotations

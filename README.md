@@ -21,7 +21,7 @@ uv tool install vrcpilot
 
 ### Windows
 
-追加インストールは不要。`pywin32` が依存として自動で入る。
+追加インストールは不要。`pywin32` および `pydirectinput` が依存として自動で入る。`vrcpilot.controls.mouse` / `vrcpilot.controls.keyboard` は `pydirectinput` 経由で `SendInput` を呼ぶので、追加のセットアップは不要。
 
 ### Linux (X11 / XWayland)
 
