@@ -166,7 +166,7 @@ if sys.platform == "win32":
     _WHEEL_DELTA = 120
 
     def _scroll_wheel(amount: int) -> None:
-        """Send a single MOUSEEVENTF_WHEEL event of ``amount`` * WHEEL_DELTA.
+        """Synthesize a vertical wheel event via ``SendInput``.
 
         Win32 wheel sign convention: positive = up. Caller is expected
         to have already sign-flipped to match the public API
@@ -232,7 +232,10 @@ _instance: Mouse | None = None
 
 
 def _get() -> Mouse:
-    """Return the lazily-built platform backend (deferred uinput open)."""
+    """Return the platform backend, constructing it on first call.
+
+    Deferred so import does not eagerly open ``/dev/uinput`` (Linux).
+    """
     global _instance
     if _instance is None:
         if sys.platform == "win32":

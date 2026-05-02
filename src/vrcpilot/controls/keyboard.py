@@ -19,8 +19,8 @@ from .guard import ensure_target
 class Key(StrEnum):
     """Normalized key identifiers.
 
-    Values follow the pydirectinput naming convention so a future Win32
-    backend can pass ``key.value`` straight through; the Linux backend
+    Values follow the pydirectinput naming convention so the Win32
+    backend forwards ``key.value`` straight through; the Linux backend
     maps each member via :data:`_INPUTTINO_CODES`.
     """
 
@@ -313,11 +313,9 @@ if sys.platform == "win32":
     class Win32Keyboard(Keyboard):
         """``pydirectinput``-backed :class:`Keyboard`.
 
-        :class:`Key` values follow pydirectinput's naming convention so
-        ``key.value`` is forwarded straight through. If a key turns out
-        to be unsupported by the real ``pydirectinput.KEYBOARD_MAPPING``
-        (caught by manual / e2e smoke), follow up per spec §11 with a
-        translation table here.
+        :class:`Key` values are forwarded as ``key.value`` directly into
+        ``pydirectinput.KEYBOARD_MAPPING``; add a translation table here
+        if any member turns out to be unsupported.
         """
 
         @override
@@ -348,7 +346,10 @@ _instance: Keyboard | None = None
 
 
 def _get() -> Keyboard:
-    """Return the lazily-built platform backend (deferred uinput open)."""
+    """Return the platform backend, constructing it on first call.
+
+    Deferred so import does not eagerly open ``/dev/uinput`` (Linux).
+    """
     global _instance
     if _instance is None:
         if sys.platform == "win32":
