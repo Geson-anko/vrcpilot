@@ -128,12 +128,13 @@ class Key(StrEnum):
 class Keyboard(ABC):
     """Keyboard ABC: runs :func:`ensure_target`, then delegates to ``_do_*``."""
 
-    def press(self, key: Key, *, duration: float = 0.0, focus: bool = True) -> None:
+    def press(self, key: Key, *, duration: float = 0.1, focus: bool = True) -> None:
         """Tap ``key`` (down then up).
 
         ``duration`` is the down-to-up hold in seconds, forwarded to
-        inputtino's ``type``; ``0.0`` releases immediately. Use
-        ``0.02``-``0.05`` when VRChat / Unity drops too-short events.
+        inputtino's ``type``. The default matches inputtino's own
+        default and is tuned to be reliably picked up by Unity / VRChat
+        -- shorter holds (including ``0.0``) get dropped in practice.
         """
         if focus:
             ensure_target()
@@ -283,8 +284,6 @@ if sys.platform == "linux":
 
         @override
         def _do_press(self, key: Key, *, duration: float) -> None:
-            # inputtino's `type` is a paired down/up with an internal
-            # hold; duration=0.0 still emits both events.
             self._imp.type(_INPUTTINO_CODES[key], duration=duration)
 
         @override
@@ -317,7 +316,7 @@ def _get() -> Keyboard:
 # Module functions ---------------------------------------------------------
 
 
-def press(key: Key, *, duration: float = 0.0, focus: bool = True) -> None:
+def press(key: Key, *, duration: float = 0.1, focus: bool = True) -> None:
     """See :meth:`Keyboard.press`."""
     _get().press(key, duration=duration, focus=focus)
 

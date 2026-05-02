@@ -199,11 +199,11 @@ class TestKeyboardGuardWiring:
         impl = ImplKeyboard()
 
         impl.press(Key.A, duration=0.05)
-        impl.press(Key.SPACE)  # default duration=0.0
+        impl.press(Key.SPACE)  # default duration=0.1
 
         assert impl.calls == [
             ("_do_press", {"key": Key.A, "duration": 0.05}),
-            ("_do_press", {"key": Key.SPACE, "duration": 0.0}),
+            ("_do_press", {"key": Key.SPACE, "duration": 0.1}),
         ]
 
     def test_down_up_forward_key(self, mocker: MockerFixture):
@@ -259,7 +259,7 @@ class TestLinuxKeyboard:
             {"key_code": inputtino.KeyCode.A, "duration": 0.05}
         ]
 
-    def test_do_press_zero_duration_still_calls_type(
+    def test_do_press_zero_duration_forwarded_verbatim(
         self, fake_inputtino_keyboard: FakeInputtinoKeyboard
     ):
         import inputtino
@@ -269,8 +269,9 @@ class TestLinuxKeyboard:
         kb = LinuxKeyboard()
         kb._do_press(Key.A, duration=0.0)
 
-        # inputtino.Keyboard.type still produces a paired down/up at
-        # duration=0.0, so production code forwards the value as-is.
+        # Backend never substitutes the caller's duration; passing 0.0
+        # explicitly still reaches inputtino as 0.0 (even though VRChat
+        # tends to drop those events -- see the public API default).
         assert fake_inputtino_keyboard.type_calls == [
             {"key_code": inputtino.KeyCode.A, "duration": 0.0}
         ]
@@ -338,7 +339,7 @@ class TestLinuxKeyboard:
 
         assert fake_inputtino_keyboard.calls == [
             ("press", {"key_code": inputtino.KeyCode.LEFT_SHIFT}),
-            ("type", {"key_code": inputtino.KeyCode.A, "duration": 0.0}),
+            ("type", {"key_code": inputtino.KeyCode.A, "duration": 0.1}),
             ("release", {"key_code": inputtino.KeyCode.LEFT_SHIFT}),
         ]
 
@@ -384,7 +385,7 @@ class _SpyKeyboard(Keyboard):
         self.calls: list[tuple[str, dict[str, object]]] = []
 
     @override
-    def press(self, key: Key, *, duration: float = 0.0, focus: bool = True) -> None:
+    def press(self, key: Key, *, duration: float = 0.1, focus: bool = True) -> None:
         self.calls.append(
             (
                 "press",
