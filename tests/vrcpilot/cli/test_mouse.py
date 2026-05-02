@@ -1,12 +1,17 @@
 """Tests for :mod:`vrcpilot.cli.mouse`.
 
-The CLI calls into :mod:`vrcpilot.controls.mouse` via the
-``mouse_api`` re-export. Patching :func:`vrcpilot.controls.mouse._get`
-to return an :class:`~tests.helpers.ImplMouse` lets the real public
-``mouse.move`` / ``mouse.click`` / ... functions run end-to-end (focus
-guard included) while keeping the backend out of the test. The guard
-itself is stubbed to a no-op so tests do not need a live VRChat
-process; the guard-failure tests deliberately re-arm the stub to raise.
+The CLI calls into :mod:`vrcpilot.controls.mouse` via the ``mouse_api``
+re-export. Patching :func:`vrcpilot.controls.mouse._get` to return an
+:class:`~tests.helpers.ImplMouse` lets the real public ``mouse.click``
+function run end-to-end (focus guard included) while keeping the
+backend out of the test. The guard itself is stubbed to a no-op so
+tests do not need a live VRChat process; the guard-failure tests
+deliberately re-arm the stub to raise.
+
+Only ``click`` is exposed by the CLI: ``move`` / ``press`` / ``release``
+/ ``scroll`` cannot work meaningfully across separate ``vrcpilot``
+invocations because each process opens and closes its own backend, and
+the kernel auto-releases on close.
 """
 
 from __future__ import annotations
@@ -31,43 +36,6 @@ def fake_mouse(mocker: MockerFixture) -> ImplMouse:
     mocker.patch("vrcpilot.controls.mouse._get", return_value=impl)
     mocker.patch("vrcpilot.controls.mouse.ensure_target", return_value=None)
     return impl
-
-
-class TestMouseMove:
-    @pytest.mark.parametrize(
-        ("argv", "expected_relative"),
-        [
-            (["mouse", "move", "100", "200"], False),
-            (["mouse", "move", "100", "200", "--rel"], True),
-            (["mouse", "move", "-50", "75", "--rel"], True),
-        ],
-    )
-    def test_dispatches_with_correct_relative_flag(
-        self,
-        fake_mouse: ImplMouse,
-        argv: list[str],
-        expected_relative: bool,
-    ):
-        exit_code = main(argv)
-
-        assert exit_code == 0
-        assert len(fake_mouse.calls) == 1
-        name, kwargs = fake_mouse.calls[0]
-        assert name == "_do_move"
-        assert kwargs["x"] == int(argv[2])
-        assert kwargs["y"] == int(argv[3])
-        assert kwargs["relative"] is expected_relative
-
-    def test_silent_on_success(
-        self, fake_mouse: ImplMouse, capsys: pytest.CaptureFixture[str]
-    ):
-        del fake_mouse  # fixture activates the patches
-        exit_code = main(["mouse", "move", "0", "0"])
-
-        assert exit_code == 0
-        captured = capsys.readouterr()
-        assert captured.out == ""
-        assert captured.err == ""
 
 
 class TestMouseClick:
@@ -119,6 +87,17 @@ class TestMouseClick:
             )
         ]
 
+    def test_silent_on_success(
+        self, fake_mouse: ImplMouse, capsys: pytest.CaptureFixture[str]
+    ):
+        del fake_mouse
+        exit_code = main(["mouse", "click"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
+
     def test_argparse_rejects_unknown_button(self, capsys: pytest.CaptureFixture[str]):
         with pytest.raises(SystemExit) as excinfo:
             main(["mouse", "click", "foobar"])
@@ -129,67 +108,28 @@ class TestMouseClick:
         assert captured.err != ""
 
 
-class TestMousePress:
-    def test_default_button_is_left(self, fake_mouse: ImplMouse):
-        exit_code = main(["mouse", "press"])
-
-        assert exit_code == 0
-        assert fake_mouse.calls == [("_do_press", {"button": MouseButton.LEFT})]
-
+class TestMouseRemovedActions:
     @pytest.mark.parametrize(
-        ("button_arg", "expected_button"),
+        "argv",
         [
-            ("left", MouseButton.LEFT),
-            ("right", MouseButton.RIGHT),
-            ("middle", MouseButton.MIDDLE),
+            ["mouse", "move", "0", "0"],
+            ["mouse", "press"],
+            ["mouse", "release"],
+            ["mouse", "scroll", "1"],
         ],
     )
-    def test_button_override(
-        self,
-        fake_mouse: ImplMouse,
-        button_arg: str,
-        expected_button: MouseButton,
+    def test_removed_actions_are_not_exposed(
+        self, argv: list[str], capsys: pytest.CaptureFixture[str]
     ):
-        exit_code = main(["mouse", "press", button_arg])
+        # The CLI deliberately drops move / press / release / scroll:
+        # each invocation opens and closes its own backend, so any
+        # held-state action would auto-release as the process exits.
+        with pytest.raises(SystemExit) as excinfo:
+            main(argv)
 
-        assert exit_code == 0
-        assert fake_mouse.calls == [("_do_press", {"button": expected_button})]
-
-
-class TestMouseRelease:
-    def test_default_button_is_left(self, fake_mouse: ImplMouse):
-        exit_code = main(["mouse", "release"])
-
-        assert exit_code == 0
-        assert fake_mouse.calls == [("_do_release", {"button": MouseButton.LEFT})]
-
-    @pytest.mark.parametrize(
-        ("button_arg", "expected_button"),
-        [
-            ("left", MouseButton.LEFT),
-            ("right", MouseButton.RIGHT),
-            ("middle", MouseButton.MIDDLE),
-        ],
-    )
-    def test_button_override(
-        self,
-        fake_mouse: ImplMouse,
-        button_arg: str,
-        expected_button: MouseButton,
-    ):
-        exit_code = main(["mouse", "release", button_arg])
-
-        assert exit_code == 0
-        assert fake_mouse.calls == [("_do_release", {"button": expected_button})]
-
-
-class TestMouseScroll:
-    @pytest.mark.parametrize("amount", [3, -3, 0])
-    def test_scroll_amount(self, fake_mouse: ImplMouse, amount: int):
-        exit_code = main(["mouse", "scroll", str(amount)])
-
-        assert exit_code == 0
-        assert fake_mouse.calls == [("_do_scroll", {"amount": amount})]
+        assert excinfo.value.code != 0
+        captured = capsys.readouterr()
+        assert captured.err != ""
 
 
 class TestMouseGuardErrors:
@@ -225,7 +165,7 @@ class TestMouseGuardErrors:
             side_effect=VRChatNotFocusedError("VRChat is not focused"),
         )
 
-        exit_code = main(["mouse", "move", "0", "0"])
+        exit_code = main(["mouse", "click"])
 
         assert exit_code == 1
         captured = capsys.readouterr()
