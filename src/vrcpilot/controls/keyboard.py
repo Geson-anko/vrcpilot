@@ -182,6 +182,11 @@ class Keyboard(ABC):
     def down(self, key: Key, *, focus: bool = True) -> None:
         """Press and hold ``key`` until a matching :meth:`up`.
 
+        Pair with :meth:`up` to express modifier combos -- e.g.
+        ``down(Key.CTRL); press(Key.C); up(Key.CTRL)`` for ``Ctrl+C``.
+        Always release inside a ``try`` / ``finally`` so a stuck key
+        never escapes a failure path.
+
         Args:
             key: The :class:`Key` to press.
             focus: Run :func:`ensure_target` first.

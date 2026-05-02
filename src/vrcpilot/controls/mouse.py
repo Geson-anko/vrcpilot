@@ -42,8 +42,11 @@ class Mouse(ABC):
     def move(
         self, x: int, y: int, *, relative: bool = False, focus: bool = True
     ) -> None:
-        """Move the cursor to ``(x, y)`` (absolute) or by ``(x, y)``
-        (relative).
+        """Move the cursor in absolute or relative coordinates.
+
+        Absolute coordinates are pixels in the union bounding box of all
+        monitors (i.e. ``mss.monitors[0]``), so ``(0, 0)`` is the
+        top-left of the leftmost / topmost monitor.
 
         Args:
             x: Target X (absolute) or delta X (relative), in pixels.
@@ -65,16 +68,19 @@ class Mouse(ABC):
         duration: float = 0.0,
         focus: bool = True,
     ) -> None:
-        """Click ``button`` ``count`` times, holding ``duration`` seconds each.
+        """Click ``button`` ``count`` times, holding ``duration`` per click.
 
-        ``duration`` is forwarded to the backend (inputtino implements
-        the press/release hold internally), and the loop runs
-        ``count`` clicks back-to-back without an inter-click sleep.
+        The press/release hold is implemented by the backend (inputtino
+        sleeps internally). The ``count`` clicks run back-to-back with
+        no inter-click delay; insert your own sleep when targeting
+        applications that debounce rapid clicks.
 
         Args:
-            button: ``"left"`` / ``"right"`` / ``"middle"``.
+            button: Mouse button to click.
             count: Number of clicks to perform; must be ``>= 0``.
-            duration: Hold time per click, in seconds.
+            duration: Hold time per click, in seconds. Use a small
+                non-zero value (``0.02``-``0.05``) when VRChat / Unity
+                is missing zero-length presses.
             focus: Run :func:`ensure_target` first.
         """
         if focus:
@@ -84,8 +90,11 @@ class Mouse(ABC):
     def press(self, button: ButtonName = "left", *, focus: bool = True) -> None:
         """Press and hold ``button`` until a matching :meth:`release`.
 
+        Always release inside a ``try`` / ``finally`` so a stuck
+        button never escapes a failure path.
+
         Args:
-            button: ``"left"`` / ``"right"`` / ``"middle"``.
+            button: Mouse button to press.
             focus: Run :func:`ensure_target` first.
         """
         if focus:
@@ -96,7 +105,7 @@ class Mouse(ABC):
         """Release ``button`` previously pressed with :meth:`press`.
 
         Args:
-            button: ``"left"`` / ``"right"`` / ``"middle"``.
+            button: Mouse button to release.
             focus: Run :func:`ensure_target` first.
         """
         if focus:
