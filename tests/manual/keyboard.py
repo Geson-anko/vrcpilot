@@ -1,4 +1,4 @@
-"""Manual scenario: drive ``vrcpilot.controls.keyboard`` against real VRChat.
+"""Manual scenario: drive ``vrcpilot.keyboard`` against real VRChat.
 
 Launches VRChat in Desktop mode, warms up, then exercises the
 keyboard module across two angles a human can verify by eye:
@@ -18,7 +18,7 @@ keyboard module across two angles a human can verify by eye:
 
 Run with::
 
-    just manual controls_keyboard_combo
+    just manual keyboard
 
 Prerequisites:
 
@@ -42,7 +42,7 @@ import time
 from pathlib import Path
 
 import vrcpilot
-from vrcpilot.controls import Key, keyboard
+from vrcpilot import Key, keyboard
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _helpers  # noqa: E402
@@ -68,13 +68,13 @@ def _scenario() -> None:
     _helpers.log("keyboard.press(Key.ESCAPE) (1/4: open LaunchPad)")
     keyboard.press(Key.ESCAPE)
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_keyboard_combo", "1_open")
+    _helpers.save_monitor_screenshot("keyboard", "1_open")
 
     # Step 2/4: close LaunchPad.
     _helpers.log("keyboard.press(Key.ESCAPE) (2/4: close LaunchPad)")
     keyboard.press(Key.ESCAPE)
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_keyboard_combo", "2_close")
+    _helpers.save_monitor_screenshot("keyboard", "2_close")
 
     # Mid-scenario: modifier combo. SHIFT_LEFT down -> A press ->
     # SHIFT_LEFT up. Whether VRChat has a focused text widget or
@@ -89,14 +89,14 @@ def _scenario() -> None:
     time.sleep(0.05)
     keyboard.up(Key.SHIFT_LEFT)
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_keyboard_combo", "3_combo")
+    _helpers.save_monitor_screenshot("keyboard", "3_combo")
 
     # Step 3/4: open LaunchPad again to verify idempotence and that
     # the modifier was released cleanly.
     _helpers.log("keyboard.press(Key.ESCAPE) (3/4: open LaunchPad again)")
     keyboard.press(Key.ESCAPE)
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_keyboard_combo", "4_open_again")
+    _helpers.save_monitor_screenshot("keyboard", "4_open_again")
 
     # Step 4/4: close LaunchPad. Final state matches the natural
     # post-launch state (menu hidden), so VRChat is left tidy for
@@ -104,11 +104,11 @@ def _scenario() -> None:
     _helpers.log("keyboard.press(Key.ESCAPE) (4/4: close LaunchPad)")
     keyboard.press(Key.ESCAPE)
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_keyboard_combo", "5_close_again")
+    _helpers.save_monitor_screenshot("keyboard", "5_close_again")
 
 
 def main() -> int:
-    return _helpers.run_scenario("controls_keyboard_combo", _scenario)
+    return _helpers.run_scenario("keyboard", _scenario)
 
 
 if __name__ == "__main__":

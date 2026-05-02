@@ -1,4 +1,4 @@
-"""Manual scenario: drive ``vrcpilot.controls.mouse`` against real VRChat.
+"""Manual scenario: drive ``vrcpilot.mouse`` against real VRChat.
 
 Launches VRChat in Desktop mode, warms up, then exercises ``move``,
 ``click``, ``press``/``release``, and ``scroll`` so a human can verify
@@ -15,7 +15,7 @@ review.
 
 Run with::
 
-    just manual controls_mouse_click
+    just manual mouse
 
 Prerequisites:
 
@@ -41,7 +41,7 @@ from pathlib import Path
 import mss
 
 import vrcpilot
-from vrcpilot.controls import mouse
+from vrcpilot import mouse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _helpers  # noqa: E402
@@ -81,14 +81,14 @@ def _scenario() -> None:
     _helpers.log("mouse.move(cx, cy) (1/6: absolute move to centre)")
     mouse.move(cx, cy)
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_mouse_click", "1_move_center")
+    _helpers.save_monitor_screenshot("mouse", "1_move_center")
 
     # Step 2/6: relative nudge so the cursor visibly moves from the
     # previous position -- a no-op move would not be observable.
     _helpers.log("mouse.move(+50, +30, relative=True) (2/6: relative nudge)")
     mouse.move(50, 30, relative=True)
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_mouse_click", "2_move_relative")
+    _helpers.save_monitor_screenshot("mouse", "2_move_relative")
 
     # Step 3/6: a left click at the current position. VRChat's main
     # menu being visible is not strictly required; the click event
@@ -96,7 +96,7 @@ def _scenario() -> None:
     _helpers.log("mouse.click() (3/6: single left click)")
     mouse.click()
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_mouse_click", "3_click")
+    _helpers.save_monitor_screenshot("mouse", "3_click")
 
     # Step 4/6: send VRChat to the background, then click. The guard
     # in mouse.click() should call vrcpilot.window.focus() and bring
@@ -106,7 +106,7 @@ def _scenario() -> None:
     time.sleep(0.5)
     mouse.click()
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_mouse_click", "4_click_after_unfocus")
+    _helpers.save_monitor_screenshot("mouse", "4_click_after_unfocus")
 
     # Step 5/6: explicit press / release pair -- exercises the
     # held-button code path that click() does not (click uses the
@@ -116,7 +116,7 @@ def _scenario() -> None:
     time.sleep(0.1)
     mouse.release("left")
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_mouse_click", "5_press_release")
+    _helpers.save_monitor_screenshot("mouse", "5_press_release")
 
     # Step 6/6: scroll down then back up. Two opposite directions so
     # the net visual position is the same and a stuck scroll wheel is
@@ -126,11 +126,11 @@ def _scenario() -> None:
     time.sleep(0.3)
     mouse.scroll(-2)
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("controls_mouse_click", "6_scroll")
+    _helpers.save_monitor_screenshot("mouse", "6_scroll")
 
 
 def main() -> int:
-    return _helpers.run_scenario("controls_mouse_click", _scenario)
+    return _helpers.run_scenario("mouse", _scenario)
 
 
 if __name__ == "__main__":
