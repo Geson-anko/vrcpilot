@@ -7,10 +7,13 @@ Public surface:
 * :class:`OCRResult` — screenshot + word tuple, with helpers that
   shift coordinates to desktop-absolute space.
 * :class:`RapidOCREngine` — default rapidocr-backed engine.
-* :func:`recognize` — high-level helper that captures a screenshot
-  and runs an :class:`OCREngine`.
+* :func:`recognize` — runs an :class:`OCREngine` on a captured
+  :class:`Screenshot` and bundles the words with it.
 * :func:`render` — draws an :class:`OCRResult` onto an ndarray
   suitable for ``PIL.Image.fromarray``.
+* :data:`Polygon` — the 4-corner polygon type alias used across the
+  module; re-exported here so users implementing their own
+  :class:`OCREngine` can annotate against the same shape.
 
 Note on the ``recognize`` name: the helper function and the submodule
 that defines it share the name. ``from vrcpilot.ocr import recognize``
@@ -26,12 +29,14 @@ from __future__ import annotations
 from .base import OCREngine, OCRWord
 from .rapidocr import RapidOCREngine
 from .recognize import OCRResult, recognize
+from .types import Polygon
 from .visualize import render
 
 __all__ = [
     "OCREngine",
     "OCRResult",
     "OCRWord",
+    "Polygon",
     "RapidOCREngine",
     "recognize",
     "render",

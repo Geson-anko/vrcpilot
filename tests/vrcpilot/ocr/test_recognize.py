@@ -24,8 +24,7 @@ from numpy.typing import NDArray
 
 import vrcpilot.ocr  # noqa: F401  ensures submodule is registered
 from tests.fakes.ocr import FakeOCREngine
-from vrcpilot.ocr import OCRResult, OCRWord, recognize
-from vrcpilot.ocr.base import Polygon
+from vrcpilot.ocr import OCRResult, OCRWord, Polygon, recognize
 from vrcpilot.screenshot import Screenshot
 
 _recognize_module: ModuleType = sys.modules["vrcpilot.ocr.recognize"]

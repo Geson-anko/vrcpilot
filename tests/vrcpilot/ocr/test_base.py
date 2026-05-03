@@ -15,7 +15,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from vrcpilot.ocr.base import OCREngine, OCRWord, Polygon
+from vrcpilot.ocr import OCREngine, OCRWord, Polygon
 
 
 def _word(polygon: Polygon, text: str = "x", confidence: float = 0.9) -> OCRWord:

@@ -14,8 +14,7 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from vrcpilot.ocr import OCRResult, OCRWord, render
-from vrcpilot.ocr.base import Polygon
+from vrcpilot.ocr import OCRResult, OCRWord, Polygon, render
 from vrcpilot.screenshot import Screenshot
 
 

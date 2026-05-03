@@ -13,7 +13,8 @@ from typing import Any, override
 import numpy as np
 from numpy.typing import NDArray
 
-from .base import OCREngine, OCRWord, Polygon
+from .base import OCREngine, OCRWord
+from .types import Polygon
 
 
 class RapidOCREngine(OCREngine):

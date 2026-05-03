@@ -15,14 +15,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-#: 4-corner polygon ordered TL → TR → BR → BL. Each corner is an
-#: ``(x, y)`` 2-tuple in image-local pixel coordinates.
-Polygon = tuple[
-    tuple[float, float],
-    tuple[float, float],
-    tuple[float, float],
-    tuple[float, float],
-]
+from .types import Polygon
 
 
 @dataclass(frozen=True)
