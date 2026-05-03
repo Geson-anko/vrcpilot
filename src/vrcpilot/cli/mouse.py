@@ -54,26 +54,29 @@ def register(subparsers: SubParsersAction) -> None:
 
     click_parser = actions.add_parser(
         "click",
-        help="Click a mouse button (default: left).",
+        help="Click one or more mouse buttons simultaneously (default: left).",
     )
     click_parser.add_argument(
         "button",
-        nargs="?",
+        nargs="*",
         type=MouseButton,
-        default=MouseButton.LEFT,
-        help="Mouse button: left / right / middle. Default: left.",
+        default=[],
+        help=(
+            "Click one or more mouse buttons simultaneously "
+            "(default: left). Values: left / right / middle."
+        ),
     )
     click_parser.add_argument(
         "--count",
         type=int,
         default=1,
-        help="Number of clicks. Default: 1.",
+        help="Number of click cycles. Default: 1.",
     )
     click_parser.add_argument(
         "--duration",
         type=float,
         default=0.0,
-        help="Down-to-up hold per click, in seconds. Default: 0.0.",
+        help="Down-to-up hold per click cycle, in seconds. Default: 0.0.",
     )
 
     scroll_parser = actions.add_parser(
@@ -99,7 +102,7 @@ def run(args: argparse.Namespace) -> int:
             case "move":
                 mouse_api.move(args.x, args.y, relative=args.rel)
             case "click":
-                mouse_api.click(args.button, count=args.count, duration=args.duration)
+                mouse_api.click(*args.button, count=args.count, duration=args.duration)
             case "scroll":
                 mouse_api.scroll(args.amount)
             case _:  # pragma: no cover - argparse required=True prevents this
