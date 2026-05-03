@@ -11,10 +11,10 @@ Steps:
 1. Launch VRChat in Desktop mode (1280x720).
 2. Wait for warmup, then ``vrcpilot.keyboard.press(Key.ESCAPE)`` to
    open the menu.
-3. ``vrcpilot.recognize()`` -- ``take_screenshot()`` grabs the focused
-   VRChat window, ``RapidOCREngine`` (default backend) loads its ONNX
-   models on first call (downloads ~15 MB to the venv on first run)
-   and detects text.
+3. ``vrcpilot.take_screenshot()`` grabs the focused VRChat window;
+   ``vrcpilot.recognize(shot)`` runs the default ``RapidOCREngine``
+   (loads its ONNX models on first call -- downloads ~15 MB to the
+   venv on first run) and bundles the words with the screenshot.
 4. Verify each :class:`vrcpilot.OCRWord` has a 4-corner polygon and a
    confidence in [0, 1], and that ``OCRResult.display_polygon`` /
    ``display_bbox`` shift to desktop-absolute coordinates by
@@ -72,11 +72,13 @@ def _scenario() -> None:
     keyboard.press(Key.ESCAPE)
     time.sleep(_MENU_OPEN_SECONDS)
 
-    _helpers.log("calling vrcpilot.recognize() (loads OCR models on first run)")
-    result = vrcpilot.recognize()
-    assert result is not None, "recognize() returned None"
+    _helpers.log("calling take_screenshot() against the menu")
+    shot = vrcpilot.take_screenshot()
+    assert shot is not None, "take_screenshot() returned None"
 
-    shot = result.screenshot
+    _helpers.log("calling vrcpilot.recognize(shot) (loads OCR models on first run)")
+    result = vrcpilot.recognize(shot)
+    assert result.screenshot is shot
     _helpers.log(
         "screenshot: "
         f"x={shot.x} y={shot.y} "

@@ -37,7 +37,7 @@ from argcomplete.completers import FilesCompleter
 from PIL import Image
 
 from vrcpilot import cli as _cli
-from vrcpilot.ocr import OCRResult
+from vrcpilot.screenshot import Screenshot
 
 from ._common import SubParsersAction, attach_completer
 
@@ -104,14 +104,16 @@ def run(args: argparse.Namespace) -> int:
     """Execute the ``ocr`` subcommand.
 
     Returns:
-        ``0`` on success, ``1`` when OCR could not be performed (e.g.
-        VRChat is not running). On failure a single ``vrcpilot: ...``
+        ``0`` on success, ``1`` when the VRChat screenshot could not
+        be captured (e.g. VRChat is not running, focus refused,
+        Wayland native session). On failure a single ``vrcpilot: ...``
         line is written to stderr and stdout stays empty.
     """
-    result: OCRResult | None = _cli.recognize()
-    if result is None:
-        print("vrcpilot: could not run OCR", file=sys.stderr)
+    shot: Screenshot | None = _cli.take_screenshot()
+    if shot is None:
+        print("vrcpilot: could not capture VRChat screenshot", file=sys.stderr)
         return 1
+    result = _cli.recognize(shot)
 
     viz_path = _resolve_viz_path(args.viz, now=datetime.now())
     if viz_path is not None:

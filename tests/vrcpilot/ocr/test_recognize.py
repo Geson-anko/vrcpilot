@@ -1,9 +1,9 @@
 """Tests for :mod:`vrcpilot.ocr.recognize`.
 
-Integration-with-fakes: :func:`take_screenshot` is patched at the
-module boundary so no real display / VRChat is needed, and the OCR
-engine is the in-memory :class:`tests.fakes.ocr.FakeOCREngine` so
-no rapidocr model download is triggered.
+Integration-with-fakes: :func:`recognize` is exercised against the
+in-memory :class:`tests.fakes.ocr.FakeOCREngine`, so no rapidocr model
+download is triggered. The function itself takes a :class:`Screenshot`
+directly, so capture is no longer mocked here.
 
 The submodule reference is fetched via ``sys.modules`` because the
 package binds the ``recognize`` *function* under the name
@@ -72,15 +72,12 @@ def _reset_default_engine() -> Iterator[None]:
 
 
 class TestRecognizeWithExplicitEngine:
-    def test_returns_ocr_result_with_tuple_words(self, monkeypatch: pytest.MonkeyPatch):
+    def test_returns_ocr_result_with_tuple_words(self):
         shot = _make_screenshot()
-        monkeypatch.setattr(
-            _recognize_module, "take_screenshot", lambda *, settle_seconds=0.05: shot
-        )
         word = _make_word()
         engine = FakeOCREngine([word])
 
-        result = recognize(engine=engine)
+        result = recognize(shot, engine=engine)
 
         assert isinstance(result, OCRResult)
         assert result.screenshot is shot
@@ -88,40 +85,27 @@ class TestRecognizeWithExplicitEngine:
         assert result.words == (word,)
         assert engine.calls == 1
 
-    def test_screenshot_none_skips_engine_and_returns_none(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
-        monkeypatch.setattr(
-            _recognize_module, "take_screenshot", lambda *, settle_seconds=0.05: None
-        )
-        engine = FakeOCREngine([_make_word()])
-
-        result = recognize(engine=engine)
-
-        assert result is None
-        assert engine.calls == 0
-
-    def test_settle_seconds_forwarded(self, monkeypatch: pytest.MonkeyPatch):
-        seen: list[float] = []
-
-        def _capture(*, settle_seconds: float = 0.05) -> Screenshot | None:
-            seen.append(settle_seconds)
-            return _make_screenshot()
-
-        monkeypatch.setattr(_recognize_module, "take_screenshot", _capture)
+    def test_engine_receives_image(self):
+        shot = _make_screenshot()
         engine = FakeOCREngine([])
-        recognize(engine=engine, settle_seconds=0.25)
 
-        assert seen == [0.25]
+        recognize(shot, engine=engine)
+
+        assert engine.calls == 1
+        assert engine.last_image is shot.image
+
+    def test_screenshot_passed_positionally(self):
+        shot = _make_screenshot()
+        engine = FakeOCREngine([])
+
+        result = recognize(shot, engine=engine)
+
+        assert result.screenshot is shot
 
 
 class TestRecognizeDefaultEngineCache:
     def test_default_engine_is_built_once(self, monkeypatch: pytest.MonkeyPatch):
         shot = _make_screenshot()
-        monkeypatch.setattr(
-            _recognize_module, "take_screenshot", lambda *, settle_seconds=0.05: shot
-        )
-
         word = _make_word()
         build_count = {"n": 0}
 
@@ -133,11 +117,11 @@ class TestRecognizeDefaultEngineCache:
         # submodule so the default-engine path uses our fake.
         monkeypatch.setattr(_recognize_module, "RapidOCREngine", _factory)
 
-        first = recognize()
-        second = recognize()
+        first = recognize(shot)
+        second = recognize(shot)
 
-        assert first is not None
-        assert second is not None
+        assert isinstance(first, OCRResult)
+        assert isinstance(second, OCRResult)
         assert build_count["n"] == 1
         cached = _recognize_module._default_engine
         assert cached is not None
@@ -146,10 +130,6 @@ class TestRecognizeDefaultEngineCache:
 
     def test_resetting_cache_rebuilds_engine(self, monkeypatch: pytest.MonkeyPatch):
         shot = _make_screenshot()
-        monkeypatch.setattr(
-            _recognize_module, "take_screenshot", lambda *, settle_seconds=0.05: shot
-        )
-
         build_count = {"n": 0}
 
         def _factory() -> FakeOCREngine:
@@ -158,11 +138,11 @@ class TestRecognizeDefaultEngineCache:
 
         monkeypatch.setattr(_recognize_module, "RapidOCREngine", _factory)
 
-        recognize()
+        recognize(shot)
         assert build_count["n"] == 1
 
         _recognize_module._default_engine = None
-        recognize()
+        recognize(shot)
         assert build_count["n"] == 2
 
 

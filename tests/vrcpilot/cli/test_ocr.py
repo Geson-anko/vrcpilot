@@ -59,8 +59,14 @@ def _make_result(*, words: tuple[OCRWord, ...] | None = None) -> OCRResult:
 
 @pytest.fixture
 def patched_recognize(mocker: MockerFixture) -> OCRResult:
-    """Patch the OCR boundary with a real :class:`OCRResult`."""
-    result = _make_result()
+    """Patch the capture and OCR boundaries with real values.
+
+    The CLI orchestrates ``take_screenshot`` then ``recognize(shot)``;
+    both are re-exported on :mod:`vrcpilot.cli` as patch targets.
+    """
+    shot = _make_screenshot()
+    result = OCRResult(screenshot=shot, words=(_make_word(),))
+    mocker.patch("vrcpilot.cli.take_screenshot", return_value=shot)
     mocker.patch("vrcpilot.cli.recognize", return_value=result)
     return result
 
@@ -291,14 +297,16 @@ class TestOCRCommandViz:
 
 
 class TestOCRCommandFailure:
-    def test_recognize_returns_none(
+    def test_screenshot_returns_none(
         self,
         mocker: MockerFixture,
         capsys: pytest.CaptureFixture[str],
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        mocker.patch("vrcpilot.cli.recognize", return_value=None)
+        mocker.patch("vrcpilot.cli.take_screenshot", return_value=None)
+        # recognize should never be reached when capture fails.
+        recognize_spy = mocker.patch("vrcpilot.cli.recognize")
         monkeypatch.chdir(tmp_path)
 
         exit_code = main(["ocr"])
@@ -306,5 +314,6 @@ class TestOCRCommandFailure:
         assert exit_code == 1
         captured = capsys.readouterr()
         assert captured.out == ""
-        assert "vrcpilot: could not run OCR" in captured.err
+        assert "vrcpilot: could not capture VRChat screenshot" in captured.err
         assert list(tmp_path.glob("*.png")) == []
+        recognize_spy.assert_not_called()

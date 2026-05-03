@@ -21,17 +21,19 @@ class FakeOCREngine(OCREngine):
     """OCR engine that always returns a fixed word list.
 
     The constructor takes a ``Sequence[OCRWord]`` and stores it
-    verbatim. Each :meth:`recognize` call returns the same list and
-    increments :attr:`calls` so tests can assert the engine was hit
-    the expected number of times (e.g. cache hit vs. miss).
+    verbatim. Each :meth:`recognize` call returns the same list,
+    records the image identity in :attr:`last_image`, and increments
+    :attr:`calls` so tests can assert what the engine saw and how
+    often it was hit.
     """
 
     def __init__(self, words: Sequence[OCRWord]) -> None:
         self._words: list[OCRWord] = list(words)
         self.calls: int = 0
+        self.last_image: NDArray[np.uint8] | None = None
 
     @override
     def recognize(self, image: NDArray[np.uint8]) -> Sequence[OCRWord]:
-        del image
         self.calls += 1
+        self.last_image = image
         return list(self._words)

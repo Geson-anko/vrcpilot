@@ -2,8 +2,9 @@
 
 Pixel capture is split between :class:`Capture` (focus-free streaming for
 video / ML) and :func:`take_screenshot` (one focused shot with on-screen
-geometry, for GUI automation). :func:`recognize` layers OCR on top of
-the latter via a swappable :class:`OCREngine`.
+geometry, for GUI automation). :func:`recognize` consumes a captured
+:class:`Screenshot` and runs OCR through a swappable :class:`OCREngine`,
+keeping capture and recognition as orthogonal steps.
 """
 
 from importlib import metadata

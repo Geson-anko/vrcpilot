@@ -5,6 +5,14 @@
 can move between image-local and desktop-absolute coordinates without
 re-doing the geometry math.
 
+:func:`recognize` is a thin pure-OCR step: the caller supplies the
+:class:`Screenshot` (typically from
+:func:`vrcpilot.screenshot.take_screenshot`), and this function only
+runs the engine and packages the result. Capture and OCR are kept as
+separate concerns so the same OCR pipeline can be replayed against
+existing images, fed cropped regions, or driven by a custom capture
+source.
+
 The module-level ``_default_engine`` cache keeps :func:`recognize`
 cheap on repeat calls: the (heavy) :class:`RapidOCREngine` is built
 exactly once per process when the user does not pass an ``engine``
@@ -16,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from vrcpilot.screenshot import Screenshot, take_screenshot
+from vrcpilot.screenshot import Screenshot
 
 from .base import OCREngine, OCRWord
 from .rapidocr import RapidOCREngine
@@ -100,29 +108,32 @@ def _get_default_engine() -> OCREngine:
 
 
 def recognize(
+    screenshot: Screenshot,
     *,
     engine: OCREngine | None = None,
-    settle_seconds: float = 0.05,
-) -> OCRResult | None:
-    """Take a VRChat screenshot and run OCR on it.
+) -> OCRResult:
+    """Run OCR on *screenshot* and bundle the words with it.
+
+    The caller is responsible for capture; pass any
+    :class:`Screenshot` (typically from
+    :func:`vrcpilot.screenshot.take_screenshot`, but a hand-built one
+    or a replayed capture works just as well).
 
     Args:
-        engine: OCR backend to use. ``None`` (default) lazily builds
-            and caches a :class:`RapidOCREngine` via
+        screenshot: Image to recognise. ``screenshot.image`` is fed
+            to the engine and ``screenshot.x`` / ``y`` are preserved
+            so :meth:`OCRResult.display_polygon` /
+            :meth:`OCRResult.display_bbox` can shift to desktop
+            coordinates.
+        engine: OCR backend. ``None`` (default) lazily builds and
+            caches a :class:`RapidOCREngine` via
             :func:`_get_default_engine`.
-        settle_seconds: Forwarded to
-            :func:`vrcpilot.screenshot.take_screenshot`.
 
     Returns:
-        :class:`OCRResult` on success, or ``None`` if
-        :func:`take_screenshot` returned ``None`` (e.g. VRChat not
-        running, focus refused, Wayland native session). The engine
-        is **not** invoked when the screenshot fails.
+        :class:`OCRResult` pairing *screenshot* with the detected
+        words (possibly empty). Never returns ``None``.
     """
-    shot = take_screenshot(settle_seconds=settle_seconds)
-    if shot is None:
-        return None
     if engine is None:
         engine = _get_default_engine()
-    words = engine.recognize(shot.image)
-    return OCRResult(screenshot=shot, words=tuple(words))
+    words = engine.recognize(screenshot.image)
+    return OCRResult(screenshot=screenshot, words=tuple(words))
