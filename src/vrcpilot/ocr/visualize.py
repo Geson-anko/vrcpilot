@@ -99,10 +99,11 @@ def render(
         )
 
         bx, by, _bw, bh = bbox
-        (text_w, text_h), baseline = cv2.getTextSize(
+        # Only the text height is used for the above/below choice;
+        # width and baseline are returned by the API but irrelevant here.
+        (_text_w, text_h), _baseline = cv2.getTextSize(
             word.text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness
         )
-        del text_w, baseline
         # Prefer placing text above the bbox; fall back below when
         # the top edge lacks the height to fit it.
         if by - text_h - 4 >= 0:

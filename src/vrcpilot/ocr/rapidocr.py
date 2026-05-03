@@ -36,7 +36,11 @@ class RapidOCREngine(OCREngine):
             ImportError: ``rapidocr`` がインストールされていない場合。
         """
         try:
-            from rapidocr import RapidOCR  # type: ignore[reportMissingTypeStubs]
+            # ``rapidocr`` ships no type stubs; suppress the import-time
+            # warning here, then assign the constructed engine to a
+            # ``self._engine: Any`` slot so the rest of this class never
+            # has to repeat the ignore.
+            from rapidocr import RapidOCR  # pyright: ignore[reportMissingTypeStubs]
         except ImportError as e:
             raise ImportError(
                 "rapidocr is required for RapidOCREngine. "

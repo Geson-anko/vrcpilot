@@ -36,8 +36,8 @@ class OCRResult:
             offsets used by :meth:`display_polygon` and
             :meth:`display_bbox`.
         words: Detected :class:`OCRWord` tuple. Always a ``tuple`` so
-            the result is hashably immutable from the caller's point
-            of view.
+            the sequence is immutable from the caller's point of view
+            (matches the frozen-dataclass posture of :class:`OCRWord`).
     """
 
     screenshot: Screenshot
