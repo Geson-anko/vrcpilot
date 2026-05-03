@@ -1,0 +1,189 @@
+"""E2E scenario: ``vrcpilot capture`` piped into ``ffmpeg`` for re-encoding.
+
+Validates the y4m self-describing pipe contract added in the capture
+CLI's no-``-o`` branch: ``vrcpilot capture | ffmpeg -i - -c:v libx264
+out.mp4`` should "just work" -- ffmpeg picks W/H/fps/colorspace out of
+the y4m header without us having to pass ``-f rawvideo`` /
+``-video_size`` / ``-framerate`` flags.
+
+Run with::
+
+    just e2e-test cli_capture_ffmpeg
+
+VRChat is launched in Desktop mode at 1280x720 to match the other
+capture-related scenarios. The encoded mp4 is written to
+``_e2e_artifacts/cli_capture_ffmpeg_<YYYYMMDD_HHMMSS>.mp4`` and a
+``ffprobe`` round-trip verifies the file is a valid h264 mp4 with
+roughly the expected duration.
+
+The pipeline is wired with the standard "tee a Popen pipe" idiom: we
+open ``ffmpeg`` first with ``stdin=PIPE``, hand its write-end to the
+``vrcpilot capture`` Popen as its ``stdout``, then close our own
+reference to ``ffmpeg.stdin`` so ``vrcpilot`` becomes the sole writer.
+When the recording duration elapses ``vrcpilot`` exits, the pipe sees
+EOF, and ``ffmpeg`` flushes and exits cleanly.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+
+import vrcpilot
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _helpers  # noqa: E402
+
+#: Wall-clock duration of the recording. Short enough to keep the e2e
+#: scenario brisk; long enough that ffprobe can resolve a non-trivial
+#: container duration.
+_DURATION_SECONDS: float = 5.0
+
+#: Target frame rate written into the y4m header by ``vrcpilot
+#: capture`` and faithfully transferred to the mp4 by ffmpeg.
+_TARGET_FPS: float = 30.0
+
+#: Tolerance around ``_DURATION_SECONDS`` when checking the encoded
+#: mp4's container duration. Wide enough to absorb worker-thread
+#: warm-up jitter and the final partial-frame flush, narrow enough to
+#: catch a "ffmpeg never received a frame" regression.
+_DURATION_TOLERANCE_SECONDS: float = 1.5
+
+
+def _ffprobe_format(path: Path) -> dict[str, object]:
+    """Return ``ffprobe -show_format -show_streams`` JSON for *path*."""
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-print_format",
+        "json",
+        "-show_format",
+        "-show_streams",
+        str(path),
+    ]
+    _helpers.log(f"$ {' '.join(cmd)}")
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    return json.loads(result.stdout)
+
+
+def _scenario() -> None:
+    _helpers.log(
+        "calling vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)"
+    )
+    vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
+
+    _helpers.log("waiting for VRChat PID")
+    pid = _helpers.wait_for_pid()
+    assert pid is not None, "VRChat PID was not observed before timeout"
+    _helpers.log(f"VRChat started (pid={pid})")
+
+    _helpers.warmup()
+
+    _helpers.ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out_path = _helpers.ARTIFACT_DIR / f"cli_capture_ffmpeg_{stamp}.mp4"
+
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        "-",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        str(out_path),
+    ]
+    vrcpilot_cmd = [
+        "uv",
+        "run",
+        "vrcpilot",
+        "capture",
+        "--fps",
+        f"{_TARGET_FPS}",
+        "--duration",
+        f"{_DURATION_SECONDS}",
+    ]
+    _helpers.log(f"$ {' '.join(vrcpilot_cmd)} | {' '.join(ffmpeg_cmd)}")
+
+    ffmpeg = subprocess.Popen(
+        ffmpeg_cmd,
+        stdin=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert ffmpeg.stdin is not None  # for type narrowing
+
+    vrc = subprocess.Popen(
+        vrcpilot_cmd,
+        stdout=ffmpeg.stdin,
+        stderr=subprocess.PIPE,
+    )
+
+    # Hand sole ownership of the write-end to vrcpilot. Without this
+    # close(), ffmpeg's stdin would never see EOF after vrcpilot exits.
+    ffmpeg.stdin.close()
+
+    vrc_stderr = vrc.stderr.read() if vrc.stderr is not None else b""
+    vrc_rc = vrc.wait()
+    ffmpeg_stderr = ffmpeg.stderr.read() if ffmpeg.stderr is not None else b""
+    ffmpeg_rc = ffmpeg.wait()
+
+    if vrc_stderr:
+        _helpers.log(
+            f"  vrcpilot stderr: {vrc_stderr.decode(errors='replace').strip()}"
+        )
+    if ffmpeg_stderr:
+        _helpers.log(
+            f"  ffmpeg stderr: {ffmpeg_stderr.decode(errors='replace').strip()}"
+        )
+
+    assert vrc_rc == 0, f"vrcpilot capture exit code: expected 0, got {vrc_rc}"
+    assert ffmpeg_rc == 0, f"ffmpeg exit code: expected 0, got {ffmpeg_rc}"
+
+    assert out_path.exists(), f"ffmpeg did not write {out_path}"
+    size = out_path.stat().st_size
+    assert size > 0, f"output mp4 is empty: {out_path}"
+    _helpers.log(f"saved encoded video: {out_path} ({size} bytes)")
+
+    info = _ffprobe_format(out_path)
+    streams = info.get("streams", [])
+    assert isinstance(streams, list), f"ffprobe streams not a list: {streams!r}"
+    video_streams = [
+        s for s in streams if isinstance(s, dict) and s.get("codec_type") == "video"
+    ]
+    assert (
+        len(video_streams) == 1
+    ), f"expected 1 video stream, got {len(video_streams)}: {streams!r}"
+    video = video_streams[0]
+    codec = video.get("codec_name")
+    assert codec == "h264", f"expected h264 codec, got {codec!r}"
+
+    fmt = info.get("format")
+    assert isinstance(fmt, dict), f"ffprobe format not a dict: {fmt!r}"
+    duration_str = fmt.get("duration")
+    assert isinstance(duration_str, str), f"missing duration in ffprobe output: {fmt!r}"
+    duration = float(duration_str)
+    delta = abs(duration - _DURATION_SECONDS)
+    _helpers.log(
+        f"ffprobe: codec={codec} duration={duration:.2f}s "
+        f"(target={_DURATION_SECONDS:.2f}s, delta={delta:.2f}s)"
+    )
+    assert delta <= _DURATION_TOLERANCE_SECONDS, (
+        f"mp4 duration {duration:.2f}s outside tolerance "
+        f"+/-{_DURATION_TOLERANCE_SECONDS:.2f}s of target {_DURATION_SECONDS:.2f}s"
+    )
+
+
+def main() -> int:
+    return _helpers.run_scenario("cli_capture_ffmpeg", _scenario)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
