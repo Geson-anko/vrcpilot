@@ -39,7 +39,7 @@ def register(subparsers: SubParsersAction) -> None:
 
     press_parser = actions.add_parser(
         "press",
-        help="Tap one or more keys (down then up, sequentially).",
+        help="Tap one or more keys (down then up, simultaneously).",
     )
     press_parser.add_argument(
         "keys",
@@ -61,9 +61,9 @@ def run(args: argparse.Namespace) -> int:
 
     Silent on success. Guard failures (VRChat not running / not focused)
     print a single ``vrcpilot: <message>`` line to stderr and return
-    exit 1. Keys are processed sequentially in argument order and the
-    loop bails on the first guard error (no point continuing if VRChat
-    is unreachable).
+    exit 1. Keys are pressed simultaneously: ``down`` is issued
+    left-to-right, then a single ``duration`` sleep, then ``up`` is
+    issued right-to-left. The guard runs once before any input.
 
     Returns:
         ``0`` on success, ``1`` on guard failure.
@@ -71,8 +71,7 @@ def run(args: argparse.Namespace) -> int:
     keys: list[Key] = args.keys
     duration: float = args.duration
     try:
-        for key in keys:
-            keyboard_api.press(key, duration=duration)
+        keyboard_api.press(*keys, duration=duration)
     except (VRChatNotRunningError, VRChatNotFocusedError) as exc:
         print(f"vrcpilot: {exc}", file=sys.stderr)
         return 1

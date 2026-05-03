@@ -108,6 +108,27 @@ class TestKeyboardPress:
         assert captured.out == ""
         assert captured.err == ""
 
+    def test_multiple_keys_pressed_simultaneously(
+        self, fake_keyboard: ImplKeyboard, mocker: MockerFixture
+    ):
+        # `vrcpilot keyboard press a b c --duration 0.2` issues a single
+        # `keyboard.press(A, B, C, duration=0.2)` call: down left-to-right,
+        # one sleep, up right-to-left.
+        sleep_spy = mocker.patch("vrcpilot.controls.keyboard.time.sleep")
+
+        exit_code = main(["keyboard", "press", "a", "b", "c", "--duration", "0.2"])
+
+        assert exit_code == 0
+        assert fake_keyboard.calls == [
+            ("_do_down", {"key": Key.A}),
+            ("_do_down", {"key": Key.B}),
+            ("_do_down", {"key": Key.C}),
+            ("_do_up", {"key": Key.C}),
+            ("_do_up", {"key": Key.B}),
+            ("_do_up", {"key": Key.A}),
+        ]
+        sleep_spy.assert_called_once_with(0.2)
+
 
 class TestKeyboardArgparseValidation:
     def test_press_requires_at_least_one_key(self, capsys: pytest.CaptureFixture[str]):
@@ -184,14 +205,14 @@ class TestKeyboardGuardErrors:
         assert "vrcpilot:" in captured.err
         assert "VRChat is not focused" in captured.err
 
-    def test_first_key_guard_error_aborts_remaining_keys(
+    def test_guard_error_before_input_yields_no_calls(
         self,
         fake_keyboard: ImplKeyboard,
         mocker: MockerFixture,
     ):
-        # ``ensure_target`` raises on the very first call -> no key
-        # input must be recorded (the guard runs before any
-        # ``_do_down`` / ``_do_up``).
+        # The combo is now a single `keyboard.press(*keys)` call, so the
+        # guard runs once up-front. When it raises, no `_do_down` /
+        # `_do_up` records should land.
         mocker.patch(
             "vrcpilot.controls.keyboard.ensure_target",
             side_effect=VRChatNotRunningError("VRChat is not running"),
