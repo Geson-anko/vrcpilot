@@ -36,8 +36,9 @@ import yaml
 from argcomplete.completers import FilesCompleter
 from PIL import Image
 
-from vrcpilot import cli as _cli
-from vrcpilot.screenshot import Screenshot
+from vrcpilot.ocr.recognize import recognize
+from vrcpilot.ocr.visualize import render
+from vrcpilot.screenshot import Screenshot, take_screenshot
 
 from ._common import SubParsersAction, attach_completer
 
@@ -109,15 +110,15 @@ def run(args: argparse.Namespace) -> int:
         Wayland native session). On failure a single ``vrcpilot: ...``
         line is written to stderr and stdout stays empty.
     """
-    shot: Screenshot | None = _cli.take_screenshot()
+    shot: Screenshot | None = take_screenshot()
     if shot is None:
         print("vrcpilot: could not capture VRChat screenshot", file=sys.stderr)
         return 1
-    result = _cli.recognize(shot)
+    result = recognize(shot)
 
     viz_path = _resolve_viz_path(args.viz, now=datetime.now())
     if viz_path is not None:
-        rendered = _cli.render(result)
+        rendered = render(result)
         Image.fromarray(rendered).save(viz_path)
 
     shot = result.screenshot

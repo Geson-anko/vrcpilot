@@ -12,10 +12,10 @@ class TestUnfocusCommand:
     def test_silent_on_success(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        # Patch the re-exported window function on ``vrcpilot.cli`` --
-        # ``unfocus.run`` resolves the call through ``_cli.unfocus`` so
-        # this is the right boundary to swap.
-        mocker.patch("vrcpilot.cli.unfocus", return_value=True)
+        # ``unfocus.run`` calls the locally imported ``unfocus`` window
+        # function, so the right patch boundary is the binding inside
+        # the submodule.
+        mocker.patch("vrcpilot.cli.unfocus.unfocus", return_value=True)
 
         exit_code = main(["unfocus"])
 
@@ -27,7 +27,7 @@ class TestUnfocusCommand:
     def test_stderr_on_failure(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        mocker.patch("vrcpilot.cli.unfocus", return_value=False)
+        mocker.patch("vrcpilot.cli.unfocus.unfocus", return_value=False)
 
         exit_code = main(["unfocus"])
 

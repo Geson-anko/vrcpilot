@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from vrcpilot import cli as _cli
+from vrcpilot.window import unfocus
 
 from ._common import SubParsersAction
 
@@ -30,7 +30,7 @@ def run(args: argparse.Namespace) -> int:
         window unavailable, native Wayland).
     """
     del args
-    if _cli.unfocus():
+    if unfocus():
         return 0
     print("vrcpilot: could not unfocus VRChat", file=sys.stderr)
     return 1

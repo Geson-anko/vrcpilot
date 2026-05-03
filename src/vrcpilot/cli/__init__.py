@@ -1,47 +1,72 @@
 # PYTHON_ARGCOMPLETE_OK
 """Command line interface for vrcpilot.
 
-Thin wrapper that translates the public Python API into exit codes;
-behavioural logic stays in the library. Each subcommand lives in
+Thin dispatcher that translates :mod:`argparse` invocations into
+public-API calls and exit codes. Each subcommand lives in
 ``vrcpilot.cli.<name>`` and exposes a ``register(subparsers)`` /
-``run(args) -> int`` pair which :mod:`._main` wires together.
-:func:`main` is the entry point for both the ``vrcpilot`` console
-script and ``python -m vrcpilot``.
-
-The ``time`` / ``argcomplete`` / ``focus`` / ``unfocus`` /
-``take_screenshot`` / ``CaptureLoop`` / ``Mp4FrameSink`` re-exports
-exist solely as stable patch targets for tests; production callsites
-inside subcommand modules read them as ``vrcpilot.cli.<name>`` so
-``mocker.patch`` can substitute fakes without monkeying the underlying
-library modules.
+``run(args) -> int`` pair. :func:`main` is the entry point for both
+the ``vrcpilot`` console script and ``python -m vrcpilot``.
 """
 
 from __future__ import annotations
 
-import time as time  # re-exported for test patching
+import argparse
 
-import argcomplete as argcomplete  # re-exported for test patching
+import argcomplete
 
-from vrcpilot.capture import CaptureLoop as CaptureLoop
-from vrcpilot.capture.sinks import Mp4FrameSink as Mp4FrameSink
-from vrcpilot.ocr.recognize import recognize as recognize  # patch boundary
-from vrcpilot.ocr.visualize import render as render  # patch boundary
-from vrcpilot.screenshot import take_screenshot as take_screenshot
-from vrcpilot.window import focus as _window_focus, unfocus as _window_unfocus
-
-# Importing ``_main`` triggers loading of the per-command submodules
-# (``vrcpilot.cli.focus`` etc.) which, by Python import-system rules,
-# overwrites any same-named attributes on this package. Re-bind the
-# ``focus`` / ``unfocus`` window-function attributes AFTER ``_main``
-# loads so production callsites (``_cli.focus()`` inside the per-command
-# submodules) and ``mocker.patch("vrcpilot.cli.focus", ...)`` keep
-# resolving to a callable.
-from ._main import (
-    _build_parser as _build_parser,  # pyright: ignore[reportPrivateUsage]
-    main as main,
+from . import (
+    capture,
+    focus,
+    keyboard,
+    launch,
+    mouse,
+    ocr,
+    pid,
+    screenshot,
+    terminate,
+    unfocus,
 )
 
-focus = _window_focus
-unfocus = _window_unfocus
+_COMMANDS = {
+    "launch": launch,
+    "pid": pid,
+    "terminate": terminate,
+    "focus": focus,
+    "unfocus": unfocus,
+    "screenshot": screenshot,
+    "capture": capture,
+    "mouse": mouse,
+    "keyboard": keyboard,
+    "ocr": ocr,
+}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the top-level argparse parser with all subcommands.
+
+    Public (no ``_`` prefix) so tests and the ``argcomplete`` hook can
+    obtain a fully-configured parser without running a command.
+    """
+    parser = argparse.ArgumentParser(
+        prog="vrcpilot",
+        description="Automation tooling for VRChat.",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    for module in _COMMANDS.values():
+        module.register(subparsers)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the ``vrcpilot`` CLI and return an exit code.
+
+    Returns the code instead of calling :func:`sys.exit` so tests can
+    pass ``argv`` and assert on the return value.
+    """
+    parser = build_parser()
+    argcomplete.autocomplete(parser)
+    args = parser.parse_args(argv)
+    return _COMMANDS[args.command].run(args)
+
 
 __all__ = ["main"]

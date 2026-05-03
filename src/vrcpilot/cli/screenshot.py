@@ -25,8 +25,7 @@ import yaml
 from argcomplete.completers import FilesCompleter
 from PIL import Image
 
-from vrcpilot import cli as _cli
-from vrcpilot.screenshot import Screenshot
+from vrcpilot.screenshot import Screenshot, take_screenshot
 
 from ._common import SubParsersAction, attach_completer
 
@@ -66,7 +65,7 @@ def run(args: argparse.Namespace) -> int:
         ``vrcpilot: ...`` line on stderr and no stdout output).
     """
     output: Path | None = args.output
-    shot: Screenshot | None = _cli.take_screenshot()
+    shot: Screenshot | None = take_screenshot()
     if shot is None:
         print("vrcpilot: could not capture VRChat screenshot", file=sys.stderr)
         return 1

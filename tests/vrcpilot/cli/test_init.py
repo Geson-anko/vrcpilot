@@ -2,7 +2,7 @@
 
 Covers the dispatcher (:func:`vrcpilot.cli.main`) and the
 ``argcomplete`` integration on the parser built by
-:func:`vrcpilot.cli._build_parser`. Per-command behaviour lives in
+:func:`vrcpilot.cli.build_parser`. Per-command behaviour lives in
 ``test_<cmd>.py`` siblings.
 """
 
@@ -14,7 +14,7 @@ import pytest
 from argcomplete.completers import FilesCompleter
 from pytest_mock import MockerFixture
 
-from vrcpilot.cli import _build_parser, main
+from vrcpilot.cli import build_parser, main
 
 
 class TestMain:
@@ -37,7 +37,7 @@ class TestArgcompleteIntegration:
         assert isinstance(call_args.args[0], argparse.ArgumentParser)
 
     def test_steam_path_has_files_completer(self):
-        parser = _build_parser()
+        parser = build_parser()
 
         subparsers_action = parser._subparsers._group_actions[0]  # type: ignore[union-attr]
         launch_parser = subparsers_action.choices["launch"]
@@ -64,7 +64,7 @@ class TestArgcompleteIntegration:
         assert exit_code == 1
 
     def test_capture_output_has_files_completer(self):
-        parser = _build_parser()
+        parser = build_parser()
 
         subparsers_action = parser._subparsers._group_actions[0]  # type: ignore[union-attr]
         capture_parser = subparsers_action.choices["capture"]

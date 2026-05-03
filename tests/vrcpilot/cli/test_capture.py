@@ -28,9 +28,11 @@ def capture_fakes(mocker: MockerFixture) -> _CaptureFakes:
     first call. Without this, ``Mock.call_args_list`` accumulates
     forever and starves the runner of memory.
     """
-    sleep_mock = mocker.patch("vrcpilot.cli.time.sleep", side_effect=KeyboardInterrupt)
-    mocker.patch("vrcpilot.cli.CaptureLoop", FakeCaptureLoop)
-    mocker.patch("vrcpilot.cli.Mp4FrameSink", FakeMp4Sink)
+    sleep_mock = mocker.patch(
+        "vrcpilot.cli.capture.time.sleep", side_effect=KeyboardInterrupt
+    )
+    mocker.patch("vrcpilot.cli.capture.CaptureLoop", FakeCaptureLoop)
+    mocker.patch("vrcpilot.cli.capture.Mp4FrameSink", FakeMp4Sink)
     FakeCaptureLoop.instances = []
     FakeCaptureLoop.frames_per_start = 3
     FakeCaptureLoop.init_side_effect = None
@@ -101,7 +103,7 @@ class TestCaptureCommand:
         # Override the fixture's KeyboardInterrupt sleep with a
         # well-behaved one so the ``--duration`` branch can complete
         # naturally.
-        sleep_mock = mocker.patch("vrcpilot.cli.time.sleep", return_value=None)
+        sleep_mock = mocker.patch("vrcpilot.cli.capture.time.sleep", return_value=None)
 
         exit_code = main(["capture", "-o", str(tmp_path / "d.mp4"), "--duration", "5"])
 

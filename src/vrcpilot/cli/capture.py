@@ -10,7 +10,8 @@ from pathlib import Path
 
 from argcomplete.completers import FilesCompleter
 
-from vrcpilot import cli as _cli
+from vrcpilot.capture import CaptureLoop
+from vrcpilot.capture.sinks import Mp4FrameSink
 
 from ._common import SubParsersAction, attach_completer
 
@@ -80,8 +81,8 @@ def run(args: argparse.Namespace) -> int:
         output = Path.cwd() / f"vrcpilot_capture_{stamp}.mp4"
 
     try:
-        with _cli.Mp4FrameSink(output, fps) as sink:
-            with _cli.CaptureLoop(sink.write, fps=fps) as loop:
+        with Mp4FrameSink(output, fps) as sink:
+            with CaptureLoop(sink.write, fps=fps) as loop:
                 loop.start()
                 # Progress messages go to stderr so stdout stays
                 # parseable as a single absolute-path line. Callers

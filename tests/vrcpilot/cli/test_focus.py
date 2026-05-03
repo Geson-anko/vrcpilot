@@ -12,10 +12,10 @@ class TestFocusCommand:
     def test_silent_on_success(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        # Patch the re-exported window function on ``vrcpilot.cli`` --
-        # ``focus.run`` resolves the call through ``_cli.focus`` so this
-        # is the right boundary to swap.
-        mocker.patch("vrcpilot.cli.focus", return_value=True)
+        # ``focus.run`` calls the locally imported ``focus`` window
+        # function, so the right patch boundary is the binding inside
+        # the submodule.
+        mocker.patch("vrcpilot.cli.focus.focus", return_value=True)
 
         exit_code = main(["focus"])
 
@@ -27,7 +27,7 @@ class TestFocusCommand:
     def test_stderr_on_failure(
         self, mocker: MockerFixture, capsys: pytest.CaptureFixture[str]
     ):
-        mocker.patch("vrcpilot.cli.focus", return_value=False)
+        mocker.patch("vrcpilot.cli.focus.focus", return_value=False)
 
         exit_code = main(["focus"])
 
