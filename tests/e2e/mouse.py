@@ -1,11 +1,12 @@
 """E2E scenario: drive ``vrcpilot.mouse`` against real VRChat.
 
 Launches VRChat in Desktop mode, warms up, then exercises ``move``,
-``click``, ``press``/``release``, and ``scroll`` so a human can verify
-the synthetic events actually reach the VRChat window. The
-``ensure_target`` guard is also covered: one step deliberately calls
-``vrcpilot.unfocus()`` and then issues a click, which must bring
-VRChat back to the foreground before the click lands.
+``click``, ``press``/``release``, ``scroll``, and the variadic combo
+form (``click(LEFT, RIGHT)``) so a human can verify the synthetic
+events actually reach the VRChat window. The ``ensure_target`` guard
+is also covered: one step deliberately calls ``vrcpilot.unfocus()``
+and then issues a click, which must bring VRChat back to the
+foreground before the click lands.
 
 The pattern follows :mod:`tests.e2e.focus_unfocus`: alternating
 operations (move-left -> click, move-right -> click, etc.) so two
@@ -118,15 +119,24 @@ def _scenario() -> None:
     time.sleep(0.5)
     _helpers.save_monitor_screenshot("mouse", "5_press_release")
 
-    # Step 6/6: scroll down then back up. Two opposite directions so
+    # Step 6/7: scroll down then back up. Two opposite directions so
     # the net visual position is the same and a stuck scroll wheel is
     # easy to spot.
-    _helpers.log("mouse.scroll(+2) then mouse.scroll(-2) (6/6: scroll round-trip)")
+    _helpers.log("mouse.scroll(+2) then mouse.scroll(-2) (6/7: scroll round-trip)")
     mouse.scroll(2)
     time.sleep(0.3)
     mouse.scroll(-2)
     time.sleep(0.5)
     _helpers.save_monitor_screenshot("mouse", "6_scroll")
+
+    # Step 7/7: simultaneous LEFT + RIGHT click. Exercises the variadic
+    # combo path -- both buttons must land on the same window without
+    # raising. A stuck button would obviously break subsequent
+    # interaction (visible in the screenshot artifacts directory).
+    _helpers.log("mouse.click(LEFT, RIGHT) (7/7: simultaneous combo click)")
+    mouse.click(MouseButton.LEFT, MouseButton.RIGHT)
+    time.sleep(0.5)
+    _helpers.save_monitor_screenshot("mouse", "7_click_combo")
 
 
 def main() -> int:

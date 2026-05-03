@@ -9,12 +9,14 @@ keyboard module across two angles a human can verify by eye:
   4 alternating steps proves the call is idempotent (same as the
   ``focus_unfocus`` pattern), and a screenshot is dropped after each
   step under ``_e2e_artifacts/`` for review.
-* **A modifier combo** (``down(SHIFT_LEFT)`` -> ``press(A)`` ->
-  ``up(SHIFT_LEFT)``) is sandwiched between the toggle steps. Whether
-  or not VRChat has a focused text field at that moment, the call
-  itself must complete without raising and the subsequent ESC toggles
-  must keep working -- a stuck SHIFT modifier would visibly break
-  later steps.
+* **A modifier combo** is sandwiched between the toggle steps in two
+  forms back-to-back: the explicit ``down(SHIFT_LEFT)`` ->
+  ``press(A)`` -> ``up(SHIFT_LEFT)`` triple, and the one-shot variadic
+  ``press(SHIFT_LEFT, A)`` that drives the same down / sleep / up
+  cycle from a single call. Whether or not VRChat has a focused text
+  field at that moment, both calls must complete without raising and
+  the subsequent ESC toggles must keep working -- a stuck SHIFT
+  modifier would visibly break later steps.
 
 Run with::
 
@@ -79,12 +81,13 @@ def _scenario() -> None:
     time.sleep(0.5)
     _helpers.save_monitor_screenshot("keyboard", "2_close")
 
-    # Mid-scenario: modifier combo. SHIFT_LEFT down -> A press ->
-    # SHIFT_LEFT up. Whether VRChat has a focused text widget or
-    # not, the call must complete without raising; a stuck SHIFT
-    # modifier would visibly break the ESC toggles in later steps.
+    # Mid-scenario: modifier combo, both forms. The explicit triple
+    # (down -> press -> up) and the one-shot variadic press should be
+    # observably equivalent. The call must complete without raising
+    # and SHIFT must not stick -- a stuck modifier would visibly
+    # break the ESC toggles in later steps.
     _helpers.log(
-        "keyboard.down(SHIFT_LEFT) -> press(A) -> up(SHIFT_LEFT) (modifier combo)"
+        "keyboard.down(SHIFT_LEFT) -> press(A) -> up(SHIFT_LEFT) (modifier combo, explicit)"
     )
     keyboard.down(Key.SHIFT_LEFT)
     time.sleep(0.05)
@@ -92,7 +95,12 @@ def _scenario() -> None:
     time.sleep(0.05)
     keyboard.up(Key.SHIFT_LEFT)
     time.sleep(0.5)
-    _helpers.save_monitor_screenshot("keyboard", "3_combo")
+    _helpers.save_monitor_screenshot("keyboard", "3a_combo_explicit")
+
+    _helpers.log("keyboard.press(SHIFT_LEFT, A) (modifier combo, one-shot variadic)")
+    keyboard.press(Key.SHIFT_LEFT, Key.A)
+    time.sleep(0.5)
+    _helpers.save_monitor_screenshot("keyboard", "3b_combo_oneshot")
 
     # Step 3/4: open LaunchPad again to verify idempotence and that
     # the modifier was released cleanly.
