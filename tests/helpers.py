@@ -157,10 +157,6 @@ class ImplKeyboard(Keyboard):
         self.calls: list[tuple[str, dict[str, object]]] = []
 
     @override
-    def _do_press(self, key: Key, *, duration: float) -> None:
-        self.calls.append(("_do_press", {"key": key, "duration": duration}))
-
-    @override
     def _do_down(self, key: Key) -> None:
         self.calls.append(("_do_down", {"key": key}))
 

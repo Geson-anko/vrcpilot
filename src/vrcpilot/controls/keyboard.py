@@ -1,8 +1,11 @@
 """Synthetic keyboard input for VRChat.
 
 Keys are passed as :class:`Key` (a :class:`enum.StrEnum`) so pyright
-and IDE completion catch typos. Combos are explicit ``down`` /
-``press`` / ``up`` triples; there is no ``"ctrl+c"`` string parsing.
+and IDE completion catch typos. Combos can be expressed either as
+explicit ``down`` / ``press`` / ``up`` triples or, equivalently, as a
+single :func:`press` call with multiple positional keys
+(``press(Key.CTRL_LEFT, Key.C)`` for ``Ctrl+C``); there is no
+``"ctrl+c"`` string parsing.
 """
 
 from __future__ import annotations
@@ -127,37 +130,68 @@ class Key(StrEnum):
 
 
 class Keyboard(ABC):
-    """Keyboard ABC: runs :func:`ensure_target`, then delegates to ``_do_*``."""
+    """Keyboard ABC: runs :func:`ensure_target`, then delegates to ``_do_*``.
 
-    def press(self, key: Key, *, duration: float = 0.1, focus: bool = True) -> None:
-        """Tap ``key`` (down then up).
+    All public methods accept one or more :class:`Key` values via the
+    ``*keys`` variadic. Combos are pressed simultaneously: ``down`` is
+    issued left-to-right, ``up`` is issued right-to-left so modifier
+    keys outlive the keys they modify (the standard ``Ctrl+C`` release
+    order used by ``pyautogui.hotkey`` / ``xdotool`` / AutoHotkey).
+    """
 
-        ``duration`` is the down-to-up hold in seconds. The default of
-        0.1 is tuned to be reliably picked up by Unity / VRChat --
-        shorter holds (including ``0.0``) get dropped in practice.
+    def press(self, *keys: Key, duration: float = 0.1, focus: bool = True) -> None:
+        """Tap ``keys`` simultaneously (down all, sleep, up all reversed).
+
+        ``duration`` is the down-to-up hold in seconds applied **once**
+        across the whole combo. The default of 0.1 is tuned to be
+        reliably picked up by Unity / VRChat -- shorter holds (including
+        ``0.0``) get dropped in practice.
+
+        Raises :class:`TypeError` when called with zero keys.
         """
+        if not keys:
+            raise TypeError("press() requires at least one Key")
         if focus:
             ensure_target()
-        self._do_press(key, duration=duration)
+        for k in keys:
+            self._do_down(k)
+        time.sleep(duration)
+        for k in reversed(keys):
+            self._do_up(k)
 
-    def down(self, key: Key, *, focus: bool = True) -> None:
-        """Press and hold ``key`` until a matching :meth:`up`.
+    def down(self, *keys: Key, focus: bool = True) -> None:
+        """Press and hold ``keys`` until a matching :meth:`up`.
 
-        Pair with :meth:`up` to express modifier combos -- e.g.
-        ``down(Key.CTRL); press(Key.C); up(Key.CTRL)`` for ``Ctrl+C``.
+        Keys are pressed left-to-right with no sleep. Pair with
+        :meth:`up` (which releases in reverse order) to express
+        modifier combos -- e.g. ``down(Key.CTRL); press(Key.C);
+        up(Key.CTRL)`` for ``Ctrl+C``, or ``press(Key.CTRL, Key.C)``
+        for the same combo in a single call.
+
+        Raises :class:`TypeError` when called with zero keys.
         """
+        if not keys:
+            raise TypeError("down() requires at least one Key")
         if focus:
             ensure_target()
-        self._do_down(key)
+        for k in keys:
+            self._do_down(k)
 
-    def up(self, key: Key, *, focus: bool = True) -> None:
-        """Release ``key`` previously pressed with :meth:`down`."""
+    def up(self, *keys: Key, focus: bool = True) -> None:
+        """Release ``keys`` previously pressed with :meth:`down`.
+
+        Keys are released right-to-left so passing the same argument
+        list to :meth:`down` and :meth:`up` yields LIFO release order
+        (modifiers held in :meth:`down` outlive the keys they modify).
+
+        Raises :class:`TypeError` when called with zero keys.
+        """
+        if not keys:
+            raise TypeError("up() requires at least one Key")
         if focus:
             ensure_target()
-        self._do_up(key)
-
-    @abstractmethod
-    def _do_press(self, key: Key, *, duration: float) -> None: ...
+        for k in reversed(keys):
+            self._do_up(k)
 
     @abstractmethod
     def _do_down(self, key: Key) -> None: ...
@@ -283,10 +317,6 @@ if sys.platform == "linux":
             self._imp = inputtino.Keyboard()
 
         @override
-        def _do_press(self, key: Key, *, duration: float) -> None:
-            self._imp.type(_INPUTTINO_CODES[key], duration=duration)
-
-        @override
         def _do_down(self, key: Key) -> None:
             self._imp.press(_INPUTTINO_CODES[key])
 
@@ -317,19 +347,6 @@ if sys.platform == "win32":
         ``pydirectinput.KEYBOARD_MAPPING``; add a translation table here
         if any member turns out to be unsupported.
         """
-
-        @override
-        def _do_press(self, key: Key, *, duration: float) -> None:
-            if duration > 0:
-                # Older pydirectinput versions inject MINIMUM_DURATION
-                # sleeps when press() is called with duration kwarg, so
-                # split the down/up path manually instead of passing
-                # duration through.
-                pydirectinput.keyDown(key.value)
-                time.sleep(duration)
-                pydirectinput.keyUp(key.value)
-            else:
-                pydirectinput.press(key.value)
 
         @override
         def _do_down(self, key: Key) -> None:
@@ -366,16 +383,16 @@ def _get() -> Keyboard:
 # Module functions ---------------------------------------------------------
 
 
-def press(key: Key, *, duration: float = 0.1, focus: bool = True) -> None:
+def press(*keys: Key, duration: float = 0.1, focus: bool = True) -> None:
     """See :meth:`Keyboard.press`."""
-    _get().press(key, duration=duration, focus=focus)
+    _get().press(*keys, duration=duration, focus=focus)
 
 
-def down(key: Key, *, focus: bool = True) -> None:
+def down(*keys: Key, focus: bool = True) -> None:
     """See :meth:`Keyboard.down`."""
-    _get().down(key, focus=focus)
+    _get().down(*keys, focus=focus)
 
 
-def up(key: Key, *, focus: bool = True) -> None:
+def up(*keys: Key, focus: bool = True) -> None:
     """See :meth:`Keyboard.up`."""
-    _get().up(key, focus=focus)
+    _get().up(*keys, focus=focus)

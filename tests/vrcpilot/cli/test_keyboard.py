@@ -51,55 +51,62 @@ class TestKeyboardPress:
         self,
         fake_keyboard: ImplKeyboard,
         key_arg: str,
+        mocker: MockerFixture,
         expected_key: Key,
     ):
+        sleep_spy = mocker.patch("vrcpilot.controls.keyboard.time.sleep")
+
         exit_code = main(["keyboard", "press", key_arg])
 
         assert exit_code == 0
         assert fake_keyboard.calls == [
-            ("_do_press", {"key": expected_key, "duration": 0.1})
+            ("_do_down", {"key": expected_key}),
+            ("_do_up", {"key": expected_key}),
         ]
+        sleep_spy.assert_called_once_with(0.1)
 
-    def test_default_duration_is_0_1(self, fake_keyboard: ImplKeyboard):
+    def test_default_duration_is_0_1(
+        self, fake_keyboard: ImplKeyboard, mocker: MockerFixture
+    ):
         # Match the API default in vrcpilot.controls.keyboard.Keyboard.press
         # (Unity / VRChat drops shorter holds - see
         # .claude/memory/project_keyboard_press_duration.md).
+        del fake_keyboard
+        sleep_spy = mocker.patch("vrcpilot.controls.keyboard.time.sleep")
+
         exit_code = main(["keyboard", "press", "a"])
 
         assert exit_code == 0
-        assert len(fake_keyboard.calls) == 1
-        name, kwargs = fake_keyboard.calls[0]
-        assert name == "_do_press"
-        assert kwargs["duration"] == 0.1
+        sleep_spy.assert_called_once_with(0.1)
 
-    def test_custom_duration_propagates(self, fake_keyboard: ImplKeyboard):
+    def test_custom_duration_propagates(
+        self, fake_keyboard: ImplKeyboard, mocker: MockerFixture
+    ):
+        sleep_spy = mocker.patch("vrcpilot.controls.keyboard.time.sleep")
+
         exit_code = main(["keyboard", "press", "a", "--duration", "0.5"])
 
         assert exit_code == 0
-        assert fake_keyboard.calls == [("_do_press", {"key": Key.A, "duration": 0.5})]
+        assert fake_keyboard.calls == [
+            ("_do_down", {"key": Key.A}),
+            ("_do_up", {"key": Key.A}),
+        ]
+        sleep_spy.assert_called_once_with(0.5)
 
     def test_silent_on_success(
-        self, fake_keyboard: ImplKeyboard, capsys: pytest.CaptureFixture[str]
+        self,
+        fake_keyboard: ImplKeyboard,
+        capsys: pytest.CaptureFixture[str],
+        mocker: MockerFixture,
     ):
         del fake_keyboard
+        mocker.patch("vrcpilot.controls.keyboard.time.sleep")
         exit_code = main(["keyboard", "press", "a"])
 
         assert exit_code == 0
         captured = capsys.readouterr()
         assert captured.out == ""
         assert captured.err == ""
-
-    def test_processes_keys_in_order_with_shared_duration(
-        self, fake_keyboard: ImplKeyboard
-    ):
-        exit_code = main(["keyboard", "press", "a", "b", "c", "--duration", "0.2"])
-
-        assert exit_code == 0
-        assert fake_keyboard.calls == [
-            ("_do_press", {"key": Key.A, "duration": 0.2}),
-            ("_do_press", {"key": Key.B, "duration": 0.2}),
-            ("_do_press", {"key": Key.C, "duration": 0.2}),
-        ]
 
 
 class TestKeyboardArgparseValidation:
@@ -182,8 +189,9 @@ class TestKeyboardGuardErrors:
         fake_keyboard: ImplKeyboard,
         mocker: MockerFixture,
     ):
-        # ``ensure_target`` raises on the very first call -> the second
-        # key must not be processed (no second ``_do_press`` recorded).
+        # ``ensure_target`` raises on the very first call -> no key
+        # input must be recorded (the guard runs before any
+        # ``_do_down`` / ``_do_up``).
         mocker.patch(
             "vrcpilot.controls.keyboard.ensure_target",
             side_effect=VRChatNotRunningError("VRChat is not running"),
