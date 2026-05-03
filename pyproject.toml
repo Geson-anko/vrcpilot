@@ -14,6 +14,7 @@ dependencies = [
     "pillow>=12.2.0",
     "psutil>=7.2.2",
     "pydirectinput>=1.0.4 ; sys_platform == 'win32'",
+    "pyperclip>=1.9",
     "python-xlib>=0.33 ; sys_platform == 'linux'",
     "pywin32>=306 ; sys_platform == 'win32'",
     "pyyaml>=6.0.2",
