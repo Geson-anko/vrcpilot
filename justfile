@@ -25,7 +25,7 @@ clean:
 
 # Setup the environment
 setup:
-    uv venv
+    uv venv --clear
     uv sync --all-extras
     uv run pre-commit install
 

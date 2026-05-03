@@ -80,6 +80,31 @@ echo $DISPLAY            # XWayland 経由時もセットされていれば OK
 - `uv sync` で開発インストール、または `uv tool install vrcpilot` を済ませて、`register-python-argcomplete` が PATH に通っていること。
 - PATH を汚したくない場合は、以下のコマンドを `uv run register-python-argcomplete ...` に置き換えても代替できる。
 
+### ワンショットセットアップ（開発リポジトリ向け）
+
+クローン直後に「venv 作成 → activate → 補完登録」までを 1 行で済ませたい場合、リポジトリ同梱のブートストラップスクリプトを **source / dot-source** する。
+
+- bash: `. ./clicomp.sh`
+- pwsh: `. .\CliComp.ps1`
+
+スクリプトは以下を順に行う:
+
+1. `.venv` が存在すれば activate する
+2. `vrcpilot` がまだ PATH に無ければ `just setup` を実行し、再 activate する
+3. `register-python-argcomplete` で現セッションに `vrcpilot` の補完を登録する
+
+サブシェル（`bash clicomp.sh` や `.\CliComp.ps1` のような実行）では venv も補完も親シェルに残らないため、必ず source / dot-source すること（実行された場合はスクリプト側で拒否する）。永続化したい場合は、起動 rc ファイルに以下を追記する。
+
+```bash
+# ~/.bashrc
+. /path/to/vrcpilot/clicomp.sh
+```
+
+```powershell
+# $PROFILE
+. C:\path\to\vrcpilot\CliComp.ps1
+```
+
 ### Bash / Git Bash
 
 現セッションのみで一時的に有効化する場合。
