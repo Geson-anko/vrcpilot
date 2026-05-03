@@ -4,3 +4,4 @@
 - [Test class organization](feedback_test_classes.md) — tests live under `class Test<Target>:` with no return-type annotations; `mocker` fixture from `pytest_mock`
 - [Avoid object-typed fixture parameters](feedback_fixture_typing.md) — don't annotate mock-fixture params as `: object`; leave unannotated to keep tests free of pyright-ignore noise
 - [pyright ignore の集約・最小化](feedback_pyright_ignore_minimization.md) — stub のない C 拡張は 1 度 Any 化して連鎖する `reportUnknown*` を全部消すのが定石
+- [tests/fakes は production の表面のみミラー](feedback_fakes_mirror_production.md) — ABC メソッド撤去後に fake 側で dead 化したシンボルを必ず grep で剥がす
