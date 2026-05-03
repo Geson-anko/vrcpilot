@@ -41,7 +41,7 @@ from pathlib import Path
 import mss
 
 import vrcpilot
-from vrcpilot import mouse
+from vrcpilot import MouseButton, mouse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _helpers  # noqa: E402
@@ -112,9 +112,9 @@ def _scenario() -> None:
     # held-button code path that click() does not (click uses the
     # built-in inputtino duration instead).
     _helpers.log("mouse.press()/release() (5/6: held-button pair)")
-    mouse.press("left")
+    mouse.press(MouseButton.LEFT)
     time.sleep(0.1)
-    mouse.release("left")
+    mouse.release(MouseButton.LEFT)
     time.sleep(0.5)
     _helpers.save_monitor_screenshot("mouse", "5_press_release")
 

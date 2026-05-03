@@ -248,8 +248,9 @@ class FakeWindowsCapture:
         return fn
 
     def start_free_threaded(self) -> FakeWindowsCaptureControl:
-        if type(self).start_raises is not None:
-            raise type(self).start_raises
+        start_raises = type(self).start_raises
+        if start_raises is not None:
+            raise start_raises
         return self._control
 
     def emit_frame(self, payload: bytes, width: int, height: int) -> None:
