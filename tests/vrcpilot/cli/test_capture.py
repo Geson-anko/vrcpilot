@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pytest_mock import MockerFixture, MockType
 
-from tests.fakes import FakeCaptureLoop, FakeMp4Sink
+from tests.fakes import FakeCaptureLoop, FakeMp4Sink, FakeY4mStdoutSink
 from vrcpilot.cli import main
 
 
@@ -16,6 +16,7 @@ from vrcpilot.cli import main
 class _CaptureFakes:
     loop: type[FakeCaptureLoop]
     sink: type[FakeMp4Sink]
+    y4m: type[FakeY4mStdoutSink]
     sleep: MockType
 
 
@@ -27,30 +28,80 @@ def capture_fakes(mocker: MockerFixture) -> _CaptureFakes:
     production ``while True: time.sleep(3600)`` idiom exits on the
     first call. Without this, ``Mock.call_args_list`` accumulates
     forever and starves the runner of memory.
+
+    ``sys.stdout.isatty`` is pinned to ``False`` so the default
+    (no ``-o``) path enters pipe mode regardless of how the test
+    suite is invoked. Tests that exercise the TTY-refusal branch
+    re-patch it via their own ``mocker.patch`` call.
     """
     sleep_mock = mocker.patch(
         "vrcpilot.cli.capture.time.sleep", side_effect=KeyboardInterrupt
     )
     mocker.patch("vrcpilot.cli.capture.CaptureLoop", FakeCaptureLoop)
     mocker.patch("vrcpilot.cli.capture.Mp4FrameSink", FakeMp4Sink)
+    mocker.patch("vrcpilot.cli.capture.Y4mStdoutFrameSink", FakeY4mStdoutSink)
+    mocker.patch("sys.stdout.isatty", lambda: False)
     FakeCaptureLoop.instances = []
     FakeCaptureLoop.frames_per_start = 3
     FakeCaptureLoop.init_side_effect = None
     FakeMp4Sink.instances = []
-    return _CaptureFakes(loop=FakeCaptureLoop, sink=FakeMp4Sink, sleep=sleep_mock)
+    FakeY4mStdoutSink.instances = []
+    return _CaptureFakes(
+        loop=FakeCaptureLoop,
+        sink=FakeMp4Sink,
+        y4m=FakeY4mStdoutSink,
+        sleep=sleep_mock,
+    )
 
 
 class TestCaptureCommand:
-    def test_default_output_uses_cwd_with_timestamp(
+    def test_no_output_streams_y4m_to_stdout_sink(
+        self,
+        capture_fakes: _CaptureFakes,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        exit_code = main(["capture"])
+
+        assert exit_code == 0
+        # Pipe mode constructs the y4m sink, not the mp4 sink.
+        assert len(capture_fakes.y4m.instances) == 1
+        assert len(capture_fakes.sink.instances) == 0
+        captured = capsys.readouterr()
+        # Pipe mode owns stdout for the binary y4m payload; Python
+        # must not write anything else to it.
+        assert captured.out == ""
+        # Progress chatter on stderr advertises the pipe target.
+        assert "stdout" in captured.err
+        assert "y4m" in captured.err
+
+    def test_no_output_refuses_when_stdout_is_tty(
+        self,
+        capture_fakes: _CaptureFakes,
+        mocker: MockerFixture,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        # Override the fixture default: pretend stdout is a TTY.
+        mocker.patch("sys.stdout.isatty", lambda: True)
+
+        exit_code = main(["capture"])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "refusing to write a y4m stream to a TTY" in captured.err
+        assert captured.out == ""
+        # Neither sink is even constructed when refusing.
+        assert capture_fakes.y4m.instances == []
+        assert capture_fakes.sink.instances == []
+        # And the capture loop is not started.
+        assert capture_fakes.loop.instances == []
+
+    def test_output_directory_uses_default_filename_inside(
         self,
         capture_fakes: _CaptureFakes,
         tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
     ):
-        monkeypatch.chdir(tmp_path)
-
-        exit_code = main(["capture"])
+        exit_code = main(["capture", "-o", str(tmp_path)])
 
         assert exit_code == 0
         assert len(capture_fakes.sink.instances) == 1
@@ -58,7 +109,8 @@ class TestCaptureCommand:
         assert sink.output_path.parent == tmp_path
         assert sink.output_path.name.startswith("vrcpilot_capture_")
         assert sink.output_path.suffix == ".mp4"
-        # stdout is now the resolved absolute path of the mp4.
+        # No y4m sink in file mode.
+        assert capture_fakes.y4m.instances == []
         captured = capsys.readouterr()
         assert captured.out.strip() == str(sink.output_path.resolve())
 
