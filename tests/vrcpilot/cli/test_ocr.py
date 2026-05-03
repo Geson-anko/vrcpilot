@@ -66,8 +66,8 @@ def patched_recognize(mocker: MockerFixture) -> OCRResult:
     """
     shot = _make_screenshot()
     result = OCRResult(screenshot=shot, words=(_make_word(),))
-    mocker.patch("vrcpilot.cli.take_screenshot", return_value=shot)
-    mocker.patch("vrcpilot.cli.recognize", return_value=result)
+    mocker.patch("vrcpilot.cli.ocr.take_screenshot", return_value=shot)
+    mocker.patch("vrcpilot.cli.ocr.recognize", return_value=result)
     return result
 
 
@@ -76,7 +76,7 @@ def patched_render(mocker: MockerFixture) -> None:
     """Patch the visualization boundary so unit tests skip the real cv2
     draw."""
     rendered = np.zeros((200, 320, 3), dtype=np.uint8)
-    mocker.patch("vrcpilot.cli.render", return_value=rendered)
+    mocker.patch("vrcpilot.cli.ocr.render", return_value=rendered)
 
 
 class TestResolveVizPath:
@@ -304,9 +304,9 @@ class TestOCRCommandFailure:
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        mocker.patch("vrcpilot.cli.take_screenshot", return_value=None)
+        mocker.patch("vrcpilot.cli.ocr.take_screenshot", return_value=None)
         # recognize should never be reached when capture fails.
-        recognize_spy = mocker.patch("vrcpilot.cli.recognize")
+        recognize_spy = mocker.patch("vrcpilot.cli.ocr.recognize")
         monkeypatch.chdir(tmp_path)
 
         exit_code = main(["ocr"])

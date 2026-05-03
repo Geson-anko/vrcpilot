@@ -53,7 +53,7 @@ def patched_take_screenshot(mocker: MockerFixture) -> Screenshot:
     to-end against the canonical :class:`Screenshot`.
     """
     shot = _make_screenshot()
-    mocker.patch("vrcpilot.cli.take_screenshot", return_value=shot)
+    mocker.patch("vrcpilot.cli.screenshot.take_screenshot", return_value=shot)
     return shot
 
 
@@ -199,7 +199,7 @@ class TestScreenshotCommand:
         capsys: pytest.CaptureFixture[str],
         tmp_path: Path,
     ):
-        mocker.patch("vrcpilot.cli.take_screenshot", return_value=None)
+        mocker.patch("vrcpilot.cli.screenshot.take_screenshot", return_value=None)
         output = tmp_path / "shot.png"
 
         exit_code = main(["screenshot", "--output", str(output)])
