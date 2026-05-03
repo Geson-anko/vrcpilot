@@ -1,0 +1,1 @@
+- [Submodule attribute collision in cli package](feedback_submodule_attribute_collision.md) — re-exports clashing with subcommand submodule names get clobbered; rebind after `_main` import

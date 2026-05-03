@@ -19,12 +19,14 @@ from . import keyboard, mouse
 from .errors import VRChatNotFocusedError, VRChatNotRunningError
 from .guard import ensure_target
 from .keyboard import Key
+from .mouse import MouseButton
 
 __all__ = [
     "ensure_target",
     "Key",
     "keyboard",
     "mouse",
+    "MouseButton",
     "VRChatNotFocusedError",
     "VRChatNotRunningError",
 ]

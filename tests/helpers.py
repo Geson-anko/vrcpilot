@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import functools
 import sys
-import time
 from typing import override
 
 import pytest
 
-import vrcpilot
+from vrcpilot import process
 from vrcpilot.controls.keyboard import Key, Keyboard
-from vrcpilot.controls.mouse import ButtonName, Mouse
+from vrcpilot.controls.mouse import Mouse, MouseButton
 
 #: Skip a test on non-Windows platforms.
 #:
@@ -73,46 +72,37 @@ requires_x11_display = pytest.mark.skipif(
     not has_x11_display(), reason="X11 display unavailable"
 )
 
-_PID_WAIT_TIMEOUT: float = 30.0
-_PID_WAIT_INTERVAL: float = 1.0
+#: Re-exported polling defaults for the e2e ``_helpers`` import surface.
+#: Both constants forward to :mod:`vrcpilot.process` so changing one
+#: place updates the whole project.
+_PID_WAIT_TIMEOUT: float = process.PID_WAIT_TIMEOUT
+_PID_WAIT_INTERVAL: float = process.PID_WAIT_INTERVAL
 
 
 def wait_for_pid(
     timeout: float = _PID_WAIT_TIMEOUT,
     interval: float = _PID_WAIT_INTERVAL,
 ) -> int | None:
-    """Poll for a VRChat PID until one appears or ``timeout`` elapses.
+    """Poll for a VRChat PID via :func:`vrcpilot.process.wait_for_pid`.
 
-    Returns the observed PID, or ``None`` if the deadline expires
-    first. Suitable for both e2e scenarios (waiting for VRChat to
-    finish launching) and automated tests that drive a real launcher.
+    Thin wrapper preserved for the e2e ``_helpers`` import surface;
+    new call sites should use :func:`vrcpilot.process.wait_for_pid`
+    directly.
     """
-    deadline = time.monotonic() + timeout
-    while True:
-        pid = vrcpilot.find_pid()
-        if pid is not None:
-            return pid
-        if time.monotonic() >= deadline:
-            return None
-        time.sleep(interval)
+    return process.wait_for_pid(timeout=timeout, interval=interval)
 
 
 def wait_for_no_pid(
     timeout: float = _PID_WAIT_TIMEOUT,
     interval: float = _PID_WAIT_INTERVAL,
 ) -> bool:
-    """Poll until VRChat is no longer running, or ``timeout`` elapses.
+    """Poll for VRChat absence via :func:`vrcpilot.process.wait_for_no_pid`.
 
-    Returns ``True`` once the process is gone; ``False`` if the
-    deadline expired with the process still present.
+    Thin wrapper preserved for the e2e ``_helpers`` import surface;
+    new call sites should use :func:`vrcpilot.process.wait_for_no_pid`
+    directly.
     """
-    deadline = time.monotonic() + timeout
-    while True:
-        if vrcpilot.find_pid() is None:
-            return True
-        if time.monotonic() >= deadline:
-            return False
-        time.sleep(interval)
+    return process.wait_for_no_pid(timeout=timeout, interval=interval)
 
 
 class ImplMouse(Mouse):
@@ -133,7 +123,7 @@ class ImplMouse(Mouse):
         self.calls.append(("_do_move", {"x": x, "y": y, "relative": relative}))
 
     @override
-    def _do_click(self, button: ButtonName, *, count: int, duration: float) -> None:
+    def _do_click(self, button: MouseButton, *, count: int, duration: float) -> None:
         self.calls.append(
             (
                 "_do_click",
@@ -142,11 +132,11 @@ class ImplMouse(Mouse):
         )
 
     @override
-    def _do_press(self, button: ButtonName) -> None:
+    def _do_press(self, button: MouseButton) -> None:
         self.calls.append(("_do_press", {"button": button}))
 
     @override
-    def _do_release(self, button: ButtonName) -> None:
+    def _do_release(self, button: MouseButton) -> None:
         self.calls.append(("_do_release", {"button": button}))
 
     @override

@@ -14,7 +14,7 @@
 
 ## プロジェクト状況
 
-`vrcpilot` パッケージは VRChat の起動・終了・プロセス検出（`process`）、ウィンドウ操作（`window/`、Win32/X11 バックエンド）、画面キャプチャ（`capture/`、`Capture` セッション + `CaptureLoop` + `Mp4FrameSink`）、スクリーンショット（`screenshot`）、CLI フロントエンド（`cli`）から構成される。プラットフォーム抽象は親 `__init__.py` で `sys.platform` ディスパッチして公開する（`__all__` 経由で公開 API を集約）。プラットフォーム固有の低レベル実装（`steam`, `win32`, `x11`, `capture/sinks`, `_session`）は内部モジュールとして配置している。
+`vrcpilot` パッケージは VRChat の起動・終了・プロセス検出（`process`）、ウィンドウ操作（`window/`、Win32/X11 バックエンド）、画面キャプチャ（`capture/`、`Capture` セッション + `CaptureLoop` + `Mp4FrameSink`）、スクリーンショット（`screenshot`）、CLI フロントエンド（`cli/` 配下にサブコマンド毎 1 ファイル: `launch` / `pid` / `terminate` / `focus` / `unfocus` / `screenshot` / `capture` / `mouse` / `keyboard`、ディスパッチは `cli/_main.py`）から構成される。プラットフォーム抽象は親 `__init__.py` で `sys.platform` ディスパッチして公開する（`__all__` 経由で公開 API を集約）。プラットフォーム固有の低レベル実装（`steam`, `win32`, `x11`, `capture/sinks`, `_session`）は内部モジュールとして配置している。
 
 ## ツーリング
 

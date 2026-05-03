@@ -6,11 +6,30 @@ import ctypes
 import sys
 import time
 from abc import ABC, abstractmethod
-from typing import Any, Literal, override
+from enum import StrEnum
+from typing import Any, override
 
 from .guard import ensure_target
 
-type ButtonName = Literal["left", "right", "middle"]
+# inputtino's scroll API takes distance in 120-per-notch high-resolution
+# units; we expose plain notches and multiply on the way down.
+_SCROLL_NOTCH = 120
+
+
+class MouseButton(StrEnum):
+    """Mouse button identifiers.
+
+    Values are the lower-case strings ``pydirectinput`` expects on its
+    ``button=`` kwarg, so the Win32 backend forwards ``button.value``
+    straight through. The Linux backend maps each member via
+    :data:`_BUTTON_MAP`. Being a :class:`enum.StrEnum`, members compare
+    equal to their string value, which lets ``argparse(type=MouseButton)``
+    accept ``left`` / ``right`` / ``middle`` directly from the CLI.
+    """
+
+    LEFT = "left"
+    RIGHT = "right"
+    MIDDLE = "middle"
 
 
 class Mouse(ABC):
@@ -31,7 +50,7 @@ class Mouse(ABC):
 
     def click(
         self,
-        button: ButtonName = "left",
+        button: MouseButton = MouseButton.LEFT,
         *,
         count: int = 1,
         duration: float = 0.0,
@@ -47,13 +66,17 @@ class Mouse(ABC):
             ensure_target()
         self._do_click(button, count=count, duration=duration)
 
-    def press(self, button: ButtonName = "left", *, focus: bool = True) -> None:
+    def press(
+        self, button: MouseButton = MouseButton.LEFT, *, focus: bool = True
+    ) -> None:
         """Press and hold ``button`` until a matching :meth:`release`."""
         if focus:
             ensure_target()
         self._do_press(button)
 
-    def release(self, button: ButtonName = "left", *, focus: bool = True) -> None:
+    def release(
+        self, button: MouseButton = MouseButton.LEFT, *, focus: bool = True
+    ) -> None:
         """Release ``button`` previously pressed with :meth:`press`."""
         if focus:
             ensure_target()
@@ -69,13 +92,15 @@ class Mouse(ABC):
     def _do_move(self, x: int, y: int, *, relative: bool) -> None: ...
 
     @abstractmethod
-    def _do_click(self, button: ButtonName, *, count: int, duration: float) -> None: ...
+    def _do_click(
+        self, button: MouseButton, *, count: int, duration: float
+    ) -> None: ...
 
     @abstractmethod
-    def _do_press(self, button: ButtonName) -> None: ...
+    def _do_press(self, button: MouseButton) -> None: ...
 
     @abstractmethod
-    def _do_release(self, button: ButtonName) -> None: ...
+    def _do_release(self, button: MouseButton) -> None: ...
 
     @abstractmethod
     def _do_scroll(self, amount: int) -> None: ...
@@ -83,18 +108,14 @@ class Mouse(ABC):
 
 # Linux backend ------------------------------------------------------------
 
-# inputtino's scroll API takes distance in 120-per-notch high-resolution
-# units; we expose plain notches and multiply on the way down.
-_SCROLL_NOTCH = 120
-
 if sys.platform == "linux":
     import inputtino
     import mss
 
-    _BUTTON_MAP: dict[ButtonName, inputtino.MouseButton] = {
-        "left": inputtino.MouseButton.LEFT,
-        "middle": inputtino.MouseButton.MIDDLE,
-        "right": inputtino.MouseButton.RIGHT,
+    _BUTTON_MAP: dict[MouseButton, inputtino.MouseButton] = {
+        MouseButton.LEFT: inputtino.MouseButton.LEFT,
+        MouseButton.MIDDLE: inputtino.MouseButton.MIDDLE,
+        MouseButton.RIGHT: inputtino.MouseButton.RIGHT,
     }
 
     class LinuxMouse(Mouse):
@@ -127,17 +148,19 @@ if sys.platform == "linux":
                 self._imp.move_abs(x, y, self._screen_w, self._screen_h)
 
         @override
-        def _do_click(self, button: ButtonName, *, count: int, duration: float) -> None:
+        def _do_click(
+            self, button: MouseButton, *, count: int, duration: float
+        ) -> None:
             btn = _BUTTON_MAP[button]
             for _ in range(count):
                 self._imp.click(btn, duration=duration)
 
         @override
-        def _do_press(self, button: ButtonName) -> None:
+        def _do_press(self, button: MouseButton) -> None:
             self._imp.press(_BUTTON_MAP[button])
 
         @override
-        def _do_release(self, button: ButtonName) -> None:
+        def _do_release(self, button: MouseButton) -> None:
             self._imp.release(_BUTTON_MAP[button])
 
         @override
@@ -199,7 +222,9 @@ if sys.platform == "win32":
                 pydirectinput.moveTo(x, y)
 
         @override
-        def _do_click(self, button: ButtonName, *, count: int, duration: float) -> None:
+        def _do_click(
+            self, button: MouseButton, *, count: int, duration: float
+        ) -> None:
             for _ in range(count):
                 if duration > 0:
                     # Older pydirectinput versions inject MINIMUM_DURATION
@@ -213,11 +238,11 @@ if sys.platform == "win32":
                     pydirectinput.click(button=button)
 
         @override
-        def _do_press(self, button: ButtonName) -> None:
+        def _do_press(self, button: MouseButton) -> None:
             pydirectinput.mouseDown(button=button)
 
         @override
-        def _do_release(self, button: ButtonName) -> None:
+        def _do_release(self, button: MouseButton) -> None:
             pydirectinput.mouseUp(button=button)
 
         @override
@@ -258,7 +283,7 @@ def move(x: int, y: int, *, relative: bool = False, focus: bool = True) -> None:
 
 
 def click(
-    button: ButtonName = "left",
+    button: MouseButton = MouseButton.LEFT,
     *,
     count: int = 1,
     duration: float = 0.0,
@@ -268,12 +293,12 @@ def click(
     _get().click(button, count=count, duration=duration, focus=focus)
 
 
-def press(button: ButtonName = "left", *, focus: bool = True) -> None:
+def press(button: MouseButton = MouseButton.LEFT, *, focus: bool = True) -> None:
     """See :meth:`Mouse.press`."""
     _get().press(button, focus=focus)
 
 
-def release(button: ButtonName = "left", *, focus: bool = True) -> None:
+def release(button: MouseButton = MouseButton.LEFT, *, focus: bool = True) -> None:
     """See :meth:`Mouse.release`."""
     _get().release(button, focus=focus)
 

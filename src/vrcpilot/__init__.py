@@ -10,6 +10,7 @@ from importlib import metadata
 from vrcpilot.capture import Capture, CaptureLoop
 from vrcpilot.controls import (
     Key,
+    MouseButton,
     VRChatNotFocusedError,
     VRChatNotRunningError,
     ensure_target,
@@ -48,6 +49,7 @@ __all__ = [
     "keyboard",
     "launch",
     "mouse",
+    "MouseButton",
     "OscConfig",
     "Screenshot",
     "SteamNotFoundError",
