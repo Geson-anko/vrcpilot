@@ -28,6 +28,7 @@ from vrcpilot.screenshot import Screenshot
 
 from .base import OCREngine, OCRWord
 from .rapidocr import RapidOCREngine
+from .types import Polygon
 
 
 @dataclass(frozen=True, eq=False)
@@ -51,14 +52,7 @@ class OCRResult:
     screenshot: Screenshot
     words: tuple[OCRWord, ...]
 
-    def display_polygon(
-        self, word: OCRWord
-    ) -> tuple[
-        tuple[float, float],
-        tuple[float, float],
-        tuple[float, float],
-        tuple[float, float],
-    ]:
+    def display_polygon(self, word: OCRWord) -> Polygon:
         """Return ``word.polygon`` shifted to desktop-absolute coordinates.
 
         Each ``(x, y)`` corner is offset by
