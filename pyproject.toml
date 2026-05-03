@@ -23,6 +23,12 @@ dependencies = [
 [project.scripts]
 vrcpilot = "vrcpilot.cli:main"
 
+[project.optional-dependencies]
+ocr = [
+    "rapidocr>=3.8",
+    "onnxruntime>=1.18",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
