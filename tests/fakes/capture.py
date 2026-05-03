@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 from types import TracebackType
-from typing import Self
+from typing import BinaryIO, Self
 
 import numpy as np
 
@@ -143,6 +143,46 @@ class FakeMp4Sink:
         self.writes: list[np.ndarray] = []
         self.closed = False
         FakeMp4Sink.instances.append(self)
+
+    @property
+    def frame_count(self) -> int:
+        return len(self.writes)
+
+    def write(self, frame_rgb: np.ndarray) -> None:
+        self.writes.append(frame_rgb)
+
+    def close(self) -> None:
+        self.closed = True
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        del exc_type, exc_val, exc_tb
+        self.close()
+
+
+class FakeY4mStdoutSink:
+    """Stand-in for :class:`vrcpilot.capture.sinks.Y4mStdoutFrameSink`.
+
+    Captures every written frame in :attr:`writes` so CLI / loop
+    integration tests can assert what would have been streamed to
+    stdout without actually emitting y4m bytes.
+    """
+
+    instances: list[FakeY4mStdoutSink] = []
+
+    def __init__(self, fps: float, *, stream: BinaryIO | None = None) -> None:
+        self.fps = fps
+        self.stream = stream
+        self.writes: list[np.ndarray] = []
+        self.closed = False
+        FakeY4mStdoutSink.instances.append(self)
 
     @property
     def frame_count(self) -> int:
