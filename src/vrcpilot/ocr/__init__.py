@@ -9,5 +9,6 @@ are added in subsequent layers.
 from __future__ import annotations
 
 from .base import OCREngine, OCRWord
+from .rapidocr import RapidOCREngine
 
-__all__ = ["OCREngine", "OCRWord"]
+__all__ = ["OCREngine", "OCRWord", "RapidOCREngine"]
