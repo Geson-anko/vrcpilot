@@ -2,7 +2,9 @@
 
 Pixel capture is split between :class:`Capture` (focus-free streaming for
 video / ML) and :func:`take_screenshot` (one focused shot with on-screen
-geometry, for GUI automation).
+geometry, for GUI automation). :func:`recognize` consumes a captured
+:class:`Screenshot` and runs OCR through a swappable :class:`OCREngine`,
+keeping capture and recognition as orthogonal steps.
 """
 
 from importlib import metadata
@@ -17,6 +19,7 @@ from vrcpilot.controls import (
     keyboard,
     mouse,
 )
+from vrcpilot.ocr import OCREngine, OCRResult, OCRWord, RapidOCREngine, recognize
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
@@ -50,7 +53,12 @@ __all__ = [
     "launch",
     "mouse",
     "MouseButton",
+    "OCREngine",
+    "OCRResult",
+    "OCRWord",
     "OscConfig",
+    "RapidOCREngine",
+    "recognize",
     "Screenshot",
     "SteamNotFoundError",
     "take_screenshot",

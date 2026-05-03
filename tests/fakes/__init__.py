@@ -26,6 +26,7 @@ from .capture import (
     make_fresh_windows_capture_subclass,
 )
 from .inputtino import FakeInputtinoKeyboard, FakeInputtinoMouse, FakeMouseButton
+from .ocr import FakeOCREngine
 from .process import FakePopen, FakeProcess
 from .pydirectinput import FakePyDirectInput
 from .x11 import (
@@ -45,6 +46,7 @@ __all__ = [
     "FakeInputtinoMouse",
     "FakeMouseButton",
     "FakeMp4Sink",
+    "FakeOCREngine",
     "FakePixmap",
     "FakePixmapImage",
     "FakePopen",
