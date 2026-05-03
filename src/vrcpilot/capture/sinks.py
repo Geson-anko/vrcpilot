@@ -117,10 +117,13 @@ class Y4mStdoutFrameSink:
     The first :meth:`write` locks the frame size from the input array's
     shape and emits the y4m header. Subsequent writes prepend
     ``b"FRAME\\n"`` and append the Y/U/V planes (each ``H * W`` bytes,
-    full-resolution chroma — ``C444``). The fps is rendered as a
-    rational ``n:d`` via ``Fraction(fps).limit_denominator(1000)`` so
-    integer rates like ``30.0`` stay ``30:1`` while NTSC ``29.97``
-    becomes ``2997:100``.
+    full-resolution chroma — ``C444``). ``C444`` is chosen over the
+    more common ``C420`` because subsampled chroma requires even W/H,
+    and the producer's frame size is dictated by VRChat's window —
+    arbitrary odd dimensions must be allowed through unchanged. The
+    fps is rendered as a rational ``n:d`` via
+    ``Fraction(fps).limit_denominator(1000)`` so integer rates like
+    ``30.0`` stay ``30:1`` while NTSC ``29.97`` becomes ``2997:100``.
 
     Args:
         fps: Frame rate written into the y4m header. Should match the
