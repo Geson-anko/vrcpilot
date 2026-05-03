@@ -20,6 +20,11 @@ class FakePyDirectInput:
     site. Tests can inspect the list directly, or use the
     ``move_to_calls`` / ``click_calls`` / etc. convenience properties
     when only one method's history matters.
+
+    Only the surface that production code actually invokes is mirrored:
+    ``Win32Keyboard`` uses ``keyDown`` / ``keyUp`` (not the higher-level
+    ``pydirectinput.press`` helper), and ``Win32Mouse`` uses
+    ``mouseDown`` / ``mouseUp`` / ``moveTo`` / ``moveRel`` / ``click``.
     """
 
     # Module-level attribute parity with real ``pydirectinput``.
@@ -50,9 +55,6 @@ class FakePyDirectInput:
 
     # --- keyboard surface -----------------------------------------------
 
-    def press(self, keys: str) -> None:
-        self.calls.append(("press", {"keys": keys}))
-
     def keyDown(self, key: str) -> None:
         self.calls.append(("keyDown", {"key": key}))
 
@@ -80,10 +82,6 @@ class FakePyDirectInput:
     @property
     def mouse_up_calls(self) -> list[dict[str, object]]:
         return [args for name, args in self.calls if name == "mouseUp"]
-
-    @property
-    def press_calls(self) -> list[dict[str, object]]:
-        return [args for name, args in self.calls if name == "press"]
 
     @property
     def key_down_calls(self) -> list[dict[str, object]]:

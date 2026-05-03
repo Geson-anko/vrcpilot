@@ -123,15 +123,6 @@ class ImplMouse(Mouse):
         self.calls.append(("_do_move", {"x": x, "y": y, "relative": relative}))
 
     @override
-    def _do_click(self, button: MouseButton, *, count: int, duration: float) -> None:
-        self.calls.append(
-            (
-                "_do_click",
-                {"button": button, "count": count, "duration": duration},
-            )
-        )
-
-    @override
     def _do_press(self, button: MouseButton) -> None:
         self.calls.append(("_do_press", {"button": button}))
 
@@ -155,10 +146,6 @@ class ImplKeyboard(Keyboard):
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, object]]] = []
-
-    @override
-    def _do_press(self, key: Key, *, duration: float) -> None:
-        self.calls.append(("_do_press", {"key": key, "duration": duration}))
 
     @override
     def _do_down(self, key: Key) -> None:

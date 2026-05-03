@@ -176,6 +176,7 @@ class TestKeyboardGuardWiring:
         self, mocker: MockerFixture
     ):
         guard = mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        mocker.patch("vrcpilot.controls.keyboard.time.sleep")
         impl = ImplKeyboard()
 
         impl.press(Key.A)
@@ -186,6 +187,7 @@ class TestKeyboardGuardWiring:
 
     def test_focus_false_skips_ensure_target(self, mocker: MockerFixture):
         guard = mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        mocker.patch("vrcpilot.controls.keyboard.time.sleep")
         impl = ImplKeyboard()
 
         impl.press(Key.A, focus=False)
@@ -194,17 +196,27 @@ class TestKeyboardGuardWiring:
 
         guard.assert_not_called()
 
-    def test_press_forwards_arguments(self, mocker: MockerFixture):
+    def test_press_single_key_decomposes_to_down_sleep_up(self, mocker: MockerFixture):
         mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        sleep_spy = mocker.patch("vrcpilot.controls.keyboard.time.sleep")
         impl = ImplKeyboard()
 
         impl.press(Key.A, duration=0.05)
-        impl.press(Key.SPACE)  # default duration=0.1
 
         assert impl.calls == [
-            ("_do_press", {"key": Key.A, "duration": 0.05}),
-            ("_do_press", {"key": Key.SPACE, "duration": 0.1}),
+            ("_do_down", {"key": Key.A}),
+            ("_do_up", {"key": Key.A}),
         ]
+        sleep_spy.assert_called_once_with(0.05)
+
+    def test_press_default_duration_is_0_1(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        sleep_spy = mocker.patch("vrcpilot.controls.keyboard.time.sleep")
+        impl = ImplKeyboard()
+
+        impl.press(Key.SPACE)
+
+        sleep_spy.assert_called_once_with(0.1)
 
     def test_down_up_forward_key(self, mocker: MockerFixture):
         mocker.patch("vrcpilot.controls.keyboard.ensure_target")
@@ -217,6 +229,84 @@ class TestKeyboardGuardWiring:
             ("_do_down", {"key": Key.CTRL_LEFT}),
             ("_do_up", {"key": Key.CTRL_LEFT}),
         ]
+
+    def test_press_combo_runs_down_left_to_right_and_up_reversed(
+        self, mocker: MockerFixture
+    ):
+        mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        sleep_spy = mocker.patch("vrcpilot.controls.keyboard.time.sleep")
+        impl = ImplKeyboard()
+
+        impl.press(Key.CTRL_LEFT, Key.C, duration=0.05)
+
+        assert impl.calls == [
+            ("_do_down", {"key": Key.CTRL_LEFT}),
+            ("_do_down", {"key": Key.C}),
+            ("_do_up", {"key": Key.C}),
+            ("_do_up", {"key": Key.CTRL_LEFT}),
+        ]
+        sleep_spy.assert_called_once_with(0.05)
+
+    def test_down_combo_left_to_right(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        impl = ImplKeyboard()
+
+        impl.down(Key.CTRL_LEFT, Key.SHIFT_LEFT, Key.A)
+
+        assert impl.calls == [
+            ("_do_down", {"key": Key.CTRL_LEFT}),
+            ("_do_down", {"key": Key.SHIFT_LEFT}),
+            ("_do_down", {"key": Key.A}),
+        ]
+
+    def test_up_combo_reversed(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        impl = ImplKeyboard()
+
+        impl.up(Key.CTRL_LEFT, Key.SHIFT_LEFT, Key.A)
+
+        # LIFO: same arg list passed to down + up yields stack-pop order.
+        assert impl.calls == [
+            ("_do_up", {"key": Key.A}),
+            ("_do_up", {"key": Key.SHIFT_LEFT}),
+            ("_do_up", {"key": Key.CTRL_LEFT}),
+        ]
+
+    def test_press_with_no_keys_raises_type_error(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        impl = ImplKeyboard()
+
+        with pytest.raises(TypeError, match="at least one Key"):
+            impl.press()
+
+        assert impl.calls == []
+
+    def test_down_with_no_keys_raises_type_error(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        impl = ImplKeyboard()
+
+        with pytest.raises(TypeError, match="at least one Key"):
+            impl.down()
+
+        assert impl.calls == []
+
+    def test_up_with_no_keys_raises_type_error(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        impl = ImplKeyboard()
+
+        with pytest.raises(TypeError, match="at least one Key"):
+            impl.up()
+
+        assert impl.calls == []
+
+    def test_focus_guard_runs_once_per_call_not_per_key(self, mocker: MockerFixture):
+        guard = mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        mocker.patch("vrcpilot.controls.keyboard.time.sleep")
+        impl = ImplKeyboard()
+
+        impl.press(Key.A, Key.B, Key.C)
+
+        assert guard.call_count == 1
 
 
 # --- LinuxKeyboard tests (Linux-only) -------------------------------------
@@ -244,54 +334,6 @@ class TestLinuxKeyboard:
     ``fake_inputtino_keyboard`` fixture replaces ``inputtino.Keyboard``
     so the production code runs end-to-end against a fake.
     """
-
-    def test_do_press_forwards_to_type(
-        self, fake_inputtino_keyboard: FakeInputtinoKeyboard
-    ):
-        import inputtino
-
-        from vrcpilot.controls.keyboard import LinuxKeyboard
-
-        kb = LinuxKeyboard()
-        kb._do_press(Key.A, duration=0.05)
-
-        assert fake_inputtino_keyboard.type_calls == [
-            {"key_code": inputtino.KeyCode.A, "duration": 0.05}
-        ]
-
-    def test_do_press_zero_duration_forwarded_verbatim(
-        self, fake_inputtino_keyboard: FakeInputtinoKeyboard
-    ):
-        import inputtino
-
-        from vrcpilot.controls.keyboard import LinuxKeyboard
-
-        kb = LinuxKeyboard()
-        kb._do_press(Key.A, duration=0.0)
-
-        # Backend never substitutes the caller's duration; passing 0.0
-        # explicitly still reaches inputtino as 0.0 (even though VRChat
-        # tends to drop those events -- see the public API default).
-        assert fake_inputtino_keyboard.type_calls == [
-            {"key_code": inputtino.KeyCode.A, "duration": 0.0}
-        ]
-
-    def test_do_press_escape_uses_inputtino_esc(
-        self, fake_inputtino_keyboard: FakeInputtinoKeyboard
-    ):
-        # Spec name `Key.ESCAPE` -> inputtino name `KeyCode.ESC`. The
-        # mapping must bridge that gap, otherwise the e2e ESC
-        # toggle scenario would silently send the wrong code.
-        import inputtino
-
-        from vrcpilot.controls.keyboard import LinuxKeyboard
-
-        kb = LinuxKeyboard()
-        kb._do_press(Key.ESCAPE, duration=0.0)
-
-        assert fake_inputtino_keyboard.type_calls == [
-            {"key_code": inputtino.KeyCode.ESC, "duration": 0.0}
-        ]
 
     def test_do_down_forwards_to_press(
         self, fake_inputtino_keyboard: FakeInputtinoKeyboard
@@ -322,15 +364,20 @@ class TestLinuxKeyboard:
         ]
 
     def test_modifier_combo_sequence(
-        self, fake_inputtino_keyboard: FakeInputtinoKeyboard, mocker: MockerFixture
+        self,
+        fake_inputtino_keyboard: FakeInputtinoKeyboard,
+        mocker: MockerFixture,
     ):
         # Drive the public methods so the guard is invoked, but stub
-        # it out so the test does not need a running VRChat.
+        # it out so the test does not need a running VRChat. ``press``
+        # now decomposes to _do_down -> sleep -> _do_up, so the
+        # backend sees only press/release calls.
         import inputtino
 
         from vrcpilot.controls.keyboard import LinuxKeyboard
 
         mocker.patch("vrcpilot.controls.keyboard.ensure_target")
+        mocker.patch("vrcpilot.controls.keyboard.time.sleep")
         kb = LinuxKeyboard()
 
         kb.down(Key.SHIFT_LEFT)
@@ -339,7 +386,8 @@ class TestLinuxKeyboard:
 
         assert fake_inputtino_keyboard.calls == [
             ("press", {"key_code": inputtino.KeyCode.LEFT_SHIFT}),
-            ("type", {"key_code": inputtino.KeyCode.A, "duration": 0.1}),
+            ("press", {"key_code": inputtino.KeyCode.A}),
+            ("release", {"key_code": inputtino.KeyCode.A}),
             ("release", {"key_code": inputtino.KeyCode.LEFT_SHIFT}),
         ]
 
@@ -372,52 +420,6 @@ class TestWin32Keyboard:
     """
 
     @pytest.mark.parametrize(
-        "key", [Key.A, Key.SPACE, Key.F1, Key.SHIFT_LEFT, Key.ESCAPE]
-    )
-    def test_do_press_zero_duration_uses_press_helper(
-        self,
-        fake_pydirectinput: FakePyDirectInput,
-        mocker: MockerFixture,
-        key: Key,
-    ):
-        from vrcpilot.controls.keyboard import Win32Keyboard
-
-        # Spy on time.sleep to confirm the zero-duration path skips it.
-        sleep_spy = mocker.patch.object(keyboard_mod.time, "sleep")
-
-        kb = Win32Keyboard()
-        kb._do_press(key, duration=0.0)
-
-        assert fake_pydirectinput.press_calls == [{"keys": key.value}]
-        assert fake_pydirectinput.key_down_calls == []
-        assert fake_pydirectinput.key_up_calls == []
-        sleep_spy.assert_not_called()
-
-    def test_do_press_with_duration_decomposes_to_down_sleep_up(
-        self,
-        fake_pydirectinput: FakePyDirectInput,
-        mocker: MockerFixture,
-    ):
-        from vrcpilot.controls.keyboard import Win32Keyboard
-
-        sleep_spy = mocker.patch.object(keyboard_mod.time, "sleep")
-
-        kb = Win32Keyboard()
-        kb._do_press(Key.A, duration=0.05)
-
-        # The press() helper must NOT be used when duration > 0, to
-        # avoid pydirectinput's MINIMUM_DURATION sleep injection.
-        assert fake_pydirectinput.press_calls == []
-        assert fake_pydirectinput.key_down_calls == [{"key": "a"}]
-        assert fake_pydirectinput.key_up_calls == [{"key": "a"}]
-        # Interleaved: keyDown -> sleep -> keyUp.
-        assert [name for name, _ in fake_pydirectinput.calls] == [
-            "keyDown",
-            "keyUp",
-        ]
-        sleep_spy.assert_called_once_with(0.05)
-
-    @pytest.mark.parametrize(
         "key", [Key.A, Key.SHIFT_LEFT, Key.CTRL_LEFT, Key.ALT_RIGHT]
     )
     def test_do_down_routes_to_key_down(
@@ -446,7 +448,7 @@ class TestWin32Keyboard:
         assert fake_pydirectinput.key_down_calls == []
 
     @pytest.mark.parametrize("key", list(Key))
-    def test_every_key_member_reaches_pydirectinput_press(
+    def test_every_key_member_reaches_pydirectinput_key_down(
         self, fake_pydirectinput: FakePyDirectInput, key: Key
     ):
         # Coverage smoke: no Key member should crash the Win32 backend
@@ -455,9 +457,11 @@ class TestWin32Keyboard:
         from vrcpilot.controls.keyboard import Win32Keyboard
 
         kb = Win32Keyboard()
-        kb._do_press(key, duration=0.0)
+        kb._do_down(key)
+        kb._do_up(key)
 
-        assert fake_pydirectinput.press_calls == [{"keys": key.value}]
+        assert fake_pydirectinput.key_down_calls == [{"key": key.value}]
+        assert fake_pydirectinput.key_up_calls == [{"key": key.value}]
 
 
 # --- _get() lazy-init tests ----------------------------------------------
@@ -501,26 +505,21 @@ class _SpyKeyboard(Keyboard):
         self.calls: list[tuple[str, dict[str, object]]] = []
 
     @override
-    def press(self, key: Key, *, duration: float = 0.1, focus: bool = True) -> None:
+    def press(self, *keys: Key, duration: float = 0.1, focus: bool = True) -> None:
         self.calls.append(
             (
                 "press",
-                {"key": key, "duration": duration, "focus": focus},
+                {"keys": keys, "duration": duration, "focus": focus},
             )
         )
 
     @override
-    def down(self, key: Key, *, focus: bool = True) -> None:
-        self.calls.append(("down", {"key": key, "focus": focus}))
+    def down(self, *keys: Key, focus: bool = True) -> None:
+        self.calls.append(("down", {"keys": keys, "focus": focus}))
 
     @override
-    def up(self, key: Key, *, focus: bool = True) -> None:
-        self.calls.append(("up", {"key": key, "focus": focus}))
-
-    @override
-    def _do_press(self, key: Key, *, duration: float) -> None:
-        # Not exercised; the spy overrides the public methods directly.
-        ...
+    def up(self, *keys: Key, focus: bool = True) -> None:
+        self.calls.append(("up", {"keys": keys, "focus": focus}))
 
     @override
     def _do_down(self, key: Key) -> None: ...
@@ -539,7 +538,24 @@ class TestModuleFunctions:
         keyboard_mod.press(Key.A, duration=0.05, focus=False)
 
         assert spy.calls == [
-            ("press", {"key": Key.A, "duration": 0.05, "focus": False})
+            ("press", {"keys": (Key.A,), "duration": 0.05, "focus": False})
+        ]
+
+    def test_press_forwards_combo(self):
+        spy = _SpyKeyboard()
+        keyboard_mod._instance = spy
+
+        keyboard_mod.press(Key.CTRL_LEFT, Key.C, duration=0.2)
+
+        assert spy.calls == [
+            (
+                "press",
+                {
+                    "keys": (Key.CTRL_LEFT, Key.C),
+                    "duration": 0.2,
+                    "focus": True,
+                },
+            )
         ]
 
     def test_down_forwards(self):
@@ -548,7 +564,23 @@ class TestModuleFunctions:
 
         keyboard_mod.down(Key.CTRL_LEFT)
 
-        assert spy.calls == [("down", {"key": Key.CTRL_LEFT, "focus": True})]
+        assert spy.calls == [("down", {"keys": (Key.CTRL_LEFT,), "focus": True})]
+
+    def test_down_forwards_combo(self):
+        spy = _SpyKeyboard()
+        keyboard_mod._instance = spy
+
+        keyboard_mod.down(Key.CTRL_LEFT, Key.SHIFT_LEFT, Key.A)
+
+        assert spy.calls == [
+            (
+                "down",
+                {
+                    "keys": (Key.CTRL_LEFT, Key.SHIFT_LEFT, Key.A),
+                    "focus": True,
+                },
+            )
+        ]
 
     def test_up_forwards(self):
         spy = _SpyKeyboard()
@@ -556,4 +588,17 @@ class TestModuleFunctions:
 
         keyboard_mod.up(Key.CTRL_LEFT, focus=False)
 
-        assert spy.calls == [("up", {"key": Key.CTRL_LEFT, "focus": False})]
+        assert spy.calls == [("up", {"keys": (Key.CTRL_LEFT,), "focus": False})]
+
+    def test_up_forwards_combo(self):
+        spy = _SpyKeyboard()
+        keyboard_mod._instance = spy
+
+        keyboard_mod.up(Key.CTRL_LEFT, Key.SHIFT_LEFT)
+
+        assert spy.calls == [
+            (
+                "up",
+                {"keys": (Key.CTRL_LEFT, Key.SHIFT_LEFT), "focus": True},
+            )
+        ]

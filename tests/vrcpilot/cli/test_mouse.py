@@ -81,10 +81,8 @@ class TestMouseClick:
 
         assert exit_code == 0
         assert fake_mouse.calls == [
-            (
-                "_do_click",
-                {"button": MouseButton.LEFT, "count": 1, "duration": 0.0},
-            )
+            ("_do_press", {"button": MouseButton.LEFT}),
+            ("_do_release", {"button": MouseButton.LEFT}),
         ]
 
     @pytest.mark.parametrize(
@@ -105,24 +103,32 @@ class TestMouseClick:
 
         assert exit_code == 0
         assert fake_mouse.calls == [
-            (
-                "_do_click",
-                {"button": expected_button, "count": 1, "duration": 0.0},
-            )
+            ("_do_press", {"button": expected_button}),
+            ("_do_release", {"button": expected_button}),
         ]
 
-    def test_count_and_duration_propagation(self, fake_mouse: ImplMouse):
+    def test_count_and_duration_propagation(
+        self, fake_mouse: ImplMouse, mocker: MockerFixture
+    ):
+        sleep_spy = mocker.patch("vrcpilot.controls.mouse.time.sleep")
+
         exit_code = main(
             ["mouse", "click", "right", "--count", "3", "--duration", "0.05"]
         )
 
         assert exit_code == 0
-        assert fake_mouse.calls == [
-            (
-                "_do_click",
-                {"button": MouseButton.RIGHT, "count": 3, "duration": 0.05},
-            )
-        ]
+        # count=3 cycles of press / release for the same button.
+        assert (
+            fake_mouse.calls
+            == [
+                ("_do_press", {"button": MouseButton.RIGHT}),
+                ("_do_release", {"button": MouseButton.RIGHT}),
+            ]
+            * 3
+        )
+        assert sleep_spy.call_count == 3
+        for call in sleep_spy.call_args_list:
+            assert call.args == (0.05,)
 
     def test_argparse_rejects_unknown_button(self, capsys: pytest.CaptureFixture[str]):
         with pytest.raises(SystemExit) as excinfo:
@@ -132,6 +138,50 @@ class TestMouseClick:
         # argparse writes its error to stderr; just ensure something landed.
         captured = capsys.readouterr()
         assert captured.err != ""
+
+    def test_click_two_buttons_simultaneously(self, fake_mouse: ImplMouse):
+        exit_code = main(["mouse", "click", "left", "right"])
+
+        assert exit_code == 0
+        assert fake_mouse.calls == [
+            ("_do_press", {"button": MouseButton.LEFT}),
+            ("_do_press", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.LEFT}),
+        ]
+
+    def test_click_three_buttons_with_count_and_duration(
+        self, fake_mouse: ImplMouse, mocker: MockerFixture
+    ):
+        sleep_spy = mocker.patch("vrcpilot.controls.mouse.time.sleep")
+
+        exit_code = main(
+            [
+                "mouse",
+                "click",
+                "left",
+                "right",
+                "middle",
+                "--count",
+                "2",
+                "--duration",
+                "0.05",
+            ]
+        )
+
+        assert exit_code == 0
+        cycle = [
+            ("_do_press", {"button": MouseButton.LEFT}),
+            ("_do_press", {"button": MouseButton.RIGHT}),
+            ("_do_press", {"button": MouseButton.MIDDLE}),
+            ("_do_release", {"button": MouseButton.MIDDLE}),
+            ("_do_release", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.LEFT}),
+        ]
+        assert fake_mouse.calls == cycle * 2
+        assert sleep_spy.call_count == 2
+        for call in sleep_spy.call_args_list:
+            assert call.args == (0.05,)
 
 
 class TestMouseScroll:

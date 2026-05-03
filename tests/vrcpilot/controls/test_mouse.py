@@ -132,30 +132,150 @@ class TestMouseGuardWiring:
             ("_do_move", {"x": 30, "y": 40, "relative": False}),
         ]
 
-    def test_click_forwards_arguments(self, mocker: MockerFixture):
+    def test_click_single_button_decomposes_to_press_release(
+        self, mocker: MockerFixture
+    ):
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        sleep_spy = mocker.patch("vrcpilot.controls.mouse.time.sleep")
+        impl = ImplMouse()
+
+        impl.click(MouseButton.RIGHT)
+
+        assert impl.calls == [
+            ("_do_press", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.RIGHT}),
+        ]
+        sleep_spy.assert_not_called()
+
+    def test_click_with_no_args_defaults_to_left(self, mocker: MockerFixture):
         mocker.patch("vrcpilot.controls.mouse.ensure_target")
         impl = ImplMouse()
 
-        impl.click(MouseButton.RIGHT, count=2, duration=0.05)
+        impl.click()
 
         assert impl.calls == [
-            (
-                "_do_click",
-                {"button": MouseButton.RIGHT, "count": 2, "duration": 0.05},
-            )
+            ("_do_press", {"button": MouseButton.LEFT}),
+            ("_do_release", {"button": MouseButton.LEFT}),
         ]
 
-    def test_press_release_forward_button(self, mocker: MockerFixture):
+    def test_click_combo_simultaneous(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        sleep_spy = mocker.patch("vrcpilot.controls.mouse.time.sleep")
+        impl = ImplMouse()
+
+        impl.click(MouseButton.LEFT, MouseButton.RIGHT, duration=0.05)
+
+        assert impl.calls == [
+            ("_do_press", {"button": MouseButton.LEFT}),
+            ("_do_press", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.LEFT}),
+        ]
+        sleep_spy.assert_called_once_with(0.05)
+
+    def test_click_with_duration_zero_skips_sleep(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        sleep_spy = mocker.patch("vrcpilot.controls.mouse.time.sleep")
+        impl = ImplMouse()
+
+        impl.click(MouseButton.LEFT, MouseButton.RIGHT, duration=0.0)
+
+        assert impl.calls == [
+            ("_do_press", {"button": MouseButton.LEFT}),
+            ("_do_press", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.LEFT}),
+        ]
+        sleep_spy.assert_not_called()
+
+    def test_click_count_3_runs_three_combo_cycles(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        sleep_spy = mocker.patch("vrcpilot.controls.mouse.time.sleep")
+        impl = ImplMouse()
+
+        impl.click(MouseButton.LEFT, MouseButton.RIGHT, count=3, duration=0.02)
+
+        cycle = [
+            ("_do_press", {"button": MouseButton.LEFT}),
+            ("_do_press", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.LEFT}),
+        ]
+        assert impl.calls == cycle * 3
+        assert sleep_spy.call_count == 3
+        for call in sleep_spy.call_args_list:
+            assert call.args == (0.02,)
+
+    def test_click_count_zero_emits_nothing(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        sleep_spy = mocker.patch("vrcpilot.controls.mouse.time.sleep")
+        impl = ImplMouse()
+
+        impl.click(MouseButton.LEFT, MouseButton.RIGHT, count=0, duration=0.05)
+
+        assert impl.calls == []
+        sleep_spy.assert_not_called()
+
+    def test_press_combo_left_to_right(self, mocker: MockerFixture):
         mocker.patch("vrcpilot.controls.mouse.ensure_target")
         impl = ImplMouse()
 
-        impl.press(MouseButton.MIDDLE)
-        impl.release(MouseButton.MIDDLE)
+        impl.press(MouseButton.LEFT, MouseButton.RIGHT, MouseButton.MIDDLE)
 
         assert impl.calls == [
+            ("_do_press", {"button": MouseButton.LEFT}),
+            ("_do_press", {"button": MouseButton.RIGHT}),
             ("_do_press", {"button": MouseButton.MIDDLE}),
-            ("_do_release", {"button": MouseButton.MIDDLE}),
         ]
+
+    def test_press_with_no_args_defaults_to_left(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        impl = ImplMouse()
+
+        impl.press()
+
+        assert impl.calls == [("_do_press", {"button": MouseButton.LEFT})]
+
+    def test_release_combo_reversed(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        impl = ImplMouse()
+
+        impl.release(MouseButton.LEFT, MouseButton.RIGHT, MouseButton.MIDDLE)
+
+        # Reverse-on-release matches LIFO stack semantics; pairing
+        # press(*bs) / release(*bs) cleans up in the opposite order.
+        assert impl.calls == [
+            ("_do_release", {"button": MouseButton.MIDDLE}),
+            ("_do_release", {"button": MouseButton.RIGHT}),
+            ("_do_release", {"button": MouseButton.LEFT}),
+        ]
+
+    def test_release_with_no_args_defaults_to_left(self, mocker: MockerFixture):
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        impl = ImplMouse()
+
+        impl.release()
+
+        assert impl.calls == [("_do_release", {"button": MouseButton.LEFT})]
+
+    def test_focus_guard_runs_once_per_combo(self, mocker: MockerFixture):
+        guard = mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        mocker.patch("vrcpilot.controls.mouse.time.sleep")
+        impl = ImplMouse()
+
+        impl.click(
+            MouseButton.LEFT,
+            MouseButton.RIGHT,
+            MouseButton.MIDDLE,
+            count=3,
+            duration=0.01,
+        )
+        impl.press(MouseButton.LEFT, MouseButton.RIGHT)
+        impl.release(MouseButton.LEFT, MouseButton.RIGHT)
+
+        # 1 call per public method invocation, regardless of combo size
+        # or count.
+        assert guard.call_count == 3
 
     def test_scroll_forwards_amount(self, mocker: MockerFixture):
         mocker.patch("vrcpilot.controls.mouse.ensure_target")
@@ -234,33 +354,44 @@ class TestLinuxMouse:
             (MouseButton.RIGHT, 2),
         ],
     )
-    def test_click_maps_button_and_repeats_count(
+    def test_click_decomposes_to_press_release_via_abc(
         self,
         fake_inputtino_mouse: FakeInputtinoMouse,
+        mocker: MockerFixture,
         button: MouseButton,
         expected_value: int,
     ):
+        # Public ``click()`` now decomposes into the ABC's
+        # _do_press / _do_release loop. The Linux backend has no
+        # _do_click of its own, so a click() ends up as inputtino
+        # press / release calls.
         from vrcpilot.controls.mouse import LinuxMouse
 
-        m = LinuxMouse()
-        m._do_click(button, count=3, duration=0.05)
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        mocker.patch("vrcpilot.controls.mouse.time.sleep")
 
-        assert len(fake_inputtino_mouse.click_calls) == 3
-        for call in fake_inputtino_mouse.click_calls:
-            # button is the real inputtino.MouseButton enum -- compare
-            # by the IntEnum value to stay decoupled from the binding.
+        m = LinuxMouse()
+        m.click(button, count=3, duration=0.05)
+
+        assert len(fake_inputtino_mouse.press_calls) == 3
+        assert len(fake_inputtino_mouse.release_calls) == 3
+        for call in fake_inputtino_mouse.press_calls:
             assert int(call["button"]) == expected_value  # type: ignore[arg-type]
-            assert call["duration"] == 0.05
+        for call in fake_inputtino_mouse.release_calls:
+            assert int(call["button"]) == expected_value  # type: ignore[arg-type]
 
     def test_click_count_zero_emits_nothing(
-        self, fake_inputtino_mouse: FakeInputtinoMouse
+        self, fake_inputtino_mouse: FakeInputtinoMouse, mocker: MockerFixture
     ):
         from vrcpilot.controls.mouse import LinuxMouse
 
-        m = LinuxMouse()
-        m._do_click(MouseButton.LEFT, count=0, duration=0.0)
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
 
-        assert fake_inputtino_mouse.click_calls == []
+        m = LinuxMouse()
+        m.click(MouseButton.LEFT, count=0, duration=0.0)
+
+        assert fake_inputtino_mouse.press_calls == []
+        assert fake_inputtino_mouse.release_calls == []
 
     def test_press_maps_right_button(self, fake_inputtino_mouse: FakeInputtinoMouse):
         from vrcpilot.controls.mouse import LinuxMouse
@@ -349,27 +480,27 @@ class TestWin32Mouse:
         "button", [MouseButton.LEFT, MouseButton.RIGHT, MouseButton.MIDDLE]
     )
     @pytest.mark.parametrize("count", [1, 3])
-    def test_click_zero_duration_uses_click_helper(
+    def test_click_zero_duration_decomposes_to_down_up(
         self,
         fake_pydirectinput: FakePyDirectInput,
         mocker: MockerFixture,
         button: MouseButton,
         count: int,
     ):
+        # Public ``click()`` now flows through _do_press / _do_release.
+        # On Win32 those resolve to ``mouseDown`` / ``mouseUp`` calls;
+        # the legacy ``click()`` shortcut on pydirectinput is gone.
         from vrcpilot.controls.mouse import Win32Mouse
 
-        # Spy on time.sleep to confirm the zero-duration path skips it.
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
         sleep_spy = mocker.patch.object(mouse_mod.time, "sleep")
 
         m = Win32Mouse()
-        m._do_click(button, count=count, duration=0.0)
+        m.click(button, count=count, duration=0.0)
 
-        # pydirectinput is fed the MouseButton (a StrEnum, hence a str
-        # subclass that equals its value), so {"button": "left"} matches
-        # {"button": MouseButton.LEFT}.
-        assert fake_pydirectinput.click_calls == [{"button": button.value}] * count
-        assert fake_pydirectinput.mouse_down_calls == []
-        assert fake_pydirectinput.mouse_up_calls == []
+        assert fake_pydirectinput.click_calls == []
+        assert fake_pydirectinput.mouse_down_calls == [{"button": button.value}] * count
+        assert fake_pydirectinput.mouse_up_calls == [{"button": button.value}] * count
         sleep_spy.assert_not_called()
 
     def test_click_with_duration_decomposes_to_down_sleep_up(
@@ -379,13 +510,12 @@ class TestWin32Mouse:
     ):
         from vrcpilot.controls.mouse import Win32Mouse
 
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
         sleep_spy = mocker.patch.object(mouse_mod.time, "sleep")
 
         m = Win32Mouse()
-        m._do_click(MouseButton.LEFT, count=2, duration=0.05)
+        m.click(MouseButton.LEFT, count=2, duration=0.05)
 
-        # The click() helper must NOT be used when duration > 0, to
-        # avoid pydirectinput's MINIMUM_DURATION sleep injection.
         assert fake_pydirectinput.click_calls == []
         assert fake_pydirectinput.mouse_down_calls == [{"button": "left"}] * 2
         assert fake_pydirectinput.mouse_up_calls == [{"button": "left"}] * 2
@@ -400,13 +530,45 @@ class TestWin32Mouse:
         for call in sleep_spy.call_args_list:
             assert call.args == (0.05,)
 
-    def test_click_count_zero_emits_nothing(
-        self, fake_pydirectinput: FakePyDirectInput
+    def test_click_combo_simultaneous(
+        self,
+        fake_pydirectinput: FakePyDirectInput,
+        mocker: MockerFixture,
     ):
         from vrcpilot.controls.mouse import Win32Mouse
 
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+        sleep_spy = mocker.patch.object(mouse_mod.time, "sleep")
+
         m = Win32Mouse()
-        m._do_click(MouseButton.LEFT, count=0, duration=0.0)
+        m.click(MouseButton.LEFT, MouseButton.RIGHT, duration=0.05)
+
+        assert [name for name, _ in fake_pydirectinput.calls] == [
+            "mouseDown",
+            "mouseDown",
+            "mouseUp",
+            "mouseUp",
+        ]
+        assert fake_pydirectinput.mouse_down_calls == [
+            {"button": "left"},
+            {"button": "right"},
+        ]
+        # Reverse-on-release: right released before left.
+        assert fake_pydirectinput.mouse_up_calls == [
+            {"button": "right"},
+            {"button": "left"},
+        ]
+        sleep_spy.assert_called_once_with(0.05)
+
+    def test_click_count_zero_emits_nothing(
+        self, fake_pydirectinput: FakePyDirectInput, mocker: MockerFixture
+    ):
+        from vrcpilot.controls.mouse import Win32Mouse
+
+        mocker.patch("vrcpilot.controls.mouse.ensure_target")
+
+        m = Win32Mouse()
+        m.click(MouseButton.LEFT, count=0, duration=0.0)
 
         assert fake_pydirectinput.calls == []
 
@@ -517,8 +679,7 @@ class _SpyMouse(Mouse):
     @override
     def click(
         self,
-        button: MouseButton = MouseButton.LEFT,
-        *,
+        *buttons: MouseButton,
         count: int = 1,
         duration: float = 0.0,
         focus: bool = True,
@@ -527,7 +688,7 @@ class _SpyMouse(Mouse):
             (
                 "click",
                 {
-                    "button": button,
+                    "buttons": buttons,
                     "count": count,
                     "duration": duration,
                     "focus": focus,
@@ -538,20 +699,18 @@ class _SpyMouse(Mouse):
     @override
     def press(
         self,
-        button: MouseButton = MouseButton.LEFT,
-        *,
+        *buttons: MouseButton,
         focus: bool = True,
     ) -> None:
-        self.calls.append(("press", {"button": button, "focus": focus}))
+        self.calls.append(("press", {"buttons": buttons, "focus": focus}))
 
     @override
     def release(
         self,
-        button: MouseButton = MouseButton.LEFT,
-        *,
+        *buttons: MouseButton,
         focus: bool = True,
     ) -> None:
-        self.calls.append(("release", {"button": button, "focus": focus}))
+        self.calls.append(("release", {"buttons": buttons, "focus": focus}))
 
     @override
     def scroll(self, amount: int, *, focus: bool = True) -> None:
@@ -561,11 +720,6 @@ class _SpyMouse(Mouse):
     def _do_move(self, x: int, y: int, *, relative: bool) -> None:
         # Not exercised; the spy overrides the public methods directly.
         ...
-
-    @override
-    def _do_click(
-        self, button: MouseButton, *, count: int, duration: float
-    ) -> None: ...
 
     @override
     def _do_press(self, button: MouseButton) -> None: ...
@@ -606,10 +760,28 @@ class TestModuleFunctions:
             (
                 "click",
                 {
-                    "button": MouseButton.RIGHT,
+                    "buttons": (MouseButton.RIGHT,),
                     "count": 2,
                     "duration": 0.1,
                     "focus": False,
+                },
+            )
+        ]
+
+    def test_click_combo_forwards(self):
+        spy = _SpyMouse()
+        mouse_mod._instance = spy
+
+        mouse_mod.click(MouseButton.LEFT, MouseButton.RIGHT, duration=0.05)
+
+        assert spy.calls == [
+            (
+                "click",
+                {
+                    "buttons": (MouseButton.LEFT, MouseButton.RIGHT),
+                    "count": 1,
+                    "duration": 0.05,
+                    "focus": True,
                 },
             )
         ]
@@ -622,8 +794,26 @@ class TestModuleFunctions:
         mouse_mod.release(MouseButton.MIDDLE, focus=False)
 
         assert spy.calls == [
-            ("press", {"button": MouseButton.MIDDLE, "focus": True}),
-            ("release", {"button": MouseButton.MIDDLE, "focus": False}),
+            ("press", {"buttons": (MouseButton.MIDDLE,), "focus": True}),
+            ("release", {"buttons": (MouseButton.MIDDLE,), "focus": False}),
+        ]
+
+    def test_press_release_combo_forward(self):
+        spy = _SpyMouse()
+        mouse_mod._instance = spy
+
+        mouse_mod.press(MouseButton.LEFT, MouseButton.RIGHT)
+        mouse_mod.release(MouseButton.LEFT, MouseButton.RIGHT)
+
+        assert spy.calls == [
+            (
+                "press",
+                {"buttons": (MouseButton.LEFT, MouseButton.RIGHT), "focus": True},
+            ),
+            (
+                "release",
+                {"buttons": (MouseButton.LEFT, MouseButton.RIGHT), "focus": True},
+            ),
         ]
 
     def test_scroll_forwards(self):

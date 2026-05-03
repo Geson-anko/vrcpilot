@@ -50,37 +50,62 @@ class Mouse(ABC):
 
     def click(
         self,
-        button: MouseButton = MouseButton.LEFT,
-        *,
+        *buttons: MouseButton,
         count: int = 1,
         duration: float = 0.0,
         focus: bool = True,
     ) -> None:
-        """Click ``button`` ``count`` times.
+        """Click one or more buttons simultaneously, ``count`` times.
 
-        ``duration`` is the down-to-up hold per click, in seconds;
-        use ``0.02``-``0.05`` when VRChat / Unity drops zero-length
-        presses. Clicks run back-to-back with no inter-click delay.
+        ``buttons`` are pressed left-to-right, held for ``duration``
+        seconds (skipped when ``duration == 0``), then released in
+        reverse order. The combo is repeated ``count`` times back-to-back
+        with no inter-cycle delay. ``duration`` is the down-to-up hold
+        per cycle in seconds; use ``0.02``-``0.05`` when VRChat / Unity
+        drops zero-length presses.
+
+        Calling ``click()`` with no ``buttons`` is treated as
+        ``click(MouseButton.LEFT)`` for back-compat with the previous
+        single-button signature.
         """
         if focus:
             ensure_target()
-        self._do_click(button, count=count, duration=duration)
+        if not buttons:
+            buttons = (MouseButton.LEFT,)
+        for _ in range(count):
+            for b in buttons:
+                self._do_press(b)
+            if duration > 0:
+                time.sleep(duration)
+            for b in reversed(buttons):
+                self._do_release(b)
 
-    def press(
-        self, button: MouseButton = MouseButton.LEFT, *, focus: bool = True
-    ) -> None:
-        """Press and hold ``button`` until a matching :meth:`release`."""
+    def press(self, *buttons: MouseButton, focus: bool = True) -> None:
+        """Press and hold one or more buttons until a matching :meth:`release`.
+
+        Buttons are pressed left-to-right. Empty argument list falls
+        back to :attr:`MouseButton.LEFT` for back-compat.
+        """
         if focus:
             ensure_target()
-        self._do_press(button)
+        if not buttons:
+            buttons = (MouseButton.LEFT,)
+        for b in buttons:
+            self._do_press(b)
 
-    def release(
-        self, button: MouseButton = MouseButton.LEFT, *, focus: bool = True
-    ) -> None:
-        """Release ``button`` previously pressed with :meth:`press`."""
+    def release(self, *buttons: MouseButton, focus: bool = True) -> None:
+        """Release one or more buttons previously held with :meth:`press`.
+
+        Buttons are released in reverse order so a paired ``press(*bs)``
+        / ``release(*bs)`` follows LIFO stack semantics. Empty argument
+        list falls back to :attr:`MouseButton.LEFT` for back-compat.
+        """
         if focus:
             ensure_target()
-        self._do_release(button)
+        if not buttons:
+            buttons = (MouseButton.LEFT,)
+        for b in reversed(buttons):
+            self._do_release(b)
 
     def scroll(self, amount: int, *, focus: bool = True) -> None:
         """Scroll vertically by ``amount`` notches (positive = down)."""
@@ -90,11 +115,6 @@ class Mouse(ABC):
 
     @abstractmethod
     def _do_move(self, x: int, y: int, *, relative: bool) -> None: ...
-
-    @abstractmethod
-    def _do_click(
-        self, button: MouseButton, *, count: int, duration: float
-    ) -> None: ...
 
     @abstractmethod
     def _do_press(self, button: MouseButton) -> None: ...
@@ -146,14 +166,6 @@ if sys.platform == "linux":
                 self._imp.move(x, y)
             else:
                 self._imp.move_abs(x, y, self._screen_w, self._screen_h)
-
-        @override
-        def _do_click(
-            self, button: MouseButton, *, count: int, duration: float
-        ) -> None:
-            btn = _BUTTON_MAP[button]
-            for _ in range(count):
-                self._imp.click(btn, duration=duration)
 
         @override
         def _do_press(self, button: MouseButton) -> None:
@@ -222,22 +234,6 @@ if sys.platform == "win32":
                 pydirectinput.moveTo(x, y)
 
         @override
-        def _do_click(
-            self, button: MouseButton, *, count: int, duration: float
-        ) -> None:
-            for _ in range(count):
-                if duration > 0:
-                    # Older pydirectinput versions inject MINIMUM_DURATION
-                    # sleeps when click() is called with duration=0, so
-                    # split the down/up path manually instead of passing
-                    # duration through.
-                    pydirectinput.mouseDown(button=button)
-                    time.sleep(duration)
-                    pydirectinput.mouseUp(button=button)
-                else:
-                    pydirectinput.click(button=button)
-
-        @override
         def _do_press(self, button: MouseButton) -> None:
             pydirectinput.mouseDown(button=button)
 
@@ -283,24 +279,23 @@ def move(x: int, y: int, *, relative: bool = False, focus: bool = True) -> None:
 
 
 def click(
-    button: MouseButton = MouseButton.LEFT,
-    *,
+    *buttons: MouseButton,
     count: int = 1,
     duration: float = 0.0,
     focus: bool = True,
 ) -> None:
     """See :meth:`Mouse.click`."""
-    _get().click(button, count=count, duration=duration, focus=focus)
+    _get().click(*buttons, count=count, duration=duration, focus=focus)
 
 
-def press(button: MouseButton = MouseButton.LEFT, *, focus: bool = True) -> None:
+def press(*buttons: MouseButton, focus: bool = True) -> None:
     """See :meth:`Mouse.press`."""
-    _get().press(button, focus=focus)
+    _get().press(*buttons, focus=focus)
 
 
-def release(button: MouseButton = MouseButton.LEFT, *, focus: bool = True) -> None:
+def release(*buttons: MouseButton, focus: bool = True) -> None:
     """See :meth:`Mouse.release`."""
-    _get().release(button, focus=focus)
+    _get().release(*buttons, focus=focus)
 
 
 def scroll(amount: int, *, focus: bool = True) -> None:
