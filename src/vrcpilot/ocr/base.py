@@ -54,9 +54,8 @@ class OCRWord:
     def bbox(self) -> tuple[int, int, int, int]:
         """Axis-aligned bounding box ``(x, y, width, height)``.
 
-        Derived from :attr:`polygon` via ``min``/``max`` and rounded
-        to ``int``. ``width`` / ``height`` are always non-negative
-        (zero for a degenerate polygon).
+        ``width`` and ``height`` are always non-negative (zero for a
+        degenerate polygon).
         """
         xs = [p[0] for p in self.polygon]
         ys = [p[1] for p in self.polygon]
