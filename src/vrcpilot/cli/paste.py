@@ -53,15 +53,7 @@ def register(subparsers: SubParsersAction) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    """Execute the ``paste`` subcommand.
-
-    Silent on success. See the module docstring for the full exit-code
-    contract.
-
-    Returns:
-        ``0`` on success, ``1`` on VRChat guard / pyperclip failure,
-        ``2`` when no text is provided and stdin is a tty.
-    """
+    """Execute the ``paste`` subcommand; see module docstring for exits."""
     raw: str | None = args.text
     if raw is None:
         if sys.stdin.isatty():
