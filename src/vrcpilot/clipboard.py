@@ -1,10 +1,10 @@
 """Clipboard helper for non-ASCII text input into VRChat.
 
-`vrcpilot.controls.keyboard` は scancode ベースで動作するため、日本語のような
-非 ASCII 文字列は直接入力できない。本モジュールはこの制限を回避するため、
-文字列を OS のクリップボードに書き込み、VRChat へ ``Ctrl+V`` を送る経路を
-提供する。pyperclip 1 つに依存する薄いラッパで、プラットフォーム分岐は
-pyperclip 内部に委ねている。
+:mod:`vrcpilot.controls.keyboard` is scancode-based and cannot type
+non-ASCII characters (e.g. Japanese). This module works around that by
+writing the text to the OS clipboard and sending ``Ctrl+V`` to VRChat.
+A thin wrapper over a single dependency (``pyperclip``); platform
+branching is delegated to pyperclip internally.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ import pyperclip
 
 from vrcpilot.controls import Key, keyboard
 
-#: xclip / xsel が selection の所有権を取得するまでの猶予 (秒)。
-#: Linux で copy 直後に paste すると selection 反映前に Ctrl+V が走り、
-#: 直前の clipboard 内容が貼られる事故が起きるため明示的に待つ。
+#: Grace period (seconds) for xclip / xsel to take selection ownership.
+#: On Linux, issuing Ctrl+V immediately after copy can land before the
+#: selection is published, pasting the *previous* clipboard contents.
 _CLIPBOARD_SETTLE: float = 0.05
 
 

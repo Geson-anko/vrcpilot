@@ -1,14 +1,16 @@
-"""E2E scenario: 日本語テキストを VRChat の chat 入力欄に貼り付ける.
+"""E2E scenario: paste Japanese text into VRChat's chat input box.
 
-`vrcpilot.clipboard.paste` は pyperclip でクリップボードに文字列を置き、
-直後に Ctrl+V を叩くことで scancode ベースの keyboard では入力できない
-非 ASCII 文字を VRChat に送る経路を提供する。本シナリオは:
+:func:`vrcpilot.clipboard.paste` writes a string to the clipboard via
+pyperclip and immediately issues ``Ctrl+V``, providing a path to send
+non-ASCII characters that the scancode-based keyboard cannot type. This
+scenario:
 
-* VRChat を Desktop モードで起動し、warmup 後に Y キーで chat 入力欄を開く
-* `clipboard.paste("こんにちは VRChat")` を呼ぶ
-* スクリーンショットを保存して目視確認できるようにする
-* 最後に ESC で chat を閉じ、起動直後と同じ tidy 状態に戻して post-cleanup
-  に渡す
+* Launches VRChat in Desktop mode, warms up, then opens the chat input
+  with the ``Y`` key.
+* Calls ``clipboard.paste("Hello VRChat")`` (with a Japanese sample) so
+  the resulting screenshot can be verified by eye.
+* Closes chat with ``ESC`` so VRChat returns to the same tidy state as
+  immediately after launch, ready for post-cleanup.
 
 Run with::
 
@@ -16,13 +18,14 @@ Run with::
 
 Prerequisites:
 
-* デスクトップセッション (X11 / XWayland) が到達可能であること。native
-  Wayland は ``ensure_target`` で弾かれる
-* Steam が起動済みであること (``vrcpilot.launch()`` が timeout する)
-* Linux では ``/dev/uinput`` への書き込み権限 (input グループ所属) が
-  必要 — ``tests/e2e/keyboard.py`` の説明を参照
-* Linux では ``xclip`` または ``xsel`` がインストール済みであること。
-  pyperclip は内部でこれらを fork して selection 所有権を保持する
+* A desktop session (X11 / XWayland) must be reachable. Native Wayland
+  is rejected by ``ensure_target``.
+* Steam must already be running (``vrcpilot.launch()`` will time out
+  otherwise).
+* On Linux, write access to ``/dev/uinput`` (membership in the ``input``
+  group) is required -- see ``tests/e2e/keyboard.py`` for details.
+* On Linux, ``xclip`` or ``xsel`` must be installed. pyperclip forks
+  one of them internally to hold selection ownership.
 """
 
 from __future__ import annotations
