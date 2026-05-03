@@ -24,6 +24,8 @@ import argcomplete as argcomplete  # re-exported for test patching
 
 from vrcpilot.capture import CaptureLoop as CaptureLoop
 from vrcpilot.capture.sinks import Mp4FrameSink as Mp4FrameSink
+from vrcpilot.ocr.recognize import recognize as recognize  # patch boundary
+from vrcpilot.ocr.visualize import render as render  # patch boundary
 from vrcpilot.screenshot import take_screenshot as take_screenshot
 from vrcpilot.window import focus as _window_focus, unfocus as _window_unfocus
 

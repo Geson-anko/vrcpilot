@@ -24,6 +24,7 @@ import vrcpilot.cli.focus as _cmd_focus
 import vrcpilot.cli.keyboard as _cmd_keyboard
 import vrcpilot.cli.launch as _cmd_launch
 import vrcpilot.cli.mouse as _cmd_mouse
+import vrcpilot.cli.ocr as _cmd_ocr
 import vrcpilot.cli.pid as _cmd_pid
 import vrcpilot.cli.screenshot as _cmd_screenshot
 import vrcpilot.cli.terminate as _cmd_terminate
@@ -39,6 +40,7 @@ _COMMANDS: dict[str, Callable[[argparse.Namespace], int]] = {
     "capture": _cmd_capture.run,
     "mouse": _cmd_mouse.run,
     "keyboard": _cmd_keyboard.run,
+    "ocr": _cmd_ocr.run,
 }
 
 
@@ -63,6 +65,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _cmd_capture.register(subparsers)
     _cmd_mouse.register(subparsers)
     _cmd_keyboard.register(subparsers)
+    _cmd_ocr.register(subparsers)
 
     return parser
 

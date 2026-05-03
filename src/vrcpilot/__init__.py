@@ -17,6 +17,7 @@ from vrcpilot.controls import (
     keyboard,
     mouse,
 )
+from vrcpilot.ocr import OCREngine, OCRResult, OCRWord, RapidOCREngine, recognize
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
     VRCHAT_STEAM_APP_ID,
@@ -50,7 +51,12 @@ __all__ = [
     "launch",
     "mouse",
     "MouseButton",
+    "OCREngine",
+    "OCRResult",
+    "OCRWord",
     "OscConfig",
+    "RapidOCREngine",
+    "recognize",
     "Screenshot",
     "SteamNotFoundError",
     "take_screenshot",
