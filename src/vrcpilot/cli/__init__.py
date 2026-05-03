@@ -21,6 +21,7 @@ from . import (
     launch,
     mouse,
     ocr,
+    paste,
     pid,
     screenshot,
     terminate,
@@ -37,6 +38,7 @@ _COMMANDS = {
     "capture": capture,
     "mouse": mouse,
     "keyboard": keyboard,
+    "paste": paste,
     "ocr": ocr,
 }
 

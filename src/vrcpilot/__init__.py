@@ -9,6 +9,7 @@ keeping capture and recognition as orthogonal steps.
 
 from importlib import metadata
 
+from vrcpilot import clipboard
 from vrcpilot.capture import Capture, CaptureLoop
 from vrcpilot.controls import (
     Key,
@@ -44,6 +45,7 @@ __all__ = [
     "build_vrchat_launch_args",
     "Capture",
     "CaptureLoop",
+    "clipboard",
     "ensure_target",
     "find_pid",
     "focus",
