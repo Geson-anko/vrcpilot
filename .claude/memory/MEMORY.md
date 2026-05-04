@@ -12,6 +12,7 @@
 - [lint ツーリング集約](feedback_lint_tooling.md) — ruff/docformatter 等は pre-commit に集約。指示・報告では「`just run`」「pre-commit 全 hook」と書く
 - [e2e は Claude が実行](feedback_e2e_run.md) — `tests/e2e/` は人手作業に残さず Claude 自身が `just e2e-test` で実機検証する
 - [計画ドキュメントは日本語](feedback_planning_doc_language.md) — plan ファイル・設計提示は日本語で書く。コード/識別子/コマンドは英語のまま
+- [vrcpilot CLI で VRChat を操作する playbook](feedback_vrchat_cli_playbook.md) — SSH/.env 環境で起動 → メニュー → OCR → click → 移動 → terminate の実機検証済み手順
 
 ## project（実装上の固有事情）
 
