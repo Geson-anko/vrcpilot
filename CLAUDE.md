@@ -14,7 +14,16 @@
 
 ## プロジェクト状況
 
-`vrcpilot` パッケージは VRChat の起動・終了・プロセス検出（`process`）、ウィンドウ操作（`window/`、Win32/X11 バックエンド）、画面キャプチャ（`capture/`、`Capture` セッション + `CaptureLoop` + `Mp4FrameSink`）、スクリーンショット（`screenshot`）、非 ASCII テキスト入力（`clipboard`、pyperclip + Ctrl+V で scancode keyboard の制限を回避）、CLI フロントエンド（`cli/` 配下にサブコマンド毎 1 ファイル: `launch` / `pid` / `terminate` / `focus` / `unfocus` / `screenshot` / `capture` / `mouse` / `keyboard` / `paste`、ディスパッチは `cli/_main.py`）から構成される。プラットフォーム抽象は親 `__init__.py` で `sys.platform` ディスパッチして公開する（`__all__` 経由で公開 API を集約）。プラットフォーム固有の低レベル実装（`steam`, `win32`, `x11`, `capture/sinks`, `_session`）は内部モジュールとして配置している。
+`vrcpilot` パッケージは以下のサブシステムから構成される:
+
+- **プロセス制御**: `process`（起動/終了/PID 検出）、`steam`（Steam 検出）、`session`（Wayland-native 判定）
+- **ウィンドウ操作**: `window/`（Win32/X11 バックエンドの focus/unfocus/is_foreground）、`geometry`（ウィンドウ矩形取得）
+- **キャプチャ系**: `capture/`（`Capture` + `CaptureLoop` + `Mp4FrameSink` / `Y4mStdoutFrameSink`、Win32/X11 バックエンド）、`screenshot`（GUI 自動化向けの 1 ショット取得）
+- **OCR**: `ocr/`（`OCREngine` ABC + `RapidOCREngine` 実装、`recognize` で `Screenshot` を入力に取る）
+- **入力制御**: `controls/`（VRChat フォーカス保証つきの `keyboard` / `mouse`、`guard`、`errors`）、`clipboard`（pyperclip + Ctrl+V で scancode keyboard の非 ASCII 制限を回避）
+- **CLI フロントエンド**: `cli/` 配下にサブコマンド毎 1 ファイル（`launch` / `pid` / `terminate` / `focus` / `unfocus` / `screenshot` / `capture` / `mouse` / `keyboard` / `paste` / `ocr`）、ディスパッチは `cli/__init__.py` の `build_parser` / `main`、共有ヘルパは `cli/_common.py`
+
+プラットフォーム抽象は親 `__init__.py` で `sys.platform` ディスパッチして公開する（`__all__` 経由で公開 API を集約）。プラットフォーム固有の低レベル実装（`steam`, `win32`, `x11`, `capture/{win32,x11,sinks}`, `window/{win32,x11}`, `controls/{keyboard,mouse}`）は対応モジュールに配置している。
 
 ## ツーリング
 
