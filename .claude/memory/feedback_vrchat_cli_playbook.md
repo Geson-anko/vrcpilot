@@ -6,7 +6,7 @@ type: feedback
 
 `vrcpilot` の CLI を組み合わせて VRChat を end-to-end で動かすための運用手順。SSH 越しに自分のデスクトップへ VRChat を出して観察・操作する用途を想定する。
 
-**Why:** ユーザーから「CLI で VRChat の UI 操作が可能なレベルまで到達したので、メニューを開いて色々操作するインストラクションを Claude 自身が VRChat を操作するために書いて」と明示依頼あり (2026-05-04)。同日に X11 デスクトップ + Steam 稼働下で起動 → Launch Pad 開閉 → OCR → mouse click → 前進 → terminate まで実機検証済みの手順を、再現できるよう記録したもの。Linux 限定の事実 (Tab で Quick Menu が開かない、`VIRTUAL_ENV=/usr` 警告は無視可など) は実機で見ないと気付かない罠なのでここに保存する価値がある。
+**Why:** ユーザーから「CLI で VRChat の UI 操作が可能なレベルまで到達したので、メニューを開いて色々操作するインストラクションを Claude 自身が VRChat を操作するために書いて」と明示依頼あり (2026-05-04)。同日に X11 デスクトップ + Steam 稼働下で起動 → Launch Pad 開閉 → OCR → mouse click → 前進 → terminate まで実機検証済みの手順を、再現できるよう記録したもの。さらに同日の延長セッション (2026-05-04 後半) で featured world への travel、ワールド内移動、各タブの read-only 巡回、`paste` での日本語投入、`R` の Radial Action Menu までを **他人アカウントでの非破壊操作の枠内で** 検証し、得た罠 (§4.1 travel フロー / §5.1 Radial / §8 追補) と禁止事項 (§9 不可逆操作リスト) として反映している。Linux 限定の事実 (Tab で Quick Menu が開かない、`VIRTUAL_ENV=/usr` 警告は無視可など) は実機で見ないと気付かない罠なのでここに保存する価値がある。
 
 **How to apply:**
 
@@ -81,10 +81,12 @@ uv run vrcpilot screenshot -o /tmp/vrc_after.png
 
 VRChat 2026 系の UI では旧 Quick Menu / 旧 Main Menu が **Launch Pad** に統合されている。
 
-| キー     | 効果                         | 備考                                                                    |
-| -------- | ---------------------------- | ----------------------------------------------------------------------- |
-| `escape` | Launch Pad の **開閉トグル** | 検証済み。同じキーで開いて同じキーで閉じる                              |
-| `tab`    | （現行 UI では 効果なし）    | 旧 Quick Menu のキーだが、Launch Pad に統合済み。叩いても画面変化しない |
+| キー                        | 効果                                                              | 備考                                                                        |
+| --------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `escape`                    | Launch Pad / 開いている直近のサブダイアログを **1 段だけ** 閉じる | input → サブモーダル → Launch Pad の順で 1 回ずつ。一発全閉じ不可           |
+| `r`                         | **Radial Action Menu** を開く                                     | Options / Tools / Expressions / Items / Looks の 5 セグメント。閉じるは Esc |
+| `tab`                       | （現行 UI では 効果なし）                                         | 旧 Quick Menu のキーだが、Launch Pad に統合済み。叩いても画面変化しない     |
+| `v` / `pageup` / `pagedown` | 視覚変化なし                                                      | 2026 UI ではマップされていないか裏で silent に動く。当てにしない            |
 
 ```bash
 # 開く
@@ -100,19 +102,59 @@ uv run vrcpilot keyboard press escape
 
 Launch Pad 上の主なナビゲーション要素 (実機で OCR 取得済): `Launch Pad`, `Explore`, `Avatars`, `Worlds`, `Social`, `Groups`, `Safety`, `Accessories`, `Home`, `Respawn`, `Select`。bottom nav (Home / Worlds / Avatars / Social ...) は `display_pos.y ≈ 642 付近` (1280×720 ウィンドウの場合)。
 
+### 4.1 Worlds タブから別ワールドへ travel する
+
+```bash
+# ① Launch Pad → Worlds タブ
+uv run vrcpilot keyboard press escape
+uv run vrcpilot mouse move 1183 514 && uv run vrcpilot mouse click left
+
+# ② サイドバー or 中央グリッドから featured collection を 1 つ開く
+#    例: "VRCat's Variety Box" のラベル中心 (879, 371) を click
+uv run vrcpilot mouse move 879 371 && uv run vrcpilot mouse click left
+
+# ③ 中央のグリッドから world card のサムネイルを click
+#    text label を直接クリックすると「お気に入り追加」が出てしまう。
+#    label の y より 30-40 px 上 = 画像中心を狙う
+uv run vrcpilot ocr > /tmp/worlds.yaml          # 各 card のラベル位置を取得
+uv run vrcpilot mouse move <label_x> <label_y - 30> && uv run vrcpilot mouse click left
+
+# ④ 詳細ペインで Public Instance を確認 → "Join" を click (例: 1117, 404)
+uv run vrcpilot mouse move 1117 404 && uv run vrcpilot mouse click left
+
+# ⑤ Loading 画面 (Connecting...) → 入室。ダウンロードは MB/秒 の世界なので
+#    "FPS:" や入室後 HUD が見えるまで 30-60s 待つ
+```
+
+**0 / N 人の Public Instance を優先** する (誰もいない instance) と、他人を巻き込まずに済む。Friends / Group instance は他人に通知が飛ぶので避ける。
+
 ## 5. ワールド内操作
 
 メニューが閉じている状態でキーを送る。`vrcpilot.controls.keyboard.press` のデフォルト `duration=0.1` が VRChat に確実に届く下限なので、**0.0 にしない**（[project_keyboard_press_duration.md](project_keyboard_press_duration.md) 参照）。
 
-| 操作              | コマンド                                   | 補足                                                                                                                              |
-| ----------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| 前進              | `vrcpilot keyboard press w --duration 1.0` | 移動量は duration に比例。0.1 だと一歩、1.0 で 1m 級                                                                              |
-| 後退/左右         | `... press s/a/d`                          | 同上                                                                                                                              |
-| ジャンプ          | `... press space`                          |                                                                                                                                   |
-| 走る (押下中のみ) | `... press shift w --duration 1.0`         | 同時押し: `down → sleep → up reversed`                                                                                            |
-| 視点回転          | mouse move/click では難しい                | desktop 視点回転はマウスドラッグ。`vrcpilot mouse move --rel <dx> <dy>` で相対移動できるが、VRChat 側がマウスキャプチャ中かに依存 |
+| 操作              | コマンド                                   | 補足                                                                                                                        |
+| ----------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| 前進              | `vrcpilot keyboard press w --duration 1.0` | 移動量は duration に比例。0.1 だと一歩、1.0 で 1m 級                                                                        |
+| 後退/左右         | `... press s/a/d`                          | 同上                                                                                                                        |
+| ジャンプ          | `... press space`                          |                                                                                                                             |
+| 走る (押下中のみ) | `... press shift w --duration 1.0`         | 同時押し: `down → sleep → up reversed`                                                                                      |
+| 視点回転          | `vrcpilot mouse move <dx> <dy> --rel`      | desktop 視点はマウスキャプチャされており、相対移動で素直に追随。`mouse move 200 0 --rel` で右に振り向けることを実機確認済み |
 
 各 `keyboard press` 呼び出しは独立プロセスのため、キーを「押しっぱなし」で別コマンドを挟むことはできない (uinput 仮想デバイスがプロセス終了で kernel 自動 release される)。複合動作は **1 つの press 呼び出しで `--duration` を伸ばす** か、Python スクリプト側で `down/up` を明示する必要がある。
+
+### 5.1 Radial Action Menu (R キー)
+
+`vrcpilot keyboard press r` で画面中央にリング状の Action Menu が出る。実機で取れたセグメント (位置は 1280×720 desktop ウィンドウ前提):
+
+| セグメント  | display_pos 中心 (例) | 用途        |
+| ----------- | --------------------- | ----------- |
+| Options     | (1293, 484)           | 設定系      |
+| Tools       | (1220, 525)           | カメラ等    |
+| Expressions | (1370, 528)           | 表情・emote |
+| Items       | (1219, 611)           | 持ち物      |
+| Looks       | (1373, 619)           | 見た目変更  |
+
+サブメニューに掘るときは text label をそのままクリックするとリングに戻されることがある。**OCR の text 中心ではなくセグメントのアイコン中心** (リング上の少し外側寄り) を狙うと当たりやすい。閉じるは Esc 一発。
 
 ## 6. テキスト入力（非 ASCII を含む）
 
@@ -125,6 +167,8 @@ cat msg.txt | uv run vrcpilot paste
 ```
 
 検索ボックスやチャットなど、テキスト入力フィールドにフォーカスがある状態で実行する。`mouse click` で入力欄をクリック → `paste` の流れが定石。
+
+実機検証 (2026-05-04): Launch Pad → Social → User Search を選ぶと VRChat 側の virtual keyboard が立ち上がる。その状態で `vrcpilot paste "テスト検索"` を流すと入力欄に日本語がそのまま乗る。**送信ボタン (右側の paper-plane アイコン) を押すと実検索が走る** ので、UI 確認だけしたい場合は paste で止めて Esc で閉じるとよい。
 
 ## 7. 終了 (必ずやる)
 
@@ -146,8 +190,39 @@ uv run vrcpilot pid; echo "exit=$?"   # exit=1 で何もいないことを確認
 - **キープレスが届かない**: `keyboard press --duration 0.05` 以下にしていないか確認。デフォルト 0.1 が確実な下限
 - **画面ロック中**: window 操作が安定しない。検証中は lock を外しておく
 - **OCR の visibility テキスト揺れ**: confidence 0.9+ でも "Avatar" が "Auatar" になる等のドリフトあり (`step5_ocr.yaml` で実観測)。完全一致でなく `startswith` / `in` でマッチさせるとよい
+- **world card label を直接クリックすると「お気に入り追加」ダイアログが出る**: card の label / heart 領域にヒットしている。**サムネイル画像の中心** (ラベルより 30-40px 上) を狙うと world 詳細ペインが開く
+- **詳細ペインから travel するには `Join` ボタン**: ラベル "Join" の display_pos 中心を click。Public Instance 0/n で人がいない選択を優先する
+- **travel 直後の世界で Respawn を呼ぶと VRChat が落ちることがある**: 2026-05-04 に Grand View 入室直後 (12s 後) に Esc → Respawn (1140, 650) を click したらプロセスが消えた事例 1 件。重要操作はホームで先に試し、travel 後はネット同期と avatar の measure が落ち着く 30s ほど待ってから操作する
+- **Esc は 1 段ずつしか閉じない**: input field → 仮想キーボード → サブモーダル → Launch Pad と階層が深いと最大 3-4 回 Esc が必要。間に screenshot を挟んで段階を確認する
 
-## 9. 1 セッション分のミニマルな実行例
+## 9. 不可逆 / アカウント状態を変える操作 — 他人アカウント運用時は触らない
+
+`vrcpilot` で他人 (借りた / テスト用) のアカウントを動かすときに **絶対避けるクリック先**。実機検証時に Esc で逃げる癖をつける。
+
+| 操作                       | どこ                                     | 何が起きる                                                                                   |
+| -------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Logout**                 | Launch Pad 右上 / Settings               | 再ログイン要 (パスワード/2FA)。ユーザーへ操作権限を返す合図                                  |
+| **Make Home**              | World 詳細ペインの button                | home world が変わる。ユーザーの初期スポーン挙動が変わってしまう                              |
+| **Block & Report**         | プロフィール / 右パネルの "Block&Report" | 他人にアクションが飛ぶ。**取り消し UI が分かりづらい**                                       |
+| **Friend / Unfriend / DM** | Social タブ内のフレンド名                | 第三者に通知が飛ぶ。ボタンが密集していて誤爆しやすいので **Social はサイドバーまでで止める** |
+| **Avatar 切替**            | Avatars タブの avatar カード             | 見た目が変わる。clone 元等で問題になることもあるので clone してない avatar はクリックしない  |
+| **Safety Shield Level**    | Safety モーダル (None/Low/Medium/High)   | trust 設定で他人の表示可否が変わる。モーダルが出たら選択肢に触らず Esc                       |
+| **VRC+ / Shop 購入**       | Launch Pad 右パネル / VRC+ タブ          | 課金。確認ダイアログでも誤クリック注意                                                       |
+| **Quit** (Settings)        | Launch Pad 上部メニュー                  | VRChat を終了する。`vrcpilot terminate` で代替し、UI からは触らない                          |
+
+**Safe な操作** (検証で確認した non-destructive な範囲):
+
+- Launch Pad / 各タブの open/close
+- Worlds / Avatars / Social / Groups タブのサイドバー巡回 (中身を見るだけ)
+- Public Instance への travel (0 人 instance を選べば誰にも見られない)
+- ワールド内の WASD / Space / Shift+W / mouse rel 視点回転
+- `paste` で入力欄に文字列を乗せる (送信ボタンは押さない)
+- R で Radial Menu を開いて閉じる (サブメニューを 1 段見る)
+- Respawn (落下事故等の状態リセット — ただし上記事例の通り travel 直後は注意)
+
+迷ったら `vrcpilot screenshot` を 1 枚撮って画面を確認する。**ボタンが何かラベルなしで分からないときはクリックしない**。
+
+## 10. 1 セッション分のミニマルな実行例
 
 ```bash
 # .env を取り込んだサブシェルで全部やる
