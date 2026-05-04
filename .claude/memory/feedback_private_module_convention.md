@@ -6,8 +6,8 @@ type: feedback
 
 `src/vrcpilot/` 配下では **モジュールでも module-level 関数でも**、テストから参照されるかどうかで `_` prefix の有無を決める:
 
-- テストを書かない（真に private な実装）→ `_` prefix を付ける（例: `_session.py`、未公開ヘルパー関数 `_resolve_viz_path`）
-- テストを書く / 書かれている → `_` prefix を **付けない**（例: `steam.py`, `win32.py`, `x11.py`, `capture/sinks.py`、テストから直接呼ぶ `build_parser`）
+- テストを書かない（真に private な実装）→ `_` prefix を付ける（例: `cli/_common.py`、module-private な `_get_default_engine` / `_decide_text_color`）
+- テストを書く / 書かれている → `_` prefix を **付けない**（例: `steam.py`, `win32.py`, `x11.py`, `session.py`, `capture/sinks.py`、テストから直接呼ぶ `build_parser`）
 - 外部公開は `__init__.py` の `__all__` で別途集約管理する。`_` 有無と「公開 API」は独立した軸として扱う
 
 **Why:** `tests/` から `_`-prefixed なものを import / 呼び出しするのは「テストする = 外部からも触り得る」ことを意味し、prefix の本来の意図（"do not test, do not touch"）と矛盾する。命名規約として一貫させ、誤誘導を防ぐ。`__all__` で公開面を制御していれば、内部の名前から `_` を外しても外部に漏れることはない。
