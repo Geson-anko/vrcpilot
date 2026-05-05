@@ -6,8 +6,10 @@ Public surface:
 * :class:`Detection` — 検出 1 件の値型 (image-local)。
 * :class:`DetectResult` — screenshot + query + detections のバンドル。
   デスクトップ絶対座標へ変換するヘルパを提供する。
-* :class:`AkazeDetectEngine` — デフォルトの AKAZE ベース実装（低テクスチャ向き）。
-* :class:`SiftDetectEngine` — SIFT ベース代替実装。
+* :class:`TemplateDetectEngine` — デフォルトの multi-scale テンプレート
+  マッチ実装。
+* :class:`AkazeDetectEngine` — AKAZE ベースの opt-in 実装（特徴点向き）。
+* :class:`SiftDetectEngine` — SIFT ベースの opt-in 実装。
 * :func:`detect` — :class:`DetectEngine` を :class:`Screenshot` と
   クエリ画像に対して実行し結果をまとめる関数。
 * :func:`render` — :class:`DetectResult` を screenshot 上に重ね描き
@@ -24,6 +26,7 @@ from .akaze import AkazeDetectEngine
 from .base import DetectEngine, Detection
 from .detect import DetectResult, detect
 from .sift import SiftDetectEngine
+from .template import TemplateDetectEngine
 from .visualize import render
 
 __all__ = [
@@ -33,6 +36,7 @@ __all__ = [
     "Detection",
     "Polygon",
     "SiftDetectEngine",
+    "TemplateDetectEngine",
     "detect",
     "render",
 ]
