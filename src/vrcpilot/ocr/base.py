@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from .types import Polygon
+from vrcpilot.types import Polygon
 
 
 @dataclass(frozen=True)

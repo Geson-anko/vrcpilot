@@ -25,10 +25,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from vrcpilot.screenshot import Screenshot
+from vrcpilot.types import Polygon
 
 from .base import OCREngine, OCRWord
 from .rapidocr import RapidOCREngine
-from .types import Polygon
 
 
 @dataclass(frozen=True, eq=False)
