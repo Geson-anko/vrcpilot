@@ -12,10 +12,9 @@ Steps:
    open the Launch Pad.
 3. ``vrcpilot.take_screenshot()`` grabs the focused VRChat window.
 4. For every PNG under ``tests/e2e/fixtures/detect_icons/``, run
-   ``vrcpilot.detect.detect`` and record whether at least one
-   instance was found.
-5. Save a raw screenshot plus one annotated PNG per query so a human
-   can inspect the matches afterwards.
+   ``vrcpilot.detect.detect`` and accumulate the detections.
+5. Save **one** annotated PNG that overlays *every* query's detections
+   on the same screenshot (each polygon labelled with the icon name).
 6. The scenario fails iff **any** icon was not detected — a partial
    pass still surfaces the offending query names so the engine can be
    tuned (e.g. switching the backend to ORB/AKAZE for tiny icons).
@@ -27,8 +26,8 @@ Run with::
 Artifacts written to ``_e2e_artifacts/``:
 
 - ``detect_screenshot_<YYYYMMDD_HHMMSS>.png`` — raw Launch Pad capture
-- ``detect_viz_<icon>_<YYYYMMDD_HHMMSS>.png`` — one per query PNG,
-  with detected polygons drawn over the screenshot
+- ``detect_viz_<YYYYMMDD_HHMMSS>.png`` — single annotated PNG with all
+  query detections overlaid; each box labelled with the icon name
 """
 
 from __future__ import annotations
@@ -44,7 +43,7 @@ from PIL import Image
 
 import vrcpilot
 from vrcpilot import Key, keyboard
-from vrcpilot.detect import detect, render
+from vrcpilot.detect import Detection, detect
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _helpers  # noqa: E402
@@ -60,6 +59,46 @@ def _load_query(path: Path) -> NDArray[np.uint8]:
         raise RuntimeError(f"could not read query image: {path}")
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     return np.asarray(rgb, dtype=np.uint8)
+
+
+def _draw_combined_viz(
+    image: NDArray[np.uint8],
+    detections_by_query: dict[str, tuple[Detection, ...]],
+) -> NDArray[np.uint8]:
+    """Overlay all queries' detections on a single copy of *image*.
+
+    Each detection is drawn as a green polygon with the query name and
+    confidence placed just above the bounding box. The input array is
+    not mutated.
+    """
+    canvas: NDArray[np.uint8] = image.copy()
+    for name, detections in detections_by_query.items():
+        for det in detections:
+            polygon_pts = np.array(det.polygon, dtype=np.int32).reshape(-1, 1, 2)
+            cv2.polylines(
+                canvas,
+                [polygon_pts],
+                isClosed=True,
+                color=(0, 255, 0),
+                thickness=2,
+            )
+            bx, by, _bw, bh = det.bbox
+            label = f"{name} {det.confidence:.2f}"
+            (_text_w, text_h), _baseline = cv2.getTextSize(
+                label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
+            )
+            text_y = by - 4 if by - text_h - 4 >= 0 else by + bh + text_h + 4
+            cv2.putText(
+                canvas,
+                label,
+                (bx, text_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                1,
+                cv2.LINE_AA,
+            )
+    return canvas
 
 
 def _scenario() -> None:
@@ -100,6 +139,7 @@ def _scenario() -> None:
     raw_path = _helpers.save_image("detect", "screenshot", Image.fromarray(shot.image))
     _helpers.log(f"raw VRChat screenshot saved: {raw_path}")
 
+    detections_by_query: dict[str, tuple[Detection, ...]] = {}
     failures: list[str] = []
     for query_path in queries:
         name = query_path.stem
@@ -107,10 +147,7 @@ def _scenario() -> None:
         qh, qw = query.shape[:2]
         _helpers.log(f"detecting {name}.png (query={qw}x{qh})")
         result = detect(shot, query)
-
-        viz = render(result)
-        viz_path = _helpers.save_image("detect", f"viz_{name}", Image.fromarray(viz))
-        _helpers.log(f"  viz saved: {viz_path}")
+        detections_by_query[name] = result.detections
 
         if not result.detections:
             _helpers.log(f"  FAIL {name}: no detections")
@@ -141,10 +178,14 @@ def _scenario() -> None:
             f"rotation={first.rotation:.3f}"
         )
 
+    viz = _draw_combined_viz(shot.image, detections_by_query)
+    viz_path = _helpers.save_image("detect", "viz", Image.fromarray(viz))
+    _helpers.log(f"combined viz saved: {viz_path}")
+
     if failures:
         raise AssertionError(
             f"{len(failures)}/{len(queries)} query icons not detected: "
-            f"{', '.join(failures)} -- inspect viz PNGs under _e2e_artifacts/"
+            f"{', '.join(failures)} -- inspect {viz_path}"
         )
     _helpers.log(f"all {len(queries)} query icons detected")
 
