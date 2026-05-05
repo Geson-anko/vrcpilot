@@ -16,6 +16,7 @@ import argcomplete
 
 from . import (
     capture,
+    detect,
     focus,
     keyboard,
     launch,
@@ -40,6 +41,7 @@ _COMMANDS = {
     "keyboard": keyboard,
     "paste": paste,
     "ocr": ocr,
+    "detect": detect,
 }
 
 
