@@ -14,7 +14,7 @@ pipeline can be replayed against existing images, fed cropped regions,
 or driven by a custom capture source.
 
 The module-level ``_default_engine`` cache keeps :func:`detect` cheap
-on repeat calls: the (heavy) :class:`SiftDetectEngine` is built
+on repeat calls: the (heavy) :class:`AkazeDetectEngine` is built
 exactly once per process when the user does not pass an ``engine``
 argument. Tests that need a fresh cache should reset the variable
 explicitly (``vrcpilot.detect.detect._default_engine = None``).
@@ -30,8 +30,8 @@ from numpy.typing import NDArray
 from vrcpilot.screenshot import Screenshot
 from vrcpilot.types import Polygon
 
+from .akaze import AkazeDetectEngine
 from .base import DetectEngine, Detection
-from .sift import SiftDetectEngine
 
 
 @dataclass(frozen=True, eq=False)
@@ -97,14 +97,19 @@ _default_engine: DetectEngine | None = None
 def _get_default_engine() -> DetectEngine:
     """Return the cached default :class:`DetectEngine`, building it if needed.
 
-    The first call constructs a :class:`SiftDetectEngine`; subsequent
+    AKAZE をデフォルトとして採用し、SIFT は ``engine=`` 引数経由で
+    opt-in 利用する。実機 e2e で SIFT が低テクスチャ UI アイコンに
+    対し keypoint 不足で 10 個中 3 個しか検出できなかったため、
+    M-LDB descriptor で同じ条件下でも検出率が高い AKAZE を既定にする。
+
+    The first call constructs an :class:`AkazeDetectEngine`; subsequent
     calls reuse the cached instance. Not thread-safe — the project
     runs in a single context, so the worst case under racy access is
     a transient duplicate engine that is immediately replaced.
     """
     global _default_engine
     if _default_engine is None:
-        _default_engine = SiftDetectEngine()
+        _default_engine = AkazeDetectEngine()
     return _default_engine
 
 
@@ -130,7 +135,7 @@ def detect(
         query: ``(h, w, 3)`` uint8 RGB image to look for in
             *screenshot*.
         engine: Detection backend. ``None`` (default) lazily builds
-            and caches a :class:`SiftDetectEngine` via
+            and caches an :class:`AkazeDetectEngine` via
             :func:`_get_default_engine`.
 
     Returns:

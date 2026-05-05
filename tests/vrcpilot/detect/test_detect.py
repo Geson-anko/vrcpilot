@@ -141,9 +141,9 @@ class TestDetectDefaultEngineCache:
             build_count["n"] += 1
             return FakeDetectEngine([det])
 
-        # Patch the SiftDetectEngine reference inside the detect
+        # Patch the AkazeDetectEngine reference inside the detect
         # submodule so the default-engine path uses our fake.
-        monkeypatch.setattr(_detect_module, "SiftDetectEngine", _factory)
+        monkeypatch.setattr(_detect_module, "AkazeDetectEngine", _factory)
 
         first = detect(shot, query)
         second = detect(shot, query)
@@ -165,7 +165,7 @@ class TestDetectDefaultEngineCache:
             build_count["n"] += 1
             return FakeDetectEngine([])
 
-        monkeypatch.setattr(_detect_module, "SiftDetectEngine", _factory)
+        monkeypatch.setattr(_detect_module, "AkazeDetectEngine", _factory)
 
         detect(shot, query)
         assert build_count["n"] == 1

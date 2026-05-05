@@ -6,7 +6,8 @@ Public surface:
 * :class:`Detection` — 検出 1 件の値型 (image-local)。
 * :class:`DetectResult` — screenshot + query + detections のバンドル。
   デスクトップ絶対座標へ変換するヘルパを提供する。
-* :class:`SiftDetectEngine` — デフォルトの SIFT ベース実装。
+* :class:`AkazeDetectEngine` — デフォルトの AKAZE ベース実装（低テクスチャ向き）。
+* :class:`SiftDetectEngine` — SIFT ベース代替実装。
 * :func:`detect` — :class:`DetectEngine` を :class:`Screenshot` と
   クエリ画像に対して実行し結果をまとめる関数。
 * :func:`render` — :class:`DetectResult` を screenshot 上に重ね描き
@@ -19,12 +20,14 @@ from __future__ import annotations
 
 from vrcpilot.types import Polygon
 
+from .akaze import AkazeDetectEngine
 from .base import DetectEngine, Detection
 from .detect import DetectResult, detect
 from .sift import SiftDetectEngine
 from .visualize import render
 
 __all__ = [
+    "AkazeDetectEngine",
     "DetectEngine",
     "DetectResult",
     "Detection",
