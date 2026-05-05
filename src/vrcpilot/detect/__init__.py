@@ -9,6 +9,8 @@ Public surface:
 * :class:`SiftDetectEngine` — デフォルトの SIFT ベース実装。
 * :func:`detect` — :class:`DetectEngine` を :class:`Screenshot` と
   クエリ画像に対して実行し結果をまとめる関数。
+* :func:`render` — :class:`DetectResult` を screenshot 上に重ね描き
+  した RGB ndarray を返す。
 * :data:`Polygon` — 4 頂点ポリゴンの型エイリアス。独自エンジンを書く
   ユーザーが同じ形状で型注釈を付けられるよう再エクスポート。
 """
@@ -20,6 +22,7 @@ from vrcpilot.types import Polygon
 from .base import DetectEngine, Detection
 from .detect import DetectResult, detect
 from .sift import SiftDetectEngine
+from .visualize import render
 
 __all__ = [
     "DetectEngine",
@@ -28,4 +31,5 @@ __all__ = [
     "Polygon",
     "SiftDetectEngine",
     "detect",
+    "render",
 ]
