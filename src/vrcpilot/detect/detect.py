@@ -14,7 +14,7 @@ pipeline can be replayed against existing images, fed cropped regions,
 or driven by a custom capture source.
 
 The module-level ``_default_engine`` cache keeps :func:`detect` cheap
-on repeat calls: the (heavy) :class:`AkazeDetectEngine` is built
+on repeat calls: the (heavy) :class:`TemplateDetectEngine` is built
 exactly once per process when the user does not pass an ``engine``
 argument. Tests that need a fresh cache should reset the variable
 explicitly (``vrcpilot.detect.detect._default_engine = None``).
@@ -30,8 +30,8 @@ from numpy.typing import NDArray
 from vrcpilot.screenshot import Screenshot
 from vrcpilot.types import Polygon
 
-from .akaze import AkazeDetectEngine
 from .base import DetectEngine, Detection
+from .template import TemplateDetectEngine
 
 
 @dataclass(frozen=True, eq=False)
@@ -97,19 +97,23 @@ _default_engine: DetectEngine | None = None
 def _get_default_engine() -> DetectEngine:
     """Return the cached default :class:`DetectEngine`, building it if needed.
 
-    AKAZE をデフォルトとして採用し、SIFT は ``engine=`` 引数経由で
-    opt-in 利用する。実機 e2e で SIFT が低テクスチャ UI アイコンに
-    対し keypoint 不足で 10 個中 3 個しか検出できなかったため、
-    M-LDB descriptor で同じ条件下でも検出率が高い AKAZE を既定にする。
+    :class:`TemplateDetectEngine` をデフォルトとして採用し、AKAZE /
+    SIFT は ``engine=`` 引数経由で opt-in 利用する。実機 e2e と
+    オフライン keypoint 計測で AKAZE / ORB がクエリ画像 (18-50 px
+    の VRChat UI アイコン) から keypoint を 0 個しか取れず、SIFT
+    でも 10 個中 3 個止まりだった一方で、VRChat UI はピクセルパーフ
+    ェクトに描画されるため scale grid 上の matchTemplate のほうが
+    原理的にも実測でも検出率が高い。
 
-    The first call constructs an :class:`AkazeDetectEngine`; subsequent
-    calls reuse the cached instance. Not thread-safe — the project
-    runs in a single context, so the worst case under racy access is
-    a transient duplicate engine that is immediately replaced.
+    The first call constructs a :class:`TemplateDetectEngine`;
+    subsequent calls reuse the cached instance. Not thread-safe —
+    the project runs in a single context, so the worst case under
+    racy access is a transient duplicate engine that is immediately
+    replaced.
     """
     global _default_engine
     if _default_engine is None:
-        _default_engine = AkazeDetectEngine()
+        _default_engine = TemplateDetectEngine()
     return _default_engine
 
 
@@ -135,7 +139,7 @@ def detect(
         query: ``(h, w, 3)`` uint8 RGB image to look for in
             *screenshot*.
         engine: Detection backend. ``None`` (default) lazily builds
-            and caches an :class:`AkazeDetectEngine` via
+            and caches a :class:`TemplateDetectEngine` via
             :func:`_get_default_engine`.
 
     Returns:

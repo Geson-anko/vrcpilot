@@ -1,9 +1,9 @@
 """Tests for :mod:`vrcpilot.detect.detect`.
 
 Integration-with-fakes: :func:`detect` is exercised against the
-in-memory :class:`tests.fakes.detect.FakeDetectEngine`, so no SIFT
-engine is built. The function itself takes a :class:`Screenshot`
-directly, so capture is not mocked here.
+in-memory :class:`tests.fakes.detect.FakeDetectEngine`, so no real
+detection engine is built. The function itself takes a
+:class:`Screenshot` directly, so capture is not mocked here.
 
 The submodule reference is fetched via ``sys.modules`` because the
 package binds the ``detect`` *function* under the name
@@ -141,9 +141,9 @@ class TestDetectDefaultEngineCache:
             build_count["n"] += 1
             return FakeDetectEngine([det])
 
-        # Patch the AkazeDetectEngine reference inside the detect
+        # Patch the TemplateDetectEngine reference inside the detect
         # submodule so the default-engine path uses our fake.
-        monkeypatch.setattr(_detect_module, "AkazeDetectEngine", _factory)
+        monkeypatch.setattr(_detect_module, "TemplateDetectEngine", _factory)
 
         first = detect(shot, query)
         second = detect(shot, query)
@@ -165,7 +165,7 @@ class TestDetectDefaultEngineCache:
             build_count["n"] += 1
             return FakeDetectEngine([])
 
-        monkeypatch.setattr(_detect_module, "AkazeDetectEngine", _factory)
+        monkeypatch.setattr(_detect_module, "TemplateDetectEngine", _factory)
 
         detect(shot, query)
         assert build_count["n"] == 1

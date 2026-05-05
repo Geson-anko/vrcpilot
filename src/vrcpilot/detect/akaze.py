@@ -48,6 +48,7 @@ class AkazeDetectEngine(DetectEngine):
         ransac_reproj_threshold: float = 5.0,
         nms_iou: float = 0.3,
         max_results: int = 32,
+        threshold: float = 0.001,
     ) -> None:
         """Configure AKAZE/BFMatcher/RANSAC/NMS thresholds.
 
@@ -65,6 +66,11 @@ class AkazeDetectEngine(DetectEngine):
                 超えるものを除外する。デフォルト ``0.3``。
             max_results: 出力する :class:`Detection` の最大数。
                 デフォルト ``32``。
+            threshold: AKAZE の応答閾値 (``cv2.AKAZE_create(threshold=...)``)。
+                小型・低テクスチャの UI アイコンに対しては OpenCV の
+                デフォルト ``0.001`` だと keypoint が不足するので、
+                ``0.0001`` 程度まで下げると感度が上がる。下げすぎると
+                誤検出が増えるトレードオフがある。
         """
         self._ratio = ratio
         self._min_inliers = min_inliers
@@ -74,7 +80,7 @@ class AkazeDetectEngine(DetectEngine):
         # cv2 自体に型 stub が薄いため Any で受ける。
         # AKAZE の descriptor デフォルトは M-LDB (バイナリ) なので、
         # FLANN KDTree ではなく BFMatcher(Hamming) を使う。
-        self._akaze: Any = cv2.AKAZE_create()  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+        self._akaze: Any = cv2.AKAZE_create(threshold=threshold)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
         self._matcher: Any = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
 
     @override
