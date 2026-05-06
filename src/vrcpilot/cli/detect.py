@@ -5,12 +5,13 @@ a YAML document on stdout describing each detection in both
 image-local and desktop-absolute coordinates. Optionally writes an
 annotated PNG visualization for human review.
 
-Engine selection: when neither ``--min-inliers`` nor ``--ratio`` is
-passed, :func:`vrcpilot.detect.detect` is invoked with ``engine=None``
-and uses its lazily cached default (currently
-:class:`~vrcpilot.detect.TemplateDetectEngine`). Passing either tuning
-flag opts the run into a fresh :class:`~vrcpilot.detect.SiftDetectEngine`
-so the SIFT-specific knobs apply.
+Engine selection: :func:`vrcpilot.detect.detect` always uses
+:class:`~vrcpilot.detect.TemplateDetectEngine` — there is no engine
+kwarg to flip. When ``--threshold`` is omitted the run reuses the
+process-cached default engine; passing ``--threshold`` constructs a
+fresh :class:`~vrcpilot.detect.TemplateDetectEngine` with that
+score-map cutoff so callers can tune match strictness from the CLI
+without editing code.
 
 YAML schema (stable, ``sort_keys=False`` so the order is fixed):
 
@@ -50,7 +51,7 @@ from argcomplete.completers import FilesCompleter
 from numpy.typing import NDArray
 from PIL import Image
 
-from vrcpilot.detect import DetectEngine, SiftDetectEngine, detect, render
+from vrcpilot.detect import DetectEngine, TemplateDetectEngine, detect, render
 from vrcpilot.screenshot import Screenshot, take_screenshot
 
 from ._common import SubParsersAction, attach_completer
@@ -78,23 +79,14 @@ def register(subparsers: SubParsersAction) -> None:
     )
     attach_completer(query_action, FilesCompleter(allowednames=("png", "jpg")))
     parser.add_argument(
-        "--min-inliers",
-        type=int,
-        default=None,
-        help=(
-            "Minimum RANSAC inlier count required to accept a homography. "
-            "SIFT-only: passing this flag switches the run to "
-            "SiftDetectEngine instead of the default TemplateDetectEngine."
-        ),
-    )
-    parser.add_argument(
-        "--ratio",
+        "--threshold",
         type=float,
         default=None,
         help=(
-            "Lowe's ratio test threshold for SIFT match filtering. "
-            "SIFT-only: passing this flag switches the run to "
-            "SiftDetectEngine instead of the default TemplateDetectEngine."
+            "TM_CCOEFF_NORMED score cutoff (theoretical range -1..1) used "
+            "by TemplateDetectEngine. Passing this flag constructs a fresh "
+            "engine with the given threshold; omit it to use the cached "
+            "default (0.85)."
         ),
     )
     parser.add_argument(
@@ -166,24 +158,17 @@ def _load_query(path: Path) -> NDArray[np.uint8] | None:
     return rgb.astype(np.uint8, copy=False)
 
 
-def _build_engine(
-    *, min_inliers: int | None, ratio: float | None
-) -> DetectEngine | None:
-    """Construct a :class:`SiftDetectEngine` only when the user tuned it.
+def _build_engine(*, threshold: float | None) -> DetectEngine | None:
+    """Construct a :class:`TemplateDetectEngine` only when the user tuned it.
 
     Returns ``None`` when no tuning flag was passed so :func:`detect`
     falls back to its lazily cached default engine. Otherwise builds a
-    fresh :class:`SiftDetectEngine` with only the user-provided kwargs
-    overridden, leaving the rest at their library defaults.
+    fresh :class:`TemplateDetectEngine` with the user-provided
+    ``threshold`` and library defaults for everything else.
     """
-    if min_inliers is None and ratio is None:
+    if threshold is None:
         return None
-    if min_inliers is not None and ratio is not None:
-        return SiftDetectEngine(min_inliers=min_inliers, ratio=ratio)
-    if min_inliers is not None:
-        return SiftDetectEngine(min_inliers=min_inliers)
-    assert ratio is not None  # narrowed by the early returns above
-    return SiftDetectEngine(ratio=ratio)
+    return TemplateDetectEngine(threshold=threshold)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -209,7 +194,7 @@ def run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    engine = _build_engine(min_inliers=args.min_inliers, ratio=args.ratio)
+    engine = _build_engine(threshold=args.threshold)
     result = detect(shot, query, engine=engine)
 
     detections = list(result.detections)

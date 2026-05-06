@@ -95,7 +95,7 @@ def patched_detect(mocker: MockerFixture) -> Iterator[FakeDetectEngine]:
     engine = FakeDetectEngine([detection])
     # Inject the fake into the cached default engine slot of
     # ``vrcpilot.detect.detect`` so the CLI's ``detect()`` call uses it
-    # without constructing a real SiftDetectEngine.
+    # without constructing a real TemplateDetectEngine.
     _detect_module._default_engine = engine
     yield engine
     _detect_module._default_engine = None
@@ -421,7 +421,7 @@ class TestDetectCommandFailure:
 
 
 class TestDetectCommandEngineConstruction:
-    def test_min_inliers_and_ratio_passed_to_sift_engine(
+    def test_threshold_passed_to_template_engine(
         self,
         mocker: MockerFixture,
         capsys: pytest.CaptureFixture[str],
@@ -430,8 +430,8 @@ class TestDetectCommandEngineConstruction:
         shot = _make_screenshot()
         mocker.patch("vrcpilot.cli.detect.take_screenshot", return_value=shot)
         engine_instance = FakeDetectEngine([])
-        sift_factory = mocker.patch(
-            "vrcpilot.cli.detect.SiftDetectEngine",
+        template_factory = mocker.patch(
+            "vrcpilot.cli.detect.TemplateDetectEngine",
             return_value=engine_instance,
         )
 
@@ -440,29 +440,27 @@ class TestDetectCommandEngineConstruction:
                 "detect",
                 "--query",
                 str(query_png),
-                "--min-inliers",
-                "5",
-                "--ratio",
-                "0.8",
+                "--threshold",
+                "0.9",
             ]
         )
 
         assert exit_code == 0
-        sift_factory.assert_called_once_with(min_inliers=5, ratio=0.8)
+        template_factory.assert_called_once_with(threshold=0.9)
         # And the engine was actually used to produce the result.
         assert engine_instance.calls == 1
         # capsys absorbs stdout; just ensure the YAML round-trips cleanly.
         loaded = yaml.safe_load(capsys.readouterr().out)
         assert loaded["detections"] == []
 
-    def test_no_tuning_flags_does_not_construct_sift_engine(
+    def test_no_tuning_flags_does_not_construct_template_engine(
         self,
         mocker: MockerFixture,
         query_png: Path,
     ):
         shot = _make_screenshot()
         mocker.patch("vrcpilot.cli.detect.take_screenshot", return_value=shot)
-        sift_factory = mocker.patch("vrcpilot.cli.detect.SiftDetectEngine")
+        template_factory = mocker.patch("vrcpilot.cli.detect.TemplateDetectEngine")
         # Provide a default cached engine so detect() does not lazy-build.
         engine_instance = FakeDetectEngine([])
         _detect_module._default_engine = engine_instance
@@ -473,5 +471,5 @@ class TestDetectCommandEngineConstruction:
             _detect_module._default_engine = None
 
         assert exit_code == 0
-        sift_factory.assert_not_called()
+        template_factory.assert_not_called()
         assert engine_instance.calls == 1

@@ -97,12 +97,10 @@ _default_engine: DetectEngine | None = None
 def _get_default_engine() -> DetectEngine:
     """Return the cached default :class:`DetectEngine`, building it if needed.
 
-    :class:`TemplateDetectEngine` is the default; AKAZE / SIFT are
-    opt-in via the ``engine=`` argument. In real-device e2e and
-    offline keypoint measurements, AKAZE / ORB extracted 0 keypoints
-    from VRChat's small UI icons (18-50 px) and SIFT only managed
-    3/10. VRChat UI is rendered pixel-perfect, so scale-grid
-    ``matchTemplate`` wins both in principle and in measurement.
+    :class:`TemplateDetectEngine` is the only shipped engine. VRChat
+    UI is rendered pixel-perfect, so scale-grid ``matchTemplate``
+    works well even on the 18-50 px icons that defeat feature-based
+    detectors.
 
     The first call constructs a :class:`TemplateDetectEngine`;
     subsequent calls reuse the cached instance. Not thread-safe —
