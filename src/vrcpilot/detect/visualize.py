@@ -66,7 +66,7 @@ def render(
         )
 
         bbox = det.bbox
-        chosen_color: tuple[int, int, int] = (
+        chosen_color = (
             text_color if text_color is not None else _decide_text_color(original, bbox)
         )
 
@@ -76,10 +76,7 @@ def render(
         (_text_w, text_h), _baseline = cv2.getTextSize(
             label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness
         )
-        if by - text_h - 4 >= 0:
-            text_y = by - 4
-        else:
-            text_y = by + bh + text_h + 4
+        text_y = by - 4 if by - text_h - 4 >= 0 else by + bh + text_h + 4
         cv2.putText(
             canvas,
             label,
