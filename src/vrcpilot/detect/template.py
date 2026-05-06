@@ -95,15 +95,15 @@ class TemplateDetectEngine(DetectEngine):
         Returns an empty list when nothing clears ``threshold`` or when
         the query is larger than the image at every transform.
         """
-        # matchTemplate is single-channel only; RGB would be undefined.
-        image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        query_gray = cv2.cvtColor(query, cv2.COLOR_RGB2GRAY)
-
-        img_h, img_w = image_gray.shape[:2]
+        # Match in RGB so the score reflects colour similarity, not just
+        # luminance shape. A blue icon and a red icon with the same outline
+        # both pass a grayscale TM_CCOEFF_NORMED at high scores; the 3-channel
+        # variant penalises the colour mismatch.
+        img_h, img_w = image.shape[:2]
         candidates: list[Detection] = []
 
         for scale in self._scales:
-            scaled = _resize_query(query_gray, scale)
+            scaled = _resize_query(query, scale)
             if scaled is None:
                 continue
 
@@ -116,7 +116,7 @@ class TemplateDetectEngine(DetectEngine):
                     continue
 
                 score_map: Any = cv2.matchTemplate(
-                    image_gray, transformed, cv2.TM_CCOEFF_NORMED
+                    image, transformed, cv2.TM_CCOEFF_NORMED
                 )
                 ys, xs = np.where(score_map >= self._threshold)
                 rotation_rad = -math.radians(rot_deg)
@@ -137,37 +137,37 @@ class TemplateDetectEngine(DetectEngine):
 
 
 def _resize_query(
-    query_gray: NDArray[Any],
+    query: NDArray[Any],
     scale: float,
 ) -> NDArray[Any] | None:
-    """Resize ``query_gray``; returns ``None`` if the result is too small.
+    """Resize ``query``; returns ``None`` if the result is too small.
 
     ``NDArray[Any]`` is used because ``cv2`` returns the broader
     ``MatLike`` shape that pyright strict cannot narrow.
     """
-    h, w = query_gray.shape[:2]
+    h, w = query.shape[:2]
     new_w = max(1, int(round(w * scale)))
     new_h = max(1, int(round(h * scale)))
     # cv2 docs: INTER_AREA shrinks cleanly, INTER_CUBIC enlarges sharply.
     interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
-    resized: Any = cv2.resize(query_gray, (new_w, new_h), interpolation=interp)
+    resized: Any = cv2.resize(query, (new_w, new_h), interpolation=interp)
     if resized.shape[0] < 2 or resized.shape[1] < 2:
         return None
     return resized
 
 
 def _rotate_query(
-    query_gray: NDArray[Any],
+    query: NDArray[Any],
     rotation_deg: float,
 ) -> NDArray[Any] | None:
-    """Rotate ``query_gray`` around its centre; identity rotation is a no-op.
+    """Rotate ``query`` around its centre; identity rotation is a no-op.
 
     The output canvas is grown to the rotated bbox with 0 padding.
     """
     if rotation_deg == 0.0:
-        return query_gray
+        return query
 
-    h, w = query_gray.shape[:2]
+    h, w = query.shape[:2]
     center = (w / 2.0, h / 2.0)
     rot_mat = cv2.getRotationMatrix2D(center, rotation_deg, 1.0)
     cos = abs(float(rot_mat[0, 0]))
@@ -178,7 +178,7 @@ def _rotate_query(
         return None
     rot_mat[0, 2] += new_w / 2 - center[0]
     rot_mat[1, 2] += new_h / 2 - center[1]
-    rotated: Any = cv2.warpAffine(query_gray, rot_mat, (new_w, new_h), borderValue=0)
+    rotated: Any = cv2.warpAffine(query, rot_mat, (new_w, new_h), borderValue=0)
     return rotated
 
 
