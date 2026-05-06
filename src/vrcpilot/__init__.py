@@ -29,11 +29,7 @@ from vrcpilot.detect import (
 )
 from vrcpilot.ocr import OCREngine, OCRResult, OCRWord, RapidOCREngine, recognize
 from vrcpilot.process import (
-    VRCHAT_PROCESS_NAME,
-    VRCHAT_STEAM_APP_ID,
     OscConfig,
-    build_launch_command,
-    build_vrchat_launch_args,
     find_pid,
     launch,
     terminate,
@@ -48,8 +44,6 @@ __version__ = metadata.version(__name__.replace("_", "-"))
 
 __all__ = [
     "__version__",
-    "build_launch_command",
-    "build_vrchat_launch_args",
     "Capture",
     "CaptureLoop",
     "clipboard",
@@ -80,6 +74,4 @@ __all__ = [
     "unfocus",
     "VRChatNotFocusedError",
     "VRChatNotRunningError",
-    "VRCHAT_PROCESS_NAME",
-    "VRCHAT_STEAM_APP_ID",
 ]
