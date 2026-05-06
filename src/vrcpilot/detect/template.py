@@ -119,18 +119,10 @@ class TemplateDetectEngine(DetectEngine):
                     image_gray, transformed, cv2.TM_CCOEFF_NORMED
                 )
                 ys, xs = np.where(score_map >= self._threshold)
-                if len(xs) == 0:
-                    continue
-
                 rotation_rad = -math.radians(rot_deg)
                 for x_int, y_int in zip(xs.tolist(), ys.tolist()):
                     score = float(score_map[y_int, x_int])
-                    polygon = _build_polygon(
-                        x=int(x_int),
-                        y=int(y_int),
-                        width=t_w,
-                        height=t_h,
-                    )
+                    polygon = _build_polygon(x=x_int, y=y_int, width=t_w, height=t_h)
                     candidates.append(
                         Detection(
                             polygon=polygon,
