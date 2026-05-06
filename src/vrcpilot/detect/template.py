@@ -54,15 +54,18 @@ class TemplateDetectEngine(DetectEngine):
         scales: Sequence[float] = (
             0.25,
             0.3,
+            0.35,
             0.4,
             0.5,
-            0.65,
-            0.8,
+            0.6,
+            0.75,
+            0.9,
             1.0,
             1.25,
             1.5,
-            2.0,
-            2.5,
+            1.8,
+            2.2,
+            2.6,
             3.0,
         ),
         rotations_deg: Sequence[float] = (0.0,),
@@ -84,10 +87,13 @@ class TemplateDetectEngine(DetectEngine):
                 via ``cv2.resize(query, (int(w*scale),
                 int(h*scale)))`` and runs ``matchTemplate`` against
                 the screenshot. The default grid spans ``0.25`` to
-                ``3.0`` in roughly geometric steps so the engine can
-                cope with VRChat's HD (1280x720) to 4K (3840x2160)
-                capture resolution range regardless of which source
-                resolution the query images were cropped from.
+                ``3.0`` so the engine can cope with VRChat's HD
+                (1280x720) to 4K (3840x2160) capture resolution range
+                regardless of which source resolution the query images
+                were cropped from. Spacing is denser (≈ 1.15-1.2x
+                ratio) at the low end where Launch Pad icons typically
+                land for HD captures (~0.35), and coarser (≈ 1.2x)
+                above 1.0 to keep the grid size practical at 4K.
             rotations_deg: Rotation angles (degrees) to enumerate.
                 When only ``0.0`` is provided, the rotation step is
                 skipped entirely for speed (intended for use cases
