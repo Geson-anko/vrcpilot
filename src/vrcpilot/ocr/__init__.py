@@ -26,10 +26,11 @@ to bypass attribute resolution.
 
 from __future__ import annotations
 
+from vrcpilot.types import Polygon
+
 from .base import OCREngine, OCRWord
 from .rapidocr import RapidOCREngine
 from .recognize import OCRResult, recognize
-from .types import Polygon
 from .visualize import render
 
 __all__ = [
