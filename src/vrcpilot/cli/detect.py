@@ -166,27 +166,22 @@ def run(args: argparse.Namespace) -> int:
         rendered = render(result)
         Image.fromarray(rendered).save(viz_path)
 
-    detections_payload: list[dict[str, object]] = []
-    for det in detections:
-        polygon = [list(point) for point in det.polygon]
-        bbox = list(det.bbox)
-        display_polygon = [list(point) for point in result.display_polygon(det)]
-        display_bbox = list(result.display_bbox(det))
-        detections_payload.append(
-            {
-                "confidence": det.confidence,
-                "scale": det.scale,
-                "rotation": det.rotation,
-                "pos": {
-                    "polygon": polygon,
-                    "bbox": bbox,
-                },
-                "display_pos": {
-                    "polygon": display_polygon,
-                    "bbox": display_bbox,
-                },
-            }
-        )
+    detections_payload: list[dict[str, object]] = [
+        {
+            "confidence": det.confidence,
+            "scale": det.scale,
+            "rotation": det.rotation,
+            "pos": {
+                "polygon": [list(point) for point in det.polygon],
+                "bbox": list(det.bbox),
+            },
+            "display_pos": {
+                "polygon": [list(point) for point in result.display_polygon(det)],
+                "bbox": list(result.display_bbox(det)),
+            },
+        }
+        for det in detections
+    ]
 
     query_height, query_width = query.shape[:2]
     payload: dict[str, object] = {
