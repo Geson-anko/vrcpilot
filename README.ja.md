@@ -149,3 +149,13 @@ code $PROFILE   # または notepad $PROFILE
 ### トラブルシュート
 
 補完が効かない場合は、argcomplete の公式ドキュメント <https://kislyuk.github.io/argcomplete/> を参照。
+
+## ドキュメント
+
+詳細なリファレンスは英語版の [docs/](docs/) に揃えてある:
+
+- [docs/usage.md](docs/usage.md) — チュートリアル / playbook（launch → 観測 → クリック → 後片付け）
+- [docs/cli.md](docs/cli.md) — CLI サブコマンド一覧、フラグ、exit code
+- [docs/python-api.md](docs/python-api.md) — `vrcpilot.<name>` で公開している全シンボルのシグネチャ
+- [CHANGELOG.md](CHANGELOG.md) — リリースノート
+- [CONTRIBUTING.md](CONTRIBUTING.md) — 貢献者向け（英語）

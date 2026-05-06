@@ -97,24 +97,27 @@ vrcpilot terminate
 
 ```python
 from time import sleep
+
 import vrcpilot
 
-# Launch and wait until the process is observable
-pid = vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720, wait_timeout=60)
+# Launch VRChat (returns once Steam has been told to start the app)
+vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
 sleep(45)  # warm up: shaders, avatar load, network sync
 
 try:
-    # One-off screenshot
+    # One-off screenshot (returns None on a recoverable failure)
     shot = vrcpilot.take_screenshot()
+    if shot is None:
+        raise RuntimeError("could not capture VRChat")
 
-    # OCR all visible words
-    result = vrcpilot.recognize(shot, vrcpilot.RapidOCREngine())
+    # OCR all visible words (uses a cached RapidOCREngine by default)
+    result = vrcpilot.recognize(shot)
     for word in result.words:
-        print(word.text, word.display_pos.bbox)
+        print(word.text, result.display_bbox(word))
 
-    # Move the mouse to the first word and click
+    # Move the mouse to the first word's centre and click
     if result.words:
-        x, y, w, h = result.words[0].display_pos.bbox
+        x, y, w, h = result.display_bbox(result.words[0])
         vrcpilot.mouse.move(int(x + w / 2), int(y + h / 2))
         vrcpilot.mouse.click(vrcpilot.MouseButton.LEFT)
 
@@ -164,10 +167,12 @@ Add the line above to your `~/.bashrc` or `$PROFILE` to persist it. See [README.
 
 ## Documentation
 
-- **CLI reference**: `vrcpilot <subcommand> --help`
+- **Tutorial / playbook**: [`docs/usage.md`](docs/usage.md) — task-oriented walkthrough (launch → observe → click → teardown).
+- **CLI reference**: [`docs/cli.md`](docs/cli.md) — every subcommand, flag, and exit code. `vrcpilot --help` and `vrcpilot <subcommand> --help` print the same content.
+- **Python API reference**: [`docs/python-api.md`](docs/python-api.md) — every symbol exposed at `vrcpilot.<name>`.
 - **Changelog**: [`CHANGELOG.md`](CHANGELOG.md)
 - **Contributing**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- **Japanese README** (more setup detail and historical notes): [`README.ja.md`](README.ja.md)
+- **Japanese README** (legacy, more historical notes): [`README.ja.md`](README.ja.md)
 
 ## License
 

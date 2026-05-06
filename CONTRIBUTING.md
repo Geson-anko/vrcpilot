@@ -47,6 +47,7 @@ uv run pre-commit install
 - Source: [`src/vrcpilot/`](src/vrcpilot/) — a typed package (`py.typed`).
 - Tests: [`tests/`](tests/) mirror `src/vrcpilot/` one-to-one (`src/vrcpilot/foo.py` ↔ `tests/vrcpilot/test_foo.py`). End-to-end scenarios live in [`tests/e2e/`](tests/e2e/).
 - CLI entry point: `vrcpilot.cli:main`, dispatched through [`src/vrcpilot/cli/__init__.py`](src/vrcpilot/cli/__init__.py).
+- Public docs: [`docs/`](docs/) holds the hand-written reference and tutorial that the README links into ([`docs/cli.md`](docs/cli.md), [`docs/python-api.md`](docs/python-api.md), [`docs/usage.md`](docs/usage.md)). Update them when you change the CLI or public API surface.
 
 ## Branching and commits
 
