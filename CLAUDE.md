@@ -19,7 +19,7 @@
 - **プロセス制御**: `process`（起動/終了/PID 検出）、`steam`（Steam 検出）、`session`（Wayland-native 判定）
 - **ウィンドウ操作**: `window/`（Win32/X11 バックエンドの focus/unfocus/is_foreground）、`geometry`（ウィンドウ矩形取得）
 - **キャプチャ系**: `capture/`（`Capture` + `CaptureLoop` + `Mp4FrameSink` / `Y4mStdoutFrameSink`、Win32/X11 バックエンド）、`screenshot`（GUI 自動化向けの 1 ショット取得。`Screenshot.save/load` は file-path / inline base64 の 2 モード対応で YAML を双方向にやり取り可能）
-- **OCR**: `ocr/`（`OCREngine` ABC + `RapidOCREngine` 実装、`recognize` で `Screenshot` を入力に取る、`visualize.render` で bbox 重ね描き PNG を生成）
+- **OCR**: `ocr/`（`OCREngine` ABC + `RapidOCREngine` 実装、`ocr()` で `Screenshot` を入力に取る、`visualize.render` で bbox 重ね描き PNG を生成）
 - **画像検出**: `detect/`（`DetectEngine` ABC + `TemplateDetectEngine`（OpenCV `TM_CCOEFF_NORMED`）実装、`detect()` で `Screenshot` + クエリ画像から座標付き `Detection` 列を返す、`visualize.render` で OCR と同一スキーマの可視化）
 - **入力制御**: `controls/`（VRChat フォーカス保証つきの `keyboard` / `mouse`、`guard`、`errors`）、`clipboard`（pyperclip + Ctrl+V で scancode keyboard の非 ASCII 制限を回避）
 - **CLI フロントエンド**: `cli/` 配下にサブコマンド毎 1 ファイル（`launch` / `pid` / `terminate` / `focus` / `unfocus` / `screenshot` / `capture` / `mouse` / `keyboard` / `paste` / `ocr` / `detect`）、ディスパッチは `cli/__init__.py` の `build_parser` / `main`、共有ヘルパは `cli/_common.py`（`add_screenshot_input_arg` / `resolve_screenshot` で `--screenshot` ↔ stdin pipe の入力解決を集約）

@@ -7,13 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: `vrcpilot.launch()` now waits for the VRChat PID by default and returns `int | None`. Pass `wait_timeout=0` to restore the previous fire-and-forget behaviour.
+- **BREAKING**: renamed `vrcpilot.recognize()` to `vrcpilot.ocr()` for clarity.
+
 ## [0.1.0a1] - 2026-05-06
 
 Initial public alpha release.
 
 ### Added
 
-- **Process control**: `vrcpilot.launch`, `vrcpilot.terminate`, `vrcpilot.find_pid`, and Steam-aware launch helpers (`build_launch_command`, `build_vrchat_launch_args`, `OscConfig`).
+- **Process control**: `vrcpilot.launch`, `vrcpilot.terminate`, `vrcpilot.find_pid`, and `OscConfig`.
 - **Window control**: `focus`, `unfocus`, `is_foreground` on Windows (Win32) and Linux (X11 / XWayland).
 - **Screen capture**: `Capture` and `CaptureLoop` with `Mp4FrameSink` / `Y4mStdoutFrameSink`; one-shot `take_screenshot` returning a `Screenshot` value object that round-trips through YAML (file-path or inline base64 PNG).
 - **OCR**: swappable `OCREngine` ABC with `RapidOCREngine` implementation; `recognize()` consumes a `Screenshot` and returns word-level results with both window-local and desktop-absolute coordinates.

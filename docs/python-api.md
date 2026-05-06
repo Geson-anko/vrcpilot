@@ -19,17 +19,23 @@ ______________________________________________________________________
 ```python
 def launch(
     *,
-    app_id: int = VRCHAT_STEAM_APP_ID,
+    app_id: int = 438100,
     steam_path: Path | None = None,
     no_vr: bool = False,
     screen_width: int | None = None,
     screen_height: int | None = None,
     osc: OscConfig | None = None,
     extra_args: list[str] | None = None,
-) -> None: ...
+    wait_timeout: float = 30.0,
+    wait_interval: float = 1.0,
+) -> int | None: ...
 ```
 
-Start VRChat through Steam. The new process is detached from the calling process group. Returns once Steam has been told to launch the app — use [`find_pid()`](#vrcpilotfind_pid) (or your own polling) to wait for the process to appear.
+Start VRChat through Steam. The new process is detached from the calling process group. After spawning Steam, polls [`find_pid()`](#vrcpilotfind_pid) for up to `wait_timeout` seconds (default 30s) and returns the observed PID. Pass `wait_timeout=0` (or any non-positive value) to skip the wait and return immediately — useful for "fire and forget" launches where you intend to poll later yourself.
+
+**Returns**: the PID once VRChat is observed, or `None` if `wait_timeout <= 0` or the timeout is exceeded. A `None` return on a positive timeout is *not* an exception — branch on the return value if you need a stricter signal.
+
+`app_id` defaults to VRChat's Steam app id. If you need to reference the constant directly (e.g. when building a custom launch wrapper), import it from the implementation module: `from vrcpilot.process import VRCHAT_STEAM_APP_ID`.
 
 **Raises**: `SteamNotFoundError` when no Steam executable is found.
 
@@ -51,34 +57,6 @@ def find_pid() -> int | None: ...
 
 **Returns**: the first running VRChat PID, or `None` when nothing matches.
 
-### `vrcpilot.build_launch_command`
-
-```python
-def build_launch_command(
-    steam_executable: Path,
-    app_id: int = VRCHAT_STEAM_APP_ID,
-    *,
-    vrchat_args: list[str] | None = None,
-) -> list[str]: ...
-```
-
-Build the argv that `launch()` would pass to `subprocess`. Useful for logging, sandboxing, or wrapping the launch in another runner.
-
-### `vrcpilot.build_vrchat_launch_args`
-
-```python
-def build_vrchat_launch_args(
-    *,
-    no_vr: bool = False,
-    screen_width: int | None = None,
-    screen_height: int | None = None,
-    osc: OscConfig | None = None,
-    extra_args: list[str] | None = None,
-) -> list[str]: ...
-```
-
-Build only the VRChat-side argv (the part after Steam's `-applaunch <app_id>` token).
-
 ### `vrcpilot.OscConfig`
 
 ```python
@@ -96,13 +74,6 @@ Structured form of VRChat's `--osc=<in>:<ip>:<out>` flag. `to_launch_arg()` rend
 ### `vrcpilot.SteamNotFoundError`
 
 Raised by `launch()` (and the Steam discovery helpers) when no Steam executable can be located.
-
-### Constants
-
-```python
-VRCHAT_STEAM_APP_ID: Final[int] = 438100
-VRCHAT_PROCESS_NAME: Final[str] = "VRChat.exe"
-```
 
 ______________________________________________________________________
 
@@ -280,10 +251,10 @@ Default backend (PP-OCRv4 via `rapidocr`). Lazy-imports `rapidocr` in the constr
 
 **Raises**: `ImportError` when `rapidocr` is not installed.
 
-### `vrcpilot.recognize`
+### `vrcpilot.ocr`
 
 ```python
-def recognize(
+def ocr(
     screenshot: Screenshot,
     *,
     engine: OCREngine | None = None,
@@ -291,6 +262,8 @@ def recognize(
 ```
 
 Run OCR on `screenshot`. When `engine` is `None`, a process-cached `RapidOCREngine` instance is used.
+
+> `vrcpilot.ocr` is callable directly (`vrcpilot.ocr(shot)`). The submodule `vrcpilot.ocr` is still accessible via `from vrcpilot.ocr import OCREngine` and similar import-from forms — Python's import machinery resolves these through `sys.modules`, so the function binding does not break submodule access.
 
 ______________________________________________________________________
 
@@ -476,15 +449,19 @@ from time import sleep
 
 import vrcpilot
 
-vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
-sleep(45)  # warm up: shaders, avatar load, network sync
+# launch() now waits up to wait_timeout seconds for VRChat's PID and
+# returns it. None means the timeout expired before VRChat appeared.
+pid = vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
+if pid is None:
+    raise RuntimeError("VRChat did not start before launch() timed out")
+sleep(45)  # extra warm up: shaders, avatar load, network sync
 
 try:
     shot = vrcpilot.take_screenshot()
     if shot is None:
         raise RuntimeError("could not capture VRChat")
 
-    result = vrcpilot.recognize(shot)
+    result = vrcpilot.ocr(shot)
     for word in result.words:
         print(word.text, result.display_bbox(word), word.confidence)
 

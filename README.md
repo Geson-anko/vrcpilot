@@ -16,7 +16,7 @@ Python automation toolkit for VRChat (Windows / Linux). Drives the desktop clien
 - **Process control** — launch VRChat through Steam (`vrcpilot.launch`), find PIDs, terminate cleanly.
 - **Window control** — focus / unfocus / foreground checks on Win32 and X11 / XWayland.
 - **Screen capture** — `Capture` for streaming (mp4 / y4m sinks), `take_screenshot` for one-off shots that round-trip through YAML.
-- **OCR** — pluggable `OCREngine` ABC with a default `RapidOCREngine`; `recognize()` returns word-level results in both window-local and desktop-absolute coordinates.
+- **OCR** — pluggable `OCREngine` ABC with a default `RapidOCREngine`; `ocr()` returns word-level results in both window-local and desktop-absolute coordinates.
 - **Image-template detection** — `TemplateDetectEngine` (OpenCV `TM_CCOEFF_NORMED`) returns coordinate-bearing detections matching the OCR coordinate schema.
 - **Synthetic input** — keyboard / mouse via [`pydirectinput`](https://github.com/learncodebygaming/pydirectinput) on Windows and [`inputtino`](https://github.com/games-on-whales/inputtino) (`/dev/uinput`) on Linux, with VRChat focus-guarding.
 - **Non-ASCII text injection** — `vrcpilot.clipboard` sends arbitrary Unicode through clipboard + Ctrl+V.
@@ -100,9 +100,12 @@ from time import sleep
 
 import vrcpilot
 
-# Launch VRChat (returns once Steam has been told to start the app)
-vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
-sleep(45)  # warm up: shaders, avatar load, network sync
+# launch() waits for VRChat's PID (up to wait_timeout, default 30s) and
+# returns it. None means the timeout expired before VRChat appeared.
+pid = vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
+if pid is None:
+    raise RuntimeError("VRChat did not start before launch() timed out")
+sleep(45)  # extra warm up: shaders, avatar load, network sync
 
 try:
     # One-off screenshot (returns None on a recoverable failure)
@@ -111,7 +114,7 @@ try:
         raise RuntimeError("could not capture VRChat")
 
     # OCR all visible words (uses a cached RapidOCREngine by default)
-    result = vrcpilot.recognize(shot)
+    result = vrcpilot.ocr(shot)
     for word in result.words:
         print(word.text, result.display_bbox(word))
 

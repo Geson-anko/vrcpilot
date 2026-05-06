@@ -22,10 +22,7 @@ import _helpers  # noqa: E402
 
 def _scenario() -> None:
     _helpers.log("calling vrcpilot.launch()")
-    vrcpilot.launch()
-
-    _helpers.log("waiting for VRChat PID")
-    pid = _helpers.wait_for_pid()
+    pid = vrcpilot.launch()
     assert pid is not None, "VRChat PID was not observed before timeout"
     _helpers.log(f"VRChat started (pid={pid})")
 

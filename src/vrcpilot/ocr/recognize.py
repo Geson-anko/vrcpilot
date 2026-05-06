@@ -1,11 +1,11 @@
-"""High-level :func:`recognize` helper and the :class:`OCRResult` value type.
+"""High-level :func:`ocr` helper and the :class:`OCRResult` value type.
 
 :class:`OCRResult` ties a :class:`Screenshot` to the
 :class:`OCRWord` list produced by an :class:`OCREngine` so that callers
 can move between image-local and desktop-absolute coordinates without
 re-doing the geometry math.
 
-:func:`recognize` is a thin pure-OCR step: the caller supplies the
+:func:`ocr` is a thin pure-OCR step: the caller supplies the
 :class:`Screenshot` (typically from
 :func:`vrcpilot.screenshot.take_screenshot`), and this function only
 runs the engine and packages the result. Capture and OCR are kept as
@@ -13,11 +13,11 @@ separate concerns so the same OCR pipeline can be replayed against
 existing images, fed cropped regions, or driven by a custom capture
 source.
 
-The module-level ``_default_engine`` cache keeps :func:`recognize`
-cheap on repeat calls: the (heavy) :class:`RapidOCREngine` is built
-exactly once per process when the user does not pass an ``engine``
-argument. Tests that need a fresh cache should reset the variable
-explicitly (``vrcpilot.ocr.recognize._default_engine = None``).
+The module-level ``_default_engine`` cache keeps :func:`ocr` cheap on
+repeat calls: the (heavy) :class:`RapidOCREngine` is built exactly
+once per process when the user does not pass an ``engine`` argument.
+Tests that need a fresh cache should reset the variable explicitly
+(``vrcpilot.ocr.recognize._default_engine = None``).
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def _get_default_engine() -> OCREngine:
     return _default_engine
 
 
-def recognize(
+def ocr(
     screenshot: Screenshot,
     *,
     engine: OCREngine | None = None,

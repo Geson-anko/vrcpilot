@@ -2,7 +2,7 @@
 
 Pixel capture is split between :class:`Capture` (focus-free streaming for
 video / ML) and :func:`take_screenshot` (one focused shot with on-screen
-geometry, for GUI automation). :func:`recognize` consumes a captured
+geometry, for GUI automation). :func:`ocr` consumes a captured
 :class:`Screenshot` and runs OCR through a swappable :class:`OCREngine`,
 keeping capture and recognition as orthogonal steps.
 """
@@ -27,13 +27,13 @@ from vrcpilot.detect import (
     TemplateDetectEngine,
     detect,
 )
-from vrcpilot.ocr import OCREngine, OCRResult, OCRWord, RapidOCREngine, recognize
+
+# Importing ``ocr`` here shadows the ``vrcpilot.ocr`` submodule attribute
+# so ``vrcpilot.ocr(shot)`` calls the function; submodule imports still
+# resolve via ``sys.modules``. Pinned by ``test_init.py``.
+from vrcpilot.ocr import OCREngine, OCRResult, OCRWord, RapidOCREngine, ocr
 from vrcpilot.process import (
-    VRCHAT_PROCESS_NAME,
-    VRCHAT_STEAM_APP_ID,
     OscConfig,
-    build_launch_command,
-    build_vrchat_launch_args,
     find_pid,
     launch,
     terminate,
@@ -48,8 +48,6 @@ __version__ = metadata.version(__name__.replace("_", "-"))
 
 __all__ = [
     "__version__",
-    "build_launch_command",
-    "build_vrchat_launch_args",
     "Capture",
     "CaptureLoop",
     "clipboard",
@@ -66,12 +64,12 @@ __all__ = [
     "launch",
     "mouse",
     "MouseButton",
+    "ocr",
     "OCREngine",
     "OCRResult",
     "OCRWord",
     "OscConfig",
     "RapidOCREngine",
-    "recognize",
     "Screenshot",
     "SteamNotFoundError",
     "take_screenshot",
@@ -80,6 +78,4 @@ __all__ = [
     "unfocus",
     "VRChatNotFocusedError",
     "VRChatNotRunningError",
-    "VRCHAT_PROCESS_NAME",
-    "VRCHAT_STEAM_APP_ID",
 ]

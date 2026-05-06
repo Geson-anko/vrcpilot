@@ -48,7 +48,7 @@ import yaml
 from argcomplete.completers import FilesCompleter
 from PIL import Image
 
-from vrcpilot.ocr.recognize import recognize
+from vrcpilot.ocr.recognize import ocr
 from vrcpilot.ocr.visualize import render
 
 from ._common import (
@@ -132,7 +132,7 @@ def run(args: argparse.Namespace) -> int:
     shot = resolve_screenshot(args)
     if shot is None:
         return 1
-    result = recognize(shot)
+    result = ocr(shot)
 
     viz_path = _resolve_viz_path(args.viz, now=datetime.now())
     if viz_path is not None:

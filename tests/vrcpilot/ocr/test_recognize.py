@@ -1,14 +1,16 @@
 """Tests for :mod:`vrcpilot.ocr.recognize`.
 
-Integration-with-fakes: :func:`recognize` is exercised against the
-in-memory :class:`tests.fakes.ocr.FakeOCREngine`, so no rapidocr model
-download is triggered. The function itself takes a :class:`Screenshot`
+Integration-with-fakes: :func:`ocr` is exercised against the in-memory
+:class:`tests.fakes.ocr.FakeOCREngine`, so no rapidocr model download
+is triggered. The function itself takes a :class:`Screenshot`
 directly, so capture is no longer mocked here.
 
 The submodule reference is fetched via ``sys.modules`` because the
-package binds the ``recognize`` *function* under the name
-``vrcpilot.ocr.recognize``, which would otherwise shadow the
-submodule in attribute-walking patch helpers.
+top-level package re-exports the ``ocr`` *function* as
+``vrcpilot.ocr``, which shadows the submodule attribute on the
+``vrcpilot`` package. Submodule access via ``sys.modules`` is the
+unaffected path; see ``tests/vrcpilot/test_init.py`` for the
+regression that pins this invariant.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from numpy.typing import NDArray
 
 import vrcpilot.ocr  # noqa: F401  ensures submodule is registered
 from tests.fakes.ocr import FakeOCREngine
-from vrcpilot.ocr import OCRResult, OCRWord, Polygon, recognize
+from vrcpilot.ocr import OCRResult, OCRWord, Polygon, ocr
 from vrcpilot.screenshot import Screenshot
 
 _recognize_module: ModuleType = sys.modules["vrcpilot.ocr.recognize"]
@@ -70,13 +72,13 @@ def _reset_default_engine() -> Iterator[None]:
     _recognize_module._default_engine = None
 
 
-class TestRecognizeWithExplicitEngine:
+class TestOcrWithExplicitEngine:
     def test_returns_ocr_result_with_tuple_words(self):
         shot = _make_screenshot()
         word = _make_word()
         engine = FakeOCREngine([word])
 
-        result = recognize(shot, engine=engine)
+        result = ocr(shot, engine=engine)
 
         assert isinstance(result, OCRResult)
         assert result.screenshot is shot
@@ -88,7 +90,7 @@ class TestRecognizeWithExplicitEngine:
         shot = _make_screenshot()
         engine = FakeOCREngine([])
 
-        recognize(shot, engine=engine)
+        ocr(shot, engine=engine)
 
         assert engine.calls == 1
         assert engine.last_image is shot.image
@@ -97,12 +99,12 @@ class TestRecognizeWithExplicitEngine:
         shot = _make_screenshot()
         engine = FakeOCREngine([])
 
-        result = recognize(shot, engine=engine)
+        result = ocr(shot, engine=engine)
 
         assert result.screenshot is shot
 
 
-class TestRecognizeDefaultEngineCache:
+class TestOcrDefaultEngineCache:
     def test_default_engine_is_built_once(self, monkeypatch: pytest.MonkeyPatch):
         shot = _make_screenshot()
         word = _make_word()
@@ -116,8 +118,8 @@ class TestRecognizeDefaultEngineCache:
         # submodule so the default-engine path uses our fake.
         monkeypatch.setattr(_recognize_module, "RapidOCREngine", _factory)
 
-        first = recognize(shot)
-        second = recognize(shot)
+        first = ocr(shot)
+        second = ocr(shot)
 
         assert isinstance(first, OCRResult)
         assert isinstance(second, OCRResult)
@@ -137,11 +139,11 @@ class TestRecognizeDefaultEngineCache:
 
         monkeypatch.setattr(_recognize_module, "RapidOCREngine", _factory)
 
-        recognize(shot)
+        ocr(shot)
         assert build_count["n"] == 1
 
         _recognize_module._default_engine = None
-        recognize(shot)
+        ocr(shot)
         assert build_count["n"] == 2
 
 

@@ -127,14 +127,15 @@ def launch(
     screen_height: int | None = None,
     osc: OscConfig | None = None,
     extra_args: list[str] | None = None,
-) -> None:
-    """Launch VRChat through Steam.
+    wait_timeout: float = PID_WAIT_TIMEOUT,
+    wait_interval: float = PID_WAIT_INTERVAL,
+) -> int | None:
+    """Launch VRChat through Steam and (optionally) wait for its PID.
 
     Detached from the parent's process group / session so the calling
-    Python script can exit without taking VRChat down with it. The
-    spawned PID is intentionally not returned: it is the short-lived
-    Steam invoker, not VRChat itself; use :func:`find_pid` to observe
-    VRChat.
+    Python script can exit without taking VRChat down with it. After
+    spawning Steam, polls :func:`find_pid` until VRChat appears or
+    ``wait_timeout`` elapses.
 
     Args:
         app_id: Steam application id. Defaults to
@@ -146,6 +147,18 @@ def launch(
         screen_height: Unity ``-screen-height`` value.
         osc: Optional :class:`OscConfig` rendered into ``--osc=...``.
         extra_args: Raw tokens forwarded verbatim to VRChat.
+        wait_timeout: Maximum seconds to wait for the VRChat PID after
+            spawning Steam. Defaults to :data:`PID_WAIT_TIMEOUT`. Pass
+            ``0`` (or any non-positive value) to skip the wait and
+            return immediately.
+        wait_interval: Seconds between PID polls. Defaults to
+            :data:`PID_WAIT_INTERVAL`.
+
+    Returns:
+        The observed VRChat PID, or ``None`` when ``wait_timeout <= 0``
+        or the timeout expires before VRChat appears. Timeout does not
+        raise - callers can branch on ``None`` if they need a stricter
+        signal.
 
     Raises:
         SteamNotFoundError: Steam executable cannot be located.
@@ -166,12 +179,16 @@ def launch(
             stdin=subprocess.DEVNULL,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
         )
-        return
-    subprocess.Popen(
-        argv,
-        stdin=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    else:
+        subprocess.Popen(
+            argv,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+
+    if wait_timeout <= 0:
+        return None
+    return wait_for_pid(timeout=wait_timeout, interval=wait_interval)
 
 
 def find_pid() -> int | None:
