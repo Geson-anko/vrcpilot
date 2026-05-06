@@ -28,13 +28,9 @@ from vrcpilot.detect import (
     detect,
 )
 
-# The local ``ocr`` binding from this ``from`` statement overwrites the
-# ``vrcpilot.ocr`` package attribute that the underlying
-# ``IMPORT_NAME`` instruction set to the submodule, so
-# ``vrcpilot.ocr(shot)`` calls the function. ``from vrcpilot.ocr
-# import OCREngine`` (etc.) keeps working because Python resolves
-# submodule imports through ``sys.modules['vrcpilot.ocr']`` rather
-# than attribute lookup. Pinned by ``test_init.py``.
+# Importing ``ocr`` here shadows the ``vrcpilot.ocr`` submodule attribute
+# so ``vrcpilot.ocr(shot)`` calls the function; submodule imports still
+# resolve via ``sys.modules``. Pinned by ``test_init.py``.
 from vrcpilot.ocr import OCREngine, OCRResult, OCRWord, RapidOCREngine, ocr
 from vrcpilot.process import (
     OscConfig,
