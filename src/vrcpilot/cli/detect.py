@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -25,7 +26,13 @@ from argcomplete.completers import FilesCompleter
 from numpy.typing import NDArray
 from PIL import Image
 
-from vrcpilot.detect import DetectEngine, TemplateDetectEngine, detect, render
+from vrcpilot.detect import (
+    DetectEngine,
+    Detection,
+    TemplateDetectEngine,
+    detect,
+    render,
+)
 from vrcpilot.screenshot import Screenshot, take_screenshot
 
 from ._common import SubParsersAction, attach_completer
@@ -147,7 +154,7 @@ def run(args: argparse.Namespace) -> int:
     engine = _build_engine(threshold=args.threshold)
     result = detect(shot, query, engine=engine)
 
-    detections = list(result.detections)
+    detections: Sequence[Detection] = result.detections
     top_k: int | None = args.top_k
     if top_k is not None:
         detections = sorted(detections, key=lambda d: d.confidence, reverse=True)[
