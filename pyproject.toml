@@ -1,10 +1,37 @@
 [project]
 name = "vrcpilot"
 version = "0.1.0"
-description = "Add your description here"
+description = "Python automation toolkit for VRChat (Windows / Linux)"
 readme = "README.md"
-authors = []
+authors = [{ name = "MLShukai" }]
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+keywords = [
+    "automation",
+    "game-bot",
+    "input-injection",
+    "ocr",
+    "screen-capture",
+    "vrchat",
+    "win32",
+    "x11",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Games/Entertainment",
+    "Topic :: Multimedia :: Graphics :: Capture :: Screen Capture",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = [
     "argcomplete>=3.5,<4",
     "inputtino-python; sys_platform == 'linux'",
@@ -20,6 +47,12 @@ dependencies = [
     "pyyaml>=6.0.2",
     "windows-capture>=2.0.0 ; sys_platform == 'win32'",
 ]
+
+[project.urls]
+Homepage = "https://github.com/MLShukai/vrcpilot"
+Repository = "https://github.com/MLShukai/vrcpilot"
+Issues = "https://github.com/MLShukai/vrcpilot/issues"
+Changelog = "https://github.com/MLShukai/vrcpilot/blob/main/CHANGELOG.md"
 
 [project.scripts]
 vrcpilot = "vrcpilot.cli:main"
