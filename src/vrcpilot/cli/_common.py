@@ -8,7 +8,7 @@ from pathlib import Path
 
 from argcomplete.completers import FilesCompleter
 
-from vrcpilot.screenshot import Screenshot, take_screenshot
+from vrcpilot.screenshot import Screenshot
 
 # argparse does not export the subparsers-action class publicly but it
 # is exactly what ``add_subparsers()`` returns — typing the per-command
@@ -56,7 +56,7 @@ def add_screenshot_input_arg(parser: argparse.ArgumentParser) -> None:
 
 
 def resolve_screenshot(args: argparse.Namespace) -> Screenshot | None:
-    """Resolve a :class:`Screenshot` from CLI args, stdin, or a live capture.
+    """Resolve a :class:`Screenshot` from CLI args or piped stdin.
 
     Priority order:
 
@@ -64,11 +64,10 @@ def resolve_screenshot(args: argparse.Namespace) -> Screenshot | None:
        the YAML file from disk and decode via :meth:`Screenshot.load`.
     2. Piped stdin (``not sys.stdin.isatty()``) — read the YAML text from
        stdin and decode via :meth:`Screenshot.load`.
-    3. Otherwise fall back to :func:`~vrcpilot.screenshot.take_screenshot`.
 
-    Any failure is reported as a single ``vrcpilot: ...`` line on stderr
-    and the function returns ``None`` so callers can simply
-    ``return 1`` to surface the error to the shell.
+    If neither is available (no flag and stdin is a tty), an explanatory
+    message is written to stderr and ``None`` is returned. Callers
+    typically map ``None`` to ``return 1``.
     """
     screenshot_arg: Path | None = getattr(args, "screenshot", None)
     if screenshot_arg is not None:
@@ -87,15 +86,15 @@ def resolve_screenshot(args: argparse.Namespace) -> Screenshot | None:
             return None
 
     if not sys.stdin.isatty():
-        text = sys.stdin.read()
         try:
-            return Screenshot.load(text)
+            return Screenshot.load(sys.stdin.read())
         except ValueError as exc:
             print(f"vrcpilot: {exc}", file=sys.stderr)
             return None
 
-    shot = take_screenshot()
-    if shot is None:
-        print("vrcpilot: could not capture VRChat screenshot", file=sys.stderr)
-        return None
-    return shot
+    print(
+        "vrcpilot: no screenshot provided; "
+        "pass --screenshot <yaml> or pipe 'vrcpilot screenshot' output via stdin",
+        file=sys.stderr,
+    )
+    return None

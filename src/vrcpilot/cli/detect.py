@@ -10,17 +10,17 @@ YAML keys are emitted in a fixed order (``sort_keys=False``):
 ``rotation`` plus ``pos`` (image-local) and ``display_pos``
 (desktop-absolute) ``polygon`` and ``bbox``.
 
-Screenshot input sources (priority order):
+Screenshot input sources:
 
 1. ``--screenshot <yaml-path>`` - read a previously captured
    screenshot from a YAML file (as emitted by ``vrcpilot screenshot``)
 2. piped stdin - same YAML format consumed from stdin when stdin is
    not a tty (e.g. ``vrcpilot screenshot | vrcpilot detect --query q.png``)
-3. live capture (default) - call :func:`~vrcpilot.screenshot.take_screenshot`
-   to grab the VRChat window now
 
-Sources 1 and 2 skip VRChat focus handling, so template detection
-works even when VRChat is not running.
+If neither is given, the command exits with status 1 and an explanatory
+message on stderr. ``vrcpilot detect`` no longer captures a fresh
+screenshot itself - pipe in or pass ``--screenshot`` so template
+detection works even when VRChat is not running.
 """
 
 from __future__ import annotations
@@ -152,8 +152,8 @@ def run(args: argparse.Namespace) -> int:
 
     Returns ``0`` on success, ``1`` when the screenshot input cannot
     be resolved (e.g. ``--screenshot`` file missing, piped YAML
-    malformed, or live capture failed because VRChat is not running)
-    or when the query image cannot be decoded.
+    malformed, or neither ``--screenshot`` nor a piped stdin was
+    supplied) or when the query image cannot be decoded.
     :func:`~vrcpilot.cli._common.resolve_screenshot` emits the
     ``vrcpilot: ...`` stderr line for screenshot failures; the query
     path branch writes its own ``vrcpilot: could not read query image:
