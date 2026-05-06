@@ -415,7 +415,7 @@ mouse.press(*buttons: MouseButton, focus: bool = True) -> None
 mouse.release(*buttons: MouseButton, focus: bool = True) -> None
 ```
 
-`move(x, y)` defaults to desktop-absolute pixel coordinates. With `relative=True`, `(x, y)` is added to the current cursor position.
+`move(x, y)` defaults to pixels in the virtual-desktop bounding box (`mss.MSS().monitors[0]` on Linux, the Win32 virtual screen on Windows). On standard left-origin monitor layouts this matches "desktop-absolute pixels" and round-trips with the `display_pos.bbox` from OCR / detect; on layouts where another monitor extends leftward of the primary the origin shifts accordingly. With `relative=True`, `(x, y)` is added to the current cursor position.
 
 `click()` falls back to `LEFT` when called with no buttons. `count > 1` repeats the press/release pair. `duration > 0` holds each click for that many seconds.
 

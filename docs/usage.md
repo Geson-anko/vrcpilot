@@ -84,7 +84,7 @@ Each `words[i]` carries:
 - `pos.{polygon,bbox}` — window-local.
 - `display_pos.{polygon,bbox}` — desktop-absolute, already shifted by `window.x` / `window.y`.
 
-When passing coordinates to `vrcpilot mouse move`, **always use `display_pos.bbox`**. Window-local `pos` will land in the wrong place under multi-monitor or non-origin window placements.
+When passing coordinates to `vrcpilot mouse move`, **always use `display_pos.bbox`**. Window-local `pos` will land in the wrong place under multi-monitor or non-origin window placements. Both OCR / detect output and `mouse move` share the same virtual-desktop frame, so coordinates round-trip without manual translation; see [`cli.md` Coordinate system](cli.md#coordinate-system) for the full story.
 
 `--viz [PATH]` produces a PNG with the polygons drawn over the screenshot. Useful to sanity-check OCR output by eye.
 
@@ -105,12 +105,12 @@ ______________________________________________________________________
 ## 4. Move and click
 
 ```bash
-# Click in the middle of an OCR word's display_pos bbox
+# Replace 1183 / 514 with the centre of an OCR/detect display_pos.bbox you obtained above.
 vrcpilot mouse move 1183 514
 vrcpilot mouse click left
 ```
 
-- Coordinates are desktop-absolute by default. `--rel` switches to a delta from the current position.
+- Coordinates default to the virtual-desktop frame (the same one OCR / detect emit under `display_pos`). `--rel` switches to a delta from the current position.
 - `vrcpilot mouse click` defaults to `left` and `--count 1`. Use `--count 2` for double-click; `--duration 0.05` to hold the button briefly.
 
 For paired down/up (e.g. drag), drive the input from a single Python process — the synthetic input device is released by the kernel when the CLI process exits, so `mouse press` followed by another `mouse release` invocation cannot keep the button held across them.
@@ -177,13 +177,15 @@ vrcpilot screenshot -o /tmp/vrc_after.png
 
 ### OCR-driven click
 
+Pipe a screenshot through `ocr`, pick the first match for a word, click its centre. The example uses [mikefarah/yq](https://github.com/mikefarah/yq) v4; with `jq` you would replace the filter with `'.words[] | select(.text == "Worlds") | .display_pos.bbox | @tsv'`.
+
 ```bash
-# 1. Find the bbox of the word you care about
-vrcpilot screenshot \
-  | vrcpilot ocr \
-  | yq '.words[] | select(.text == "Worlds") | .display_pos.bbox' > /tmp/bbox.yaml
-# 2. Compute the centre, then click
-read x y w h <<<"$(yq '. | join(" ")' /tmp/bbox.yaml)"
+read -r x y w h < <(
+  vrcpilot screenshot \
+    | vrcpilot ocr \
+    | yq -r '.words[] | select(.text == "Worlds") | .display_pos.bbox | join(" ")' \
+    | head -n 1
+)
 vrcpilot mouse move $((x + w / 2)) $((y + h / 2))
 vrcpilot mouse click left
 ```
@@ -248,4 +250,4 @@ finally:
     vrcpilot.terminate()
 ```
 
-The Python form is the only way to keep a key held or a button pressed across multiple actions in the same session — `keyboard.down` / `up` and `mouse.press` / `release` are paired half-actions that only work within one process.
+Hold a key or a button across multiple actions by using `keyboard.down` / `up` and `mouse.press` / `release` from one Python process — half-action APIs that the CLI cannot expose because each invocation is its own process.

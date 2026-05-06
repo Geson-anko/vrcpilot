@@ -7,18 +7,18 @@ This document is the flag-by-flag reference for the `vrcpilot` command. For task
 ## Conventions
 
 - All subcommands return exit code `0` on success and `1` on a recoverable failure (with a one-line `vrcpilot: <message>` on stderr). A few commands also use `2` for an input-shape error; those are noted explicitly below.
-- `vrcpilot --version` prints the resolved version (read from package metadata via `importlib.metadata`).
+- `vrcpilot --version` prints the resolved package version (read via `importlib.metadata` so it stays in sync with `pyproject.toml`).
 - The CLI is `argcomplete`-aware (`PYTHON_ARGCOMPLETE_OK` marker is in [`src/vrcpilot/cli/__init__.py`](../src/vrcpilot/cli/__init__.py)). See [`README.md`](../README.md#shell-completion) for setup.
 
 ### `Screenshot` YAML hand-off
 
 `ocr` and `detect` do not capture the screen themselves. They consume a `Screenshot` YAML produced by `vrcpilot screenshot`, resolved by [`cli/_common.py::resolve_screenshot`](../src/vrcpilot/cli/_common.py) in this order:
 
-1. `--screenshot <path>` if the flag is set.
+1. `-s` / `--screenshot <path>` if the flag is set. The file always wins; stdin is not even read in this branch.
 2. Stdin, if stdin is **not** a TTY (i.e. piped from `vrcpilot screenshot ...`).
 3. Otherwise: print a usage message to stderr and exit `1`.
 
-Both stdin pipe and `--screenshot <path>` are first-class — pipelines can mix them freely.
+Both forms are first-class — pipe a fresh capture or hand in a previously-saved file as you please.
 
 ### Coordinate system
 
@@ -28,6 +28,8 @@ OCR and detect output two coordinate spaces per match:
 - `display_pos.{polygon,bbox}` — desktop-absolute, already shifted by `window.x` / `window.y`.
 
 When feeding coordinates back into `vrcpilot mouse move`, **always use `display_pos.bbox`**. Window-local `pos` will land in the wrong place on multi-monitor setups or when the VRChat window is not at `(0, 0)`.
+
+The shared frame for both screenshot geometry and `mouse move` is the **virtual-desktop bounding box** — `mss.MSS().monitors[0]` on Linux, the Win32 virtual screen on Windows. On standard left-origin monitor layouts that bounding box starts at `(0, 0)` and matches the everyday "desktop-absolute pixels" intuition; on layouts where a secondary monitor extends leftward of the primary the origin shifts accordingly. Both OCR / detect output and `mouse move` use the same frame, so coordinates round-trip without manual translation.
 
 ______________________________________________________________________
 
@@ -147,7 +149,7 @@ vrcpilot screenshot [-o PATH]
 
 **Exit codes**: `0` on success, `1` if capture fails.
 
-**Side effects**: writes a PNG to disk only when `-o` is set.
+**Side effects**: writes a PNG to disk only when `-o` is set. The parent directory of `-o PATH` must already exist; a missing parent surfaces as a `FileNotFoundError` traceback rather than a clean exit-1.
 
 ______________________________________________________________________
 
@@ -186,10 +188,10 @@ Send synthetic mouse input to VRChat. All actions guard on VRChat being running 
 vrcpilot mouse move X Y [--rel]
 ```
 
-| Argument | Description                                                          |
-| -------- | -------------------------------------------------------------------- |
-| `X`, `Y` | Target position. By default, desktop-absolute pixel coordinates.     |
-| `--rel`  | Treat `X`, `Y` as a relative delta from the current cursor position. |
+| Argument | Description                                                                                                                                                            |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `X`, `Y` | Target position in the virtual-desktop frame (see [Coordinate system](#coordinate-system)). On standard layouts this matches `display_pos.bbox` from `ocr` / `detect`. |
+| `--rel`  | Treat `X`, `Y` as a relative delta from the current cursor position.                                                                                                   |
 
 ### `mouse click`
 
@@ -197,11 +199,11 @@ vrcpilot mouse move X Y [--rel]
 vrcpilot mouse click [BUTTON ...] [--count N] [--duration SECONDS]
 ```
 
-| Argument / Option    | Default | Description                                                                            |
-| -------------------- | ------- | -------------------------------------------------------------------------------------- |
-| `BUTTON ...`         | `left`  | One or more of `left`, `right`, `middle`. Multiple buttons are pressed simultaneously. |
-| `--count N`          | `1`     | Repeat the click `N` times.                                                            |
-| `--duration SECONDS` | `0.0`   | How long to hold the buttons down per click. `0.0` skips the sleep.                    |
+| Argument / Option    | Default | Description                                                                                                                      |
+| -------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `BUTTON ...`         | `left`  | One or more of `left`, `right`, `middle`. Multiple buttons are pressed simultaneously.                                           |
+| `--count N`          | `1`     | Repeat the click `N` times.                                                                                                      |
+| `--duration SECONDS` | `0.0`   | How long to hold the buttons down per click. `0.0` (the default) skips the sleep so the press / release pair fires back-to-back. |
 
 ### `mouse scroll`
 
@@ -252,9 +254,9 @@ Inject arbitrary Unicode text via clipboard + Ctrl+V. Use this for non-ASCII con
 vrcpilot paste [TEXT]
 ```
 
-| Argument            | Description                                                                              |
-| ------------------- | ---------------------------------------------------------------------------------------- |
-| `TEXT` (positional) | The text to paste. Optional. If omitted and stdin is piped, the text is read from stdin. |
+| Argument            | Description                                                                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TEXT` (positional) | The text to paste. Optional. If omitted and stdin is piped, the text is read from stdin; if omitted and stdin is a TTY, the command exits `2` rather than blocking on input. |
 
 **Exit codes**: `0` on success, `1` on a VRChat focus-guard failure or a clipboard backend error, `2` if `TEXT` is omitted and stdin is a TTY.
 
@@ -267,13 +269,13 @@ ______________________________________________________________________
 Run OCR over a `Screenshot` YAML.
 
 ```
-vrcpilot ocr [--screenshot PATH] [--viz [PATH]]
+vrcpilot ocr [-s YAML | --screenshot YAML] [--viz [PATH]]
 ```
 
-| Option              | Default | Description                                                                                                                                                                                          |
-| ------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--screenshot PATH` | unset   | Read the `Screenshot` YAML from `PATH`. Mutually exclusive with stdin.                                                                                                                               |
-| `--viz [PATH]`      | off     | When the flag is given without an argument, write the visualization PNG to `./vrcpilot_ocr_viz_<UTC>.png`. With a directory: same filename inside that directory. With a file path: that exact path. |
+| Option                         | Default | Description                                                                                                                                                                                          |
+| ------------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-s YAML`, `--screenshot YAML` | unset   | Read the `Screenshot` YAML from `YAML`. When set, stdin is ignored even if piped — the file always wins.                                                                                             |
+| `--viz [PATH]`                 | off     | When the flag is given without an argument, write the visualization PNG to `./vrcpilot_ocr_viz_<UTC>.png`. With a directory: same filename inside that directory. With a file path: that exact path. |
 
 **Input**: stdin pipe (when stdin is not a TTY) or `--screenshot PATH`. See [Screenshot YAML hand-off](#screenshot-yaml-hand-off).
 
@@ -295,17 +297,17 @@ ______________________________________________________________________
 Run image-template detection over a `Screenshot` YAML.
 
 ```
-vrcpilot detect -q QUERY_PATH [--screenshot PATH]
+vrcpilot detect -q QUERY_PATH [-s YAML | --screenshot YAML]
                 [--threshold FLOAT] [--top-k INT] [--viz [PATH]]
 ```
 
-| Argument / Option         | Default                 | Description                                                                                 |
-| ------------------------- | ----------------------- | ------------------------------------------------------------------------------------------- |
-| `-q PATH`, `--query PATH` | required                | Query image (PNG / JPG).                                                                    |
-| `--screenshot PATH`       | unset                   | Read the `Screenshot` YAML from `PATH`. Mutually exclusive with stdin.                      |
-| `--threshold FLOAT`       | engine default (`0.85`) | `cv2.matchTemplate` (`TM_CCOEFF_NORMED`) cutoff. Range `-1.0`–`1.0`.                        |
-| `--top-k INT`             | unbounded               | Keep only the `K` highest-confidence detections.                                            |
-| `--viz [PATH]`            | off                     | Same semantics as `ocr --viz`, but the default filename is `vrcpilot_detect_viz_<UTC>.png`. |
+| Argument / Option              | Default                 | Description                                                                                 |
+| ------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------- |
+| `-q PATH`, `--query PATH`      | required                | Query image (PNG / JPG).                                                                    |
+| `-s YAML`, `--screenshot YAML` | unset                   | Read the `Screenshot` YAML from `YAML`. When set, stdin is ignored even if piped.           |
+| `--threshold FLOAT`            | engine default (`0.85`) | `cv2.matchTemplate` (`TM_CCOEFF_NORMED`) cutoff. Range `-1.0`–`1.0`.                        |
+| `--top-k INT`                  | unbounded               | Keep only the `K` highest-confidence detections.                                            |
+| `--viz [PATH]`                 | off                     | Same semantics as `ocr --viz`, but the default filename is `vrcpilot_detect_viz_<UTC>.png`. |
 
 **Input**: same hand-off rules as `ocr`.
 
