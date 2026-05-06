@@ -1,1 +1,2 @@
 - [Submodule attribute collision in cli package](feedback_submodule_attribute_collision.md) — re-exports clashing with subcommand submodule names get clobbered; rebind after `_main` import
+- [yaml.safe_load returns Unknown under pyright strict](feedback_yaml_safe_load_pyright_strict.md) — cast to dict\[str, Any\] after isinstance narrow so int()/str() coercions type-check
