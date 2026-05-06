@@ -1,0 +1,501 @@
+# Python API Reference
+
+This document is a hand-curated reference for every symbol exposed at `vrcpilot.<name>`. For runnable narratives see [`usage.md`](usage.md); for the equivalent CLI see [`cli.md`](cli.md). Function signatures match the source as of `0.1.0a1`.
+
+## Conventions
+
+- All `vrcpilot.<name>` symbols are listed in [`src/vrcpilot/__init__.py::__all__`](../src/vrcpilot/__init__.py).
+- Submodules `vrcpilot.keyboard`, `vrcpilot.mouse`, and `vrcpilot.clipboard` are also part of the public surface.
+- Most call sites that send synthetic input or talk to the VRChat window expect VRChat to be **running and focused** — that requirement is enforced by [`ensure_target()`](#ensure_target) and is called for you by the high-level helpers. The relevant exceptions (`VRChatNotRunningError`, `VRChatNotFocusedError`) are re-raised so callers can recover.
+- All coordinate-bearing types (`Screenshot`, `OCRWord`, `OCRResult`, `Detection`, `DetectResult`) carry both window-local (`pos*`) and desktop-absolute (`display_pos*`) views. Always feed `display_pos.bbox` into `mouse.move()` — see [coordinate system](cli.md#coordinate-system).
+- Code blocks use `...` as the body of every signature so they paste back cleanly into a Python REPL or stub file.
+
+______________________________________________________________________
+
+## Process control
+
+### `vrcpilot.launch`
+
+```python
+def launch(
+    *,
+    app_id: int = VRCHAT_STEAM_APP_ID,
+    steam_path: Path | None = None,
+    no_vr: bool = False,
+    screen_width: int | None = None,
+    screen_height: int | None = None,
+    osc: OscConfig | None = None,
+    extra_args: list[str] | None = None,
+) -> None: ...
+```
+
+Start VRChat through Steam. The new process is detached from the calling process group. Returns once Steam has been told to launch the app — use [`find_pid()`](#vrcpilotfind_pid) (or your own polling) to wait for the process to appear.
+
+**Raises**: `SteamNotFoundError` when no Steam executable is found.
+
+### `vrcpilot.terminate`
+
+```python
+def terminate(*, timeout: float = 5.0) -> list[int]: ...
+```
+
+Force-kill every running VRChat process and wait up to `timeout` seconds for them to exit. Idempotent — returns an empty list when nothing is running.
+
+**Returns**: the PIDs that were signalled.
+
+### `vrcpilot.find_pid`
+
+```python
+def find_pid() -> int | None: ...
+```
+
+**Returns**: the first running VRChat PID, or `None` when nothing matches.
+
+### `vrcpilot.build_launch_command`
+
+```python
+def build_launch_command(
+    steam_executable: Path,
+    app_id: int = VRCHAT_STEAM_APP_ID,
+    *,
+    vrchat_args: list[str] | None = None,
+) -> list[str]: ...
+```
+
+Build the argv that `launch()` would pass to `subprocess`. Useful for logging, sandboxing, or wrapping the launch in another runner.
+
+### `vrcpilot.build_vrchat_launch_args`
+
+```python
+def build_vrchat_launch_args(
+    *,
+    no_vr: bool = False,
+    screen_width: int | None = None,
+    screen_height: int | None = None,
+    osc: OscConfig | None = None,
+    extra_args: list[str] | None = None,
+) -> list[str]: ...
+```
+
+Build only the VRChat-side argv (the part after Steam's `-applaunch <app_id>` token).
+
+### `vrcpilot.OscConfig`
+
+```python
+@dataclass(frozen=True)
+class OscConfig:
+    in_port: int = 9000
+    out_ip: str = "127.0.0.1"
+    out_port: int = 9001
+
+    def to_launch_arg(self) -> str: ...
+```
+
+Structured form of VRChat's `--osc=<in>:<ip>:<out>` flag. `to_launch_arg()` renders the single CLI token used at launch.
+
+### `vrcpilot.SteamNotFoundError`
+
+Raised by `launch()` (and the Steam discovery helpers) when no Steam executable can be located.
+
+### Constants
+
+```python
+VRCHAT_STEAM_APP_ID: Final[int] = 438100
+VRCHAT_PROCESS_NAME: Final[str] = "VRChat.exe"
+```
+
+______________________________________________________________________
+
+## Window control
+
+### `vrcpilot.focus`
+
+```python
+def focus() -> bool: ...
+```
+
+Bring the VRChat window to the foreground (and de-minimize it if needed).
+
+**Returns**: `True` on success, `False` when VRChat is not running, the window is not mapped, the platform call fails, or the session is Wayland-native.
+
+**Raises**: `NotImplementedError` on platforms other than Windows / Linux.
+
+### `vrcpilot.unfocus`
+
+```python
+def unfocus() -> bool: ...
+```
+
+Send the VRChat window to the bottom of the z-order without raising any other window. Same return / raise contract as `focus()`.
+
+### `vrcpilot.is_foreground`
+
+```python
+def is_foreground() -> bool: ...
+```
+
+**Returns**: `True` iff the VRChat window is currently in the foreground.
+
+______________________________________________________________________
+
+## Screen capture
+
+### `vrcpilot.Capture`
+
+```python
+class Capture:
+    def __init__(self, *, frame_timeout: float = 2.0) -> None: ...
+    def read(self) -> np.ndarray: ...
+    def close(self) -> None: ...
+```
+
+Streaming capture session for the VRChat window. Captures without focus. The internal buffer keeps only the most recent frame, so `read()` always returns "now".
+
+- `read()` returns `(H, W, 3)` `uint8` RGB.
+- `close()` is idempotent and never raises.
+- Supports `with` (context manager).
+- `frame_timeout` is the per-frame wait in seconds; must be `> 0`.
+
+**Raises**:
+
+- `NotImplementedError` on platforms other than Windows / Linux.
+- `RuntimeError` when the backend cannot start (VRChat not running, window not mapped, X11 unavailable, WGC session failure, Wayland-native).
+- `ValueError` when `frame_timeout <= 0`.
+
+### `vrcpilot.CaptureLoop`
+
+```python
+class CaptureLoop:
+    def __init__(
+        self,
+        callback: Callable[[np.ndarray], None],
+        *,
+        fps: float,
+        frame_timeout: float = 2.0,
+    ) -> None: ...
+
+    @property
+    def is_running(self) -> bool: ...
+
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+    def close(self) -> None: ...
+```
+
+Drives a `Capture` on a background thread at a fixed `fps`. Each frame is delivered to `callback` as `(H, W, 3)` `uint8` RGB. Supports `with`.
+
+**Raises**: `ValueError` when `fps` or `frame_timeout` is non-positive; `RuntimeError` when the inner `Capture` cannot start; `NotImplementedError` on unsupported platforms.
+
+The CLI `vrcpilot capture` command uses internal sinks (`Mp4FrameSink`, `Y4mStdoutFrameSink`) on top of `CaptureLoop`. Custom sinks are written by passing your own `callback`.
+
+______________________________________________________________________
+
+## Screenshot
+
+### `vrcpilot.Screenshot`
+
+```python
+@dataclass(frozen=True, eq=False)
+class Screenshot:
+    image: NDArray[np.uint8]   # (H, W, 3) uint8 RGB
+    x: int                     # window top-left, desktop-absolute
+    y: int
+    width: int
+    height: int
+    monitor_index: int         # mss.MSS().monitors index
+    captured_at: datetime      # UTC
+
+    def save(self, png_path: Path | None = None) -> str: ...
+    @classmethod
+    def load(cls, text: str) -> Screenshot: ...
+```
+
+Pixel data plus the on-screen geometry needed to translate window-local coordinates back to the desktop. `eq=False` because numpy arrays cannot be compared element-wise in `__eq__`.
+
+`save()` returns a YAML string. When `png_path` is provided the PNG is written there and the YAML stores `path:`; otherwise the YAML embeds the PNG as base64 under `image:`. `load()` restores either form.
+
+### `vrcpilot.take_screenshot`
+
+```python
+def take_screenshot(*, settle_seconds: float = 0.05) -> Screenshot | None: ...
+```
+
+Focus VRChat, sleep `settle_seconds`, and grab a one-shot capture of the VRChat window only.
+
+**Returns**: a `Screenshot`, or `None` on a recoverable failure (Wayland-native, focus refused, window unmapped, mss error).
+
+**Raises**: `NotImplementedError` on unsupported platforms; `ValueError` when `settle_seconds < 0`.
+
+______________________________________________________________________
+
+## OCR
+
+### `vrcpilot.OCRWord`
+
+```python
+@dataclass(frozen=True)
+class OCRWord:
+    text: str
+    polygon: Polygon          # (TL, TR, BR, BL), image-local
+    confidence: float         # 0.0–1.0
+
+    @property
+    def bbox(self) -> tuple[int, int, int, int]: ...   # (x, y, w, h), axis-aligned
+    @property
+    def center(self) -> tuple[float, float]: ...
+```
+
+### `vrcpilot.OCRResult`
+
+```python
+@dataclass(frozen=True, eq=False)
+class OCRResult:
+    screenshot: Screenshot
+    words: tuple[OCRWord, ...]
+
+    def display_polygon(self, word: OCRWord) -> Polygon: ...
+    def display_bbox(self, word: OCRWord) -> tuple[int, int, int, int]: ...
+```
+
+Bundles a `Screenshot` with the words detected on it. `display_*` shifts a word's window-local coordinates to desktop-absolute space using the `Screenshot`'s `x` / `y`.
+
+### `vrcpilot.OCREngine`
+
+```python
+class OCREngine(ABC):
+    @abstractmethod
+    def recognize(self, image: NDArray[np.uint8]) -> Sequence[OCRWord]: ...
+```
+
+Swap in your own backend by implementing this ABC.
+
+### `vrcpilot.RapidOCREngine`
+
+```python
+class RapidOCREngine(OCREngine):
+    def __init__(self, *, params: dict[str, Any] | None = None) -> None: ...
+```
+
+Default backend (PP-OCRv4 via `rapidocr`). Lazy-imports `rapidocr` in the constructor so the rest of the package is usable without the `ocr` extra installed.
+
+**Raises**: `ImportError` when `rapidocr` is not installed.
+
+### `vrcpilot.recognize`
+
+```python
+def recognize(
+    screenshot: Screenshot,
+    *,
+    engine: OCREngine | None = None,
+) -> OCRResult: ...
+```
+
+Run OCR on `screenshot`. When `engine` is `None`, a process-cached `RapidOCREngine` instance is used.
+
+______________________________________________________________________
+
+## Image-template detection
+
+### `vrcpilot.Detection`
+
+```python
+@dataclass(frozen=True)
+class Detection:
+    polygon: Polygon
+    confidence: float
+    scale: float        # 1.0 = same size as the query
+    rotation: float     # radians, counter-clockwise positive
+
+    @property
+    def bbox(self) -> tuple[int, int, int, int]: ...
+    @property
+    def center(self) -> tuple[float, float]: ...
+```
+
+### `vrcpilot.DetectResult`
+
+```python
+@dataclass(frozen=True, eq=False)
+class DetectResult:
+    screenshot: Screenshot
+    query: NDArray[np.uint8]    # (h, w, 3) uint8 RGB
+    detections: tuple[Detection, ...]
+
+    def display_polygon(self, det: Detection) -> Polygon: ...
+    def display_bbox(self, det: Detection) -> tuple[int, int, int, int]: ...
+```
+
+### `vrcpilot.DetectEngine`
+
+```python
+class DetectEngine(ABC):
+    @abstractmethod
+    def detect(
+        self,
+        image: NDArray[np.uint8],
+        query: NDArray[np.uint8],
+    ) -> Sequence[Detection]: ...
+```
+
+### `vrcpilot.TemplateDetectEngine`
+
+```python
+class TemplateDetectEngine(DetectEngine):
+    def __init__(
+        self,
+        *,
+        threshold: float = 0.85,
+        scales: Sequence[float] = (
+            0.25, 0.3, 0.35, 0.4, 0.5, 0.6, 0.75,
+            0.9, 1.0, 1.25, 1.5, 1.8, 2.2, 2.6, 3.0,
+        ),
+        rotations_deg: Sequence[float] = (0.0,),
+        nms_iou: float = 0.3,
+        max_results: int = 32,
+    ) -> None: ...
+```
+
+Multi-scale (and optionally multi-rotation) `cv2.matchTemplate(..., TM_CCOEFF_NORMED)` runner with non-maximum suppression.
+
+### `vrcpilot.detect`
+
+```python
+def detect(
+    screenshot: Screenshot,
+    query: NDArray[np.uint8],
+    *,
+    engine: DetectEngine | None = None,
+) -> DetectResult: ...
+```
+
+Run `engine.detect(screenshot.image, query)`. When `engine` is `None`, a process-cached `TemplateDetectEngine` is used.
+
+______________________________________________________________________
+
+## Synthetic input
+
+The `keyboard` and `mouse` modules are thin objects (not classes) — call methods on them directly. All methods accept `focus: bool = True` to opt out of the VRChat focus guard; leave it `True` unless you have a reason. The signatures below are written as `def`s for paste-friendliness; in practice you call them as `vrcpilot.keyboard.press(...)` and so on.
+
+### `vrcpilot.Key`
+
+`StrEnum` of every supported key name. Members:
+
+- Letters: `A`–`Z`
+- Digits: `NUM_0`–`NUM_9`
+- Function keys: `F1`–`F12`
+- Modifiers: `SHIFT`, `SHIFT_LEFT`, `SHIFT_RIGHT`, `CTRL`, `CTRL_LEFT`, `CTRL_RIGHT`, `ALT`, `ALT_LEFT`, `ALT_RIGHT`, `WIN`, `WIN_LEFT`, `WIN_RIGHT`
+- Navigation: `UP`, `DOWN`, `LEFT`, `RIGHT`, `HOME`, `END`, `PAGE_UP`, `PAGE_DOWN`
+- Editing: `BACKSPACE`, `DELETE`, `INSERT`, `TAB`, `ENTER`, `ESCAPE`, `SPACE`
+- Punctuation: `MINUS`, `EQUALS`, `LBRACKET`, `RBRACKET`, `BACKSLASH`, `SEMICOLON`, `QUOTE`, `COMMA`, `PERIOD`, `SLASH`, `BACKTICK`
+
+### `vrcpilot.keyboard`
+
+```python
+def press(*keys: Key, duration: float = 0.1, focus: bool = True) -> None: ...
+def down(*keys: Key, focus: bool = True) -> None: ...
+def up(*keys: Key, focus: bool = True) -> None: ...
+```
+
+`press` is a chord-tap: keys are pressed left-to-right, held for `duration` seconds, then released right-to-left. Do not lower `duration` below `0.1` — VRChat / Unity drops shorter taps.
+
+`down` and `up` are paired half-actions. They are intentionally only useful within a single Python process; the synthetic input device is released by the kernel when the process exits, so down/up cannot be paired across CLI invocations.
+
+**Raises**: `TypeError` when `keys` is empty; `VRChatNotRunningError` / `VRChatNotFocusedError` from the focus guard.
+
+### `vrcpilot.MouseButton`
+
+`StrEnum` with members `LEFT`, `RIGHT`, `MIDDLE`.
+
+### `vrcpilot.mouse`
+
+```python
+def move(x: int, y: int, *, relative: bool = False, focus: bool = True) -> None: ...
+def click(*buttons: MouseButton, count: int = 1, duration: float = 0.0, focus: bool = True) -> None: ...
+def scroll(amount: int, *, focus: bool = True) -> None: ...
+def press(*buttons: MouseButton, focus: bool = True) -> None: ...
+def release(*buttons: MouseButton, focus: bool = True) -> None: ...
+```
+
+`move(x, y)` defaults to pixels in the virtual-desktop bounding box (`mss.MSS().monitors[0]` on Linux, the Win32 virtual screen on Windows). On standard left-origin monitor layouts this matches "desktop-absolute pixels" and round-trips with the `display_pos.bbox` from OCR / detect; on layouts where another monitor extends leftward of the primary the origin shifts accordingly. With `relative=True`, `(x, y)` is added to the current cursor position.
+
+`click()` falls back to `LEFT` when called with no buttons. `count > 1` repeats the press/release pair. `duration > 0` holds each click for that many seconds.
+
+`press` / `release` are paired half-actions for chord clicks. As with `keyboard.down` / `up`, they are only meaningful within a single Python process.
+
+### `vrcpilot.ensure_target`
+
+```python
+def ensure_target() -> None: ...
+```
+
+Verify VRChat is running and currently focused, focusing it if necessary. Idempotent. The high-level `keyboard` / `mouse` / `clipboard.paste` calls invoke this for you when `focus=True` (the default).
+
+**Raises**: `NotImplementedError` on Wayland-native; `VRChatNotRunningError`; `VRChatNotFocusedError`.
+
+### `vrcpilot.VRChatNotRunningError`, `vrcpilot.VRChatNotFocusedError`
+
+Raised by `ensure_target()` and the input helpers.
+
+______________________________________________________________________
+
+## Clipboard
+
+### `vrcpilot.clipboard.paste`
+
+```python
+def paste(text: str, *, focus: bool = True) -> None: ...
+```
+
+Copy `text` to the OS clipboard, then send Ctrl+V to VRChat. Use this for non-ASCII content (Japanese, emoji, …) — scancode-based `keyboard.press` cannot type those directly.
+
+**Raises**: `pyperclip.PyperclipException` when no clipboard backend is available (e.g. Linux without `xclip` or `xsel` installed); the focus-guard exceptions when `focus=True`.
+
+______________________________________________________________________
+
+## Type aliases
+
+### `vrcpilot.types.Polygon`
+
+```python
+type Polygon = tuple[
+    tuple[float, float],  # TL
+    tuple[float, float],  # TR
+    tuple[float, float],  # BR
+    tuple[float, float],  # BL
+]
+```
+
+The 4-corner polygon shape used by `OCRWord.polygon` and `Detection.polygon`. Coordinates are image-local pixels.
+
+______________________________________________________________________
+
+## End-to-end snippet
+
+```python
+from time import sleep
+
+import vrcpilot
+
+vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
+sleep(45)  # warm up: shaders, avatar load, network sync
+
+try:
+    shot = vrcpilot.take_screenshot()
+    if shot is None:
+        raise RuntimeError("could not capture VRChat")
+
+    result = vrcpilot.recognize(shot)
+    for word in result.words:
+        print(word.text, result.display_bbox(word), word.confidence)
+
+    if result.words:
+        first = result.words[0]
+        x, y, w, h = result.display_bbox(first)
+        vrcpilot.mouse.move(int(x + w / 2), int(y + h / 2))
+        vrcpilot.mouse.click(vrcpilot.MouseButton.LEFT)
+
+    vrcpilot.keyboard.press(vrcpilot.Key.W, duration=1.0)
+    vrcpilot.clipboard.paste("こんにちは、VRChat！")
+finally:
+    vrcpilot.terminate()
+```

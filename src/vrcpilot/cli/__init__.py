@@ -11,6 +11,7 @@ the ``vrcpilot`` console script and ``python -m vrcpilot``.
 from __future__ import annotations
 
 import argparse
+from importlib import metadata
 
 import argcomplete
 
@@ -54,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vrcpilot",
         description="Automation tooling for VRChat.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {metadata.version('vrcpilot')}",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     for module in _COMMANDS.values():
