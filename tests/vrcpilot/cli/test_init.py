@@ -22,6 +22,19 @@ class TestMain:
         with pytest.raises(SystemExit):
             main([])
 
+    def test_version_prints_package_version(
+        self,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        import vrcpilot
+
+        with pytest.raises(SystemExit) as excinfo:
+            main(["--version"])
+
+        assert excinfo.value.code == 0
+        captured = capsys.readouterr()
+        assert vrcpilot.__version__ in captured.out
+
 
 class TestArgcompleteIntegration:
     def test_autocomplete_invoked_with_parser(self, mocker: MockerFixture):
