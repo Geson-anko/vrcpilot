@@ -8,17 +8,23 @@ Recoverable failures return ``None`` so polling callers can retry.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import io
 import sys
 import time
 import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import mss
 import numpy as np
+import yaml
 from numpy.typing import NDArray
+from PIL import Image, UnidentifiedImageError
 
 from vrcpilot.geometry import get_vrchat_window_rect
 from vrcpilot.session import is_wayland_native
@@ -51,6 +57,154 @@ class Screenshot:
     height: int
     monitor_index: int
     captured_at: datetime
+
+    def save(self, png_path: Path | None = None) -> str:
+        """Serialise the screenshot to YAML, optionally backed by a PNG file.
+
+        Two emission modes share one return type so callers can always
+        pipe the result to stdout or a ``.yaml`` file:
+
+        * **path mode** (``png_path`` given): the PNG is written to
+          ``png_path`` and the YAML records an absolute ``path:``
+          reference. Keys appear in the order ``path``, ``x``, ``y``,
+          ``width``, ``height``, ``monitor_index``, ``captured_at`` —
+          the historical ``vrcpilot screenshot`` CLI contract.
+        * **inline mode** (``png_path is None``): no file is written;
+          the PNG bytes are encoded as base64 and stored under
+          ``image:``. To keep the metadata grep-friendly the
+          (potentially very long) ``image`` value is emitted **last**;
+          keys appear in the order ``x``, ``y``, ``width``, ``height``,
+          ``monitor_index``, ``captured_at``, ``image``.
+
+        Args:
+            png_path: Optional PNG destination. May be relative; when
+                given, the YAML records its ``resolve()``-d absolute
+                form and the parent directory must already exist
+                (callers are responsible for ``mkdir(parents=True)``
+                when needed). When ``None``, no file is touched and the
+                YAML is fully self-contained.
+
+        Raises:
+            FileNotFoundError: ``png_path`` is supplied and its parent
+                directory does not exist (propagated from
+                :class:`PIL.Image.Image.save`). The inline path writes
+                to an in-memory buffer and effectively never raises in
+                normal use.
+
+        Returns:
+            YAML text that :meth:`load` round-trips back into an
+            equivalent :class:`Screenshot`.
+        """
+        if png_path is not None:
+            Image.fromarray(self.image).save(png_path)
+            payload: dict[str, object] = {
+                "path": str(png_path.resolve()),
+                "x": self.x,
+                "y": self.y,
+                "width": self.width,
+                "height": self.height,
+                "monitor_index": self.monitor_index,
+                "captured_at": self.captured_at.isoformat(),
+            }
+        else:
+            buf = io.BytesIO()
+            Image.fromarray(self.image).save(buf, format="PNG")
+            payload = {
+                "x": self.x,
+                "y": self.y,
+                "width": self.width,
+                "height": self.height,
+                "monitor_index": self.monitor_index,
+                "captured_at": self.captured_at.isoformat(),
+                "image": base64.b64encode(buf.getvalue()).decode("ascii"),
+            }
+        return yaml.safe_dump(payload, sort_keys=False, default_flow_style=False)
+
+    @classmethod
+    def load(cls, text: str) -> Screenshot:
+        """Restore a :class:`Screenshot` from YAML text written by ``save``.
+
+        Two YAML shapes are accepted, mirroring :meth:`save`:
+
+        * **path mode** — the document carries a ``path:`` key and the
+          referenced PNG is read from disk.
+        * **inline mode** — the document carries an ``image:`` key
+          containing base64-encoded PNG bytes and no file system access
+          is performed.
+
+        Exactly one of ``path`` / ``image`` must be present; supplying
+        both or neither is a :class:`ValueError` so the schema stays
+        unambiguous. The decoded image is converted to ``(H, W, 3)``
+        ``uint8`` RGB regardless of the source path.
+
+        Other field types are coerced via :func:`int` / :func:`str`, so
+        any non-mapping payload, missing key, malformed value, invalid
+        ISO-8601 timestamp, or invalid base64 is surfaced as
+        :class:`ValueError`. A missing or non-image PNG is reported
+        with a dedicated message that names the offending file.
+
+        Args:
+            text: YAML text emitted by :meth:`save` (either mode).
+
+        Raises:
+            ValueError: ``text`` is not a YAML mapping; both ``path``
+                and ``image`` are present, or neither; a required key
+                is missing; a field cannot be coerced; the
+                ``captured_at`` timestamp is not ISO-8601; the
+                referenced PNG is missing or undecodable; the inline
+                ``image`` value is not valid base64 or PNG.
+
+        Returns:
+            A new :class:`Screenshot` whose ``image`` is detached from
+            any backing file or buffer (safe to keep after the source
+            is removed).
+        """
+        raw = yaml.safe_load(text)
+        if not isinstance(raw, dict):
+            raise ValueError("screenshot YAML must be a mapping")
+        # ``yaml.safe_load`` returns ``dict[Unknown, Unknown]`` under
+        # pyright strict; cast to a permissive ``dict[str, Any]`` so the
+        # downstream ``int()`` / ``str()`` coercions are well-typed. The
+        # actual type validation is performed at runtime via the
+        # ``(binascii.Error, KeyError, TypeError, ValueError)`` catch
+        # below.
+        payload = cast(dict[str, Any], raw)
+        has_path = "path" in payload
+        has_image = "image" in payload
+        if has_path and has_image:
+            raise ValueError(
+                "screenshot YAML must contain either 'path' or 'image', not both"
+            )
+        if not has_path and not has_image:
+            raise ValueError("screenshot YAML must contain either 'path' or 'image'")
+        try:
+            if has_image:
+                png_bytes = base64.b64decode(str(payload["image"]), validate=True)
+                with Image.open(io.BytesIO(png_bytes)) as img:
+                    image = np.asarray(img.convert("RGB"), dtype=np.uint8).copy()
+            else:
+                png_path = Path(str(payload["path"]))
+                with Image.open(png_path) as img:
+                    image = np.asarray(img.convert("RGB"), dtype=np.uint8).copy()
+            return cls(
+                image=image,
+                x=int(payload["x"]),
+                y=int(payload["y"]),
+                width=int(payload["width"]),
+                height=int(payload["height"]),
+                monitor_index=int(payload["monitor_index"]),
+                captured_at=datetime.fromisoformat(str(payload["captured_at"])),
+            )
+        except FileNotFoundError as exc:
+            raise ValueError(
+                f"PNG referenced by screenshot YAML not found: {exc.filename}"
+            ) from exc
+        except UnidentifiedImageError as exc:
+            raise ValueError(
+                f"PNG referenced by screenshot YAML is not a valid image: {exc}"
+            ) from exc
+        except (binascii.Error, KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"invalid screenshot YAML: {exc}") from exc
 
 
 def _resolve_monitor_index(

@@ -9,6 +9,18 @@ YAML keys are emitted in a fixed order (``sort_keys=False``):
 ``viz_path``. Each detection carries ``confidence`` / ``scale`` /
 ``rotation`` plus ``pos`` (image-local) and ``display_pos``
 (desktop-absolute) ``polygon`` and ``bbox``.
+
+Screenshot input sources:
+
+1. ``--screenshot <yaml-path>`` - read a previously captured
+   screenshot from a YAML file (as emitted by ``vrcpilot screenshot``)
+2. piped stdin - same YAML format consumed from stdin when stdin is
+   not a tty (e.g. ``vrcpilot screenshot | vrcpilot detect --query q.png``)
+
+If neither is given, the command exits with status 1 and an explanatory
+message on stderr. ``vrcpilot detect`` no longer captures a fresh
+screenshot itself - pipe in or pass ``--screenshot`` so template
+detection works even when VRChat is not running.
 """
 
 from __future__ import annotations
@@ -33,9 +45,13 @@ from vrcpilot.detect import (
     detect,
     render,
 )
-from vrcpilot.screenshot import Screenshot, take_screenshot
 
-from ._common import SubParsersAction, attach_completer
+from ._common import (
+    SubParsersAction,
+    add_screenshot_input_arg,
+    attach_completer,
+    resolve_screenshot,
+)
 
 # Sentinel for "--viz with no argument" — distinct from "--viz absent"
 # (``None``) and "--viz <path>" (``Path``).
@@ -93,6 +109,7 @@ def register(subparsers: SubParsersAction) -> None:
     attach_completer(
         viz_action, FilesCompleter(allowednames=("png",), directories=True)
     )
+    add_screenshot_input_arg(parser)
 
 
 def _resolve_viz_path(arg: object, *, now: datetime) -> Path | None:
@@ -133,13 +150,17 @@ def _build_engine(*, threshold: float | None) -> DetectEngine | None:
 def run(args: argparse.Namespace) -> int:
     """Execute the ``detect`` subcommand.
 
-    Returns ``0`` on success, ``1`` when the screenshot or query image
-    cannot be read (a ``vrcpilot: ...`` line is written to stderr and
-    stdout stays empty).
+    Returns ``0`` on success, ``1`` when the screenshot input cannot
+    be resolved (e.g. ``--screenshot`` file missing, piped YAML
+    malformed, or neither ``--screenshot`` nor a piped stdin was
+    supplied) or when the query image cannot be decoded.
+    :func:`~vrcpilot.cli._common.resolve_screenshot` emits the
+    ``vrcpilot: ...`` stderr line for screenshot failures; the query
+    path branch writes its own ``vrcpilot: could not read query image:
+    ...`` line. stdout stays empty on every failure.
     """
-    shot: Screenshot | None = take_screenshot()
+    shot = resolve_screenshot(args)
     if shot is None:
-        print("vrcpilot: could not capture VRChat screenshot", file=sys.stderr)
         return 1
 
     query_path: Path = args.query

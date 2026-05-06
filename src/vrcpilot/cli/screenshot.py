@@ -1,31 +1,45 @@
 """``vrcpilot screenshot`` subcommand.
 
-Writes the PNG to disk and dumps the :class:`Screenshot` metadata as a
-YAML document on stdout. The schema (stable, grep-able):
+Captures the VRChat window and emits its metadata as YAML on stdout.
+The output mode depends on whether ``-o / --output`` is given:
 
-- ``path`` — absolute path of the PNG that was written
-- ``x`` / ``y`` — window top-left in absolute desktop pixels
-- ``width`` / ``height`` — window size in physical pixels
-- ``monitor_index`` — index into ``mss.MSS().monitors`` (``0`` is the
+- **With ``-o``** (file mode): The PNG is written to the given path and
+  the YAML carries a ``path`` field with the absolute on-disk location.
+  Use this when you want a separately-stored PNG you can open later.
+- **Without ``-o``** (inline mode, default): No PNG file is written;
+  the image is embedded in the YAML as a base64-encoded PNG under the
+  ``image`` key. Designed for ``vrcpilot screenshot | vrcpilot ocr``
+  pipelines so no stray files accumulate in the cwd.
+
+Schema (file mode, stable, grep-able):
+
+- ``path`` -- absolute path of the PNG that was written
+- ``x`` / ``y`` -- window top-left in absolute desktop pixels
+- ``width`` / ``height`` -- window size in physical pixels
+- ``monitor_index`` -- index into ``mss.MSS().monitors`` (``0`` is the
   composite, ``1..N`` are individual monitors)
-- ``captured_at`` — ISO-8601 UTC timestamp of the grab
+- ``captured_at`` -- ISO-8601 UTC timestamp of the grab
 
-Keys are emitted in the order above (``sort_keys=False``) so callers
-can rely on it for line-oriented parsing.
+Schema (inline mode, stable, grep-able):
+
+- ``x``, ``y``, ``width``, ``height``, ``monitor_index``,
+  ``captured_at`` (same as above)
+- ``image`` -- base64-encoded PNG bytes (emitted last so the metadata
+  remains line-grep-friendly)
+
+Keys are emitted with ``sort_keys=False`` so callers can rely on the
+order for line-oriented parsing.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime
 from pathlib import Path
 
-import yaml
 from argcomplete.completers import FilesCompleter
-from PIL import Image
 
-from vrcpilot.screenshot import Screenshot, take_screenshot
+from vrcpilot.screenshot import take_screenshot
 
 from ._common import SubParsersAction, attach_completer
 
@@ -42,9 +56,10 @@ def register(subparsers: SubParsersAction) -> None:
         type=Path,
         default=None,
         help=(
-            "Path where the PNG screenshot is written. Defaults to "
-            "./vrcpilot_screenshot_<YYYYMMDD_HHMMSS>.png in the current "
-            "directory."
+            "Path where the PNG screenshot is written. When omitted, the "
+            "image is embedded as base64 PNG in the YAML output (no file "
+            "is written) so the result can be piped directly to "
+            "'vrcpilot ocr' / 'detect'."
         ),
     )
     attach_completer(
@@ -55,33 +70,20 @@ def register(subparsers: SubParsersAction) -> None:
 def run(args: argparse.Namespace) -> int:
     """Execute the ``screenshot`` subcommand.
 
-    Writes the PNG to ``args.output`` (or ``./vrcpilot_screenshot_
-    <YYYYMMDD_HHMMSS>.png`` when unset) and emits the YAML metadata
-    document described in the module docstring on stdout. The output
-    extension drives the on-disk format via :func:`PIL.Image.save`.
+    When ``args.output`` is given, writes the PNG to that path and emits
+    ``path``-referencing YAML on stdout. When omitted, no file is
+    written and the YAML embeds the PNG as base64 under ``image:``. The
+    output extension drives the on-disk format via
+    :func:`PIL.Image.save`.
 
     Returns:
         ``0`` on success, ``1`` if capture failed (with a single
         ``vrcpilot: ...`` line on stderr and no stdout output).
     """
     output: Path | None = args.output
-    shot: Screenshot | None = take_screenshot()
+    shot = take_screenshot()
     if shot is None:
         print("vrcpilot: could not capture VRChat screenshot", file=sys.stderr)
         return 1
-    if output is None:
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output = Path.cwd() / f"vrcpilot_screenshot_{stamp}.png"
-    Image.fromarray(shot.image).save(output)
-
-    payload: dict[str, object] = {
-        "path": str(output.resolve()),
-        "x": shot.x,
-        "y": shot.y,
-        "width": shot.width,
-        "height": shot.height,
-        "monitor_index": shot.monitor_index,
-        "captured_at": shot.captured_at.isoformat(),
-    }
-    sys.stdout.write(yaml.safe_dump(payload, sort_keys=False, default_flow_style=False))
+    sys.stdout.write(shot.save(output))
     return 0

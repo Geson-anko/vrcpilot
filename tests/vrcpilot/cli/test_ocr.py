@@ -10,6 +10,7 @@ import pytest
 import yaml
 from pytest_mock import MockerFixture
 
+from tests.fakes import patch_stdin_with_screenshot, write_screenshot_payload
 from vrcpilot.cli import main
 from vrcpilot.cli.ocr import _VIZ_DEFAULT, _resolve_viz_path
 from vrcpilot.ocr import OCRResult, OCRWord
@@ -58,15 +59,19 @@ def _make_result(*, words: tuple[OCRWord, ...] | None = None) -> OCRResult:
 
 
 @pytest.fixture
-def patched_recognize(mocker: MockerFixture) -> OCRResult:
-    """Patch the capture and OCR boundaries with real values.
+def patched_recognize(mocker: MockerFixture, tmp_path: Path) -> OCRResult:
+    """Patch the OCR boundary and feed a screenshot via piped stdin.
 
-    The CLI orchestrates ``take_screenshot`` then ``recognize(shot)``;
-    both are re-exported on :mod:`vrcpilot.cli` as patch targets.
+    Since commit 10 removed the live-capture fallback,
+    :func:`vrcpilot.cli._common.resolve_screenshot` only honours
+    ``--screenshot`` or piped stdin. This fixture takes the stdin path
+    via :func:`patch_stdin_with_screenshot` so ``ocr`` reads the YAML on
+    demand. ``recognize`` is patched in the ocr module where it is
+    imported so the test never touches the real engine.
     """
     shot = _make_screenshot()
     result = OCRResult(screenshot=shot, words=(_make_word(),))
-    mocker.patch("vrcpilot.cli.ocr.take_screenshot", return_value=shot)
+    patch_stdin_with_screenshot(mocker, tmp_path)
     mocker.patch("vrcpilot.cli.ocr.recognize", return_value=result)
     return result
 
@@ -240,7 +245,10 @@ class TestOCRCommandViz:
         assert exit_code == 0
         loaded = yaml.safe_load(capsys.readouterr().out)
         assert "viz_path" not in loaded
-        assert list(tmp_path.glob("*.png")) == []
+        # The fixture writes ``screenshot.png`` in tmp_path to feed a
+        # screenshot YAML on stdin; viz pngs would have a
+        # ``vrcpilot_ocr_viz_`` prefix.
+        assert list(tmp_path.glob("vrcpilot_ocr_viz_*.png")) == []
 
     def test_viz_no_arg_writes_to_cwd(
         self,
@@ -296,24 +304,116 @@ class TestOCRCommandViz:
         assert Path(loaded["viz_path"]) == produced[0].resolve()
 
 
-class TestOCRCommandFailure:
-    def test_screenshot_returns_none(
+class TestOCRScreenshotInputIntegration:
+    """Cover the two input sources resolved by ``--screenshot`` plumbing.
+
+    OCR itself is patched out so tests stay decoupled from the real
+    OCR engine and only assert that the wiring funnels into
+    :func:`~vrcpilot.cli._common.resolve_screenshot` correctly.
+    """
+
+    def test_flag_loads_screenshot_yaml(
+        self,
+        mocker: MockerFixture,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        # ``write_screenshot_payload`` intentionally returns the YAML
+        # text without writing the file, so flag-based tests must dump
+        # it to disk themselves (stdin tests use the text directly).
+        yaml_path, yaml_text = write_screenshot_payload(tmp_path)
+        yaml_path.write_text(yaml_text)
+        # Stub out OCR so the test never touches the real engine.
+        result = _make_result()
+        mocker.patch("vrcpilot.cli.ocr.recognize", return_value=result)
+
+        exit_code = main(["ocr", "--screenshot", str(yaml_path)])
+
+        assert exit_code == 0
+        loaded = yaml.safe_load(capsys.readouterr().out)
+        assert "captured_at" in loaded
+        assert "window" in loaded
+        assert "words" in loaded
+
+    def test_stdin_loads_screenshot_yaml(
+        self,
+        mocker: MockerFixture,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        # ``patch_stdin_with_screenshot`` swaps sys.stdin for a
+        # StringIO whose ``isatty()`` returns False — exactly the
+        # piped-stdin signal resolve_screenshot looks for. The autouse
+        # fixture's True override is shadowed by this fresh patch.
+        patch_stdin_with_screenshot(mocker, tmp_path)
+        result = _make_result()
+        mocker.patch("vrcpilot.cli.ocr.recognize", return_value=result)
+
+        exit_code = main(["ocr"])
+
+        assert exit_code == 0
+        loaded = yaml.safe_load(capsys.readouterr().out)
+        assert "captured_at" in loaded
+        assert "window" in loaded
+        assert "words" in loaded
+
+    def test_missing_screenshot_file_exits_1(
         self,
         mocker: MockerFixture,
         capsys: pytest.CaptureFixture[str],
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
     ):
-        mocker.patch("vrcpilot.cli.ocr.take_screenshot", return_value=None)
-        # recognize should never be reached when capture fails.
         recognize_spy = mocker.patch("vrcpilot.cli.ocr.recognize")
-        monkeypatch.chdir(tmp_path)
+
+        exit_code = main(["ocr", "--screenshot", "/nonexistent/path.yaml"])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "vrcpilot: --screenshot file not found:" in captured.err
+        recognize_spy.assert_not_called()
+
+    def test_malformed_screenshot_yaml_exits_1(
+        self,
+        mocker: MockerFixture,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        # Write something that parses as YAML but is not a mapping, so
+        # ``Screenshot.load`` raises ValueError and the helper turns it
+        # into a single ``vrcpilot:`` stderr line.
+        broken = tmp_path / "broken.yaml"
+        broken.write_text("- not\n- a\n- mapping\n")
+        recognize_spy = mocker.patch("vrcpilot.cli.ocr.recognize")
+
+        exit_code = main(["ocr", "--screenshot", str(broken)])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "vrcpilot: screenshot YAML must be a mapping" in captured.err
+        recognize_spy.assert_not_called()
+
+
+class TestOCRScreenshotInputRequirement:
+    """No screenshot source = exit 1 with guidance message."""
+
+    def test_no_source_exits_1_with_error_message(
+        self,
+        mocker: MockerFixture,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        # The autouse ``_stdin_is_tty_by_default`` fixture pins
+        # ``sys.stdin.isatty()`` to ``True`` so this test exercises the
+        # "no flag, no pipe" branch without any extra setup.
+        recognize_spy = mocker.patch("vrcpilot.cli.ocr.recognize")
 
         exit_code = main(["ocr"])
 
         assert exit_code == 1
         captured = capsys.readouterr()
         assert captured.out == ""
-        assert "vrcpilot: could not capture VRChat screenshot" in captured.err
-        assert list(tmp_path.glob("*.png")) == []
+        assert "vrcpilot: no screenshot provided" in captured.err
+        assert "--screenshot" in captured.err
+        assert "stdin" in captured.err
+        assert "pipe" in captured.err
         recognize_spy.assert_not_called()

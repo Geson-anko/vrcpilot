@@ -23,6 +23,18 @@ YAML schema (stable, ``sort_keys=False`` so the order is fixed):
     ``window.x`` / ``window.y``)
 - ``viz_path`` - absolute path of the annotated PNG (only present when
   ``--viz`` was passed)
+
+Screenshot input sources:
+
+1. ``--screenshot <yaml-path>`` - read a previously captured
+   screenshot from a YAML file (as emitted by ``vrcpilot screenshot``)
+2. piped stdin - same YAML format consumed from stdin when stdin is
+   not a tty (e.g. ``vrcpilot screenshot | vrcpilot ocr``)
+
+If neither is given, the command exits with status 1 and an explanatory
+message on stderr. OCR no longer captures a fresh screenshot itself -
+pipe in or pass ``--screenshot`` so OCR works even when VRChat is not
+running.
 """
 
 from __future__ import annotations
@@ -38,9 +50,13 @@ from PIL import Image
 
 from vrcpilot.ocr.recognize import recognize
 from vrcpilot.ocr.visualize import render
-from vrcpilot.screenshot import Screenshot, take_screenshot
 
-from ._common import SubParsersAction, attach_completer
+from ._common import (
+    SubParsersAction,
+    add_screenshot_input_arg,
+    attach_completer,
+    resolve_screenshot,
+)
 
 # Sentinel that distinguishes "--viz absent" (``None``) from
 # "--viz with no argument" (this object) once argparse has parsed the
@@ -70,6 +86,7 @@ def register(subparsers: SubParsersAction) -> None:
     attach_completer(
         viz_action, FilesCompleter(allowednames=("png",), directories=True)
     )
+    add_screenshot_input_arg(parser)
 
 
 def _resolve_viz_path(arg: object, *, now: datetime) -> Path | None:
@@ -105,14 +122,15 @@ def run(args: argparse.Namespace) -> int:
     """Execute the ``ocr`` subcommand.
 
     Returns:
-        ``0`` on success, ``1`` when the VRChat screenshot could not
-        be captured (e.g. VRChat is not running, focus refused,
-        Wayland native session). On failure a single ``vrcpilot: ...``
-        line is written to stderr and stdout stays empty.
+        ``0`` on success, ``1`` when the screenshot input could not be
+        resolved (e.g. ``--screenshot`` file missing, piped YAML
+        malformed, or neither ``--screenshot`` nor a piped stdin was
+        supplied). :func:`~vrcpilot.cli._common.resolve_screenshot` is
+        responsible for emitting the ``vrcpilot: ...`` stderr line on
+        each failure mode.
     """
-    shot: Screenshot | None = take_screenshot()
+    shot = resolve_screenshot(args)
     if shot is None:
-        print("vrcpilot: could not capture VRChat screenshot", file=sys.stderr)
         return 1
     result = recognize(shot)
 

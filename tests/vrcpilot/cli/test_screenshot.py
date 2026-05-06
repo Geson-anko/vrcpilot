@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -164,21 +165,38 @@ class TestScreenshotCommand:
         parsed = datetime.fromisoformat(loaded["captured_at"])
         assert parsed == shot.captured_at
 
-    def test_default_output_is_cwd_with_timestamp(
+    def test_default_output_embeds_base64_png(
         self,
         patched_take_screenshot: Screenshot,
+        capsys: pytest.CaptureFixture[str],
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        del patched_take_screenshot
+        shot = patched_take_screenshot
+        # Use ``tmp_path`` as cwd so any errant PNG write is observable
+        # via ``glob``; the new contract forbids producing a file at
+        # all when ``-o`` is omitted.
         monkeypatch.chdir(tmp_path)
 
         exit_code = main(["screenshot"])
 
         assert exit_code == 0
-        produced = list(tmp_path.glob("vrcpilot_screenshot_*.png"))
-        assert len(produced) == 1
-        assert produced[0].suffix == ".png"
+        # No PNG file should be created in cwd anymore.
+        assert list(tmp_path.glob("*.png")) == []
+
+        loaded = yaml.safe_load(capsys.readouterr().out)
+        assert "image" in loaded
+        assert "path" not in loaded
+        # base64 decodes to a valid PNG (magic bytes ``\x89PNG``).
+        png_bytes = base64.b64decode(loaded["image"], validate=True)
+        assert png_bytes.startswith(b"\x89PNG")
+        # Geometry / capture metadata round-trips faithfully.
+        assert loaded["x"] == shot.x
+        assert loaded["y"] == shot.y
+        assert loaded["width"] == shot.width
+        assert loaded["height"] == shot.height
+        assert loaded["monitor_index"] == shot.monitor_index
+        assert datetime.fromisoformat(loaded["captured_at"]) == shot.captured_at
 
     def test_short_output_flag(
         self,
