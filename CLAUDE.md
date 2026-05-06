@@ -18,10 +18,11 @@
 
 - **プロセス制御**: `process`（起動/終了/PID 検出）、`steam`（Steam 検出）、`session`（Wayland-native 判定）
 - **ウィンドウ操作**: `window/`（Win32/X11 バックエンドの focus/unfocus/is_foreground）、`geometry`（ウィンドウ矩形取得）
-- **キャプチャ系**: `capture/`（`Capture` + `CaptureLoop` + `Mp4FrameSink` / `Y4mStdoutFrameSink`、Win32/X11 バックエンド）、`screenshot`（GUI 自動化向けの 1 ショット取得）
-- **OCR**: `ocr/`（`OCREngine` ABC + `RapidOCREngine` 実装、`recognize` で `Screenshot` を入力に取る）
+- **キャプチャ系**: `capture/`（`Capture` + `CaptureLoop` + `Mp4FrameSink` / `Y4mStdoutFrameSink`、Win32/X11 バックエンド）、`screenshot`（GUI 自動化向けの 1 ショット取得。`Screenshot.save/load` は file-path / inline base64 の 2 モード対応で YAML を双方向にやり取り可能）
+- **OCR**: `ocr/`（`OCREngine` ABC + `RapidOCREngine` 実装、`recognize` で `Screenshot` を入力に取る、`visualize.render` で bbox 重ね描き PNG を生成）
+- **画像検出**: `detect/`（`DetectEngine` ABC + `TemplateDetectEngine`（OpenCV `TM_CCOEFF_NORMED`）実装、`detect()` で `Screenshot` + クエリ画像から座標付き `Detection` 列を返す、`visualize.render` で OCR と同一スキーマの可視化）
 - **入力制御**: `controls/`（VRChat フォーカス保証つきの `keyboard` / `mouse`、`guard`、`errors`）、`clipboard`（pyperclip + Ctrl+V で scancode keyboard の非 ASCII 制限を回避）
-- **CLI フロントエンド**: `cli/` 配下にサブコマンド毎 1 ファイル（`launch` / `pid` / `terminate` / `focus` / `unfocus` / `screenshot` / `capture` / `mouse` / `keyboard` / `paste` / `ocr`）、ディスパッチは `cli/__init__.py` の `build_parser` / `main`、共有ヘルパは `cli/_common.py`
+- **CLI フロントエンド**: `cli/` 配下にサブコマンド毎 1 ファイル（`launch` / `pid` / `terminate` / `focus` / `unfocus` / `screenshot` / `capture` / `mouse` / `keyboard` / `paste` / `ocr` / `detect`）、ディスパッチは `cli/__init__.py` の `build_parser` / `main`、共有ヘルパは `cli/_common.py`（`add_screenshot_input_arg` / `resolve_screenshot` で `--screenshot` ↔ stdin pipe の入力解決を集約）
 
 プラットフォーム抽象は親 `__init__.py` で `sys.platform` ディスパッチして公開する（`__all__` 経由で公開 API を集約）。プラットフォーム固有の低レベル実装（`steam`, `win32`, `x11`, `capture/{win32,x11,sinks}`, `window/{win32,x11}`, `controls/{keyboard,mouse}`）は対応モジュールに配置している。
 
@@ -51,6 +52,58 @@
 - キーワードフィルタ: `uv run pytest -v -k "<expr>"`
 - 単一パスへの pyright: `uv run pyright src/vrcpilot/<file>.py`
 - 単一の pre-commit フック: `uv run pre-commit run ruff -a`
+
+## CLI（`vrcpilot` / `python -m vrcpilot`）の使い方
+
+VRChat を実機で操作する end-to-end な手順は [.claude/memory/feedback_vrchat_cli_playbook.md](.claude/memory/feedback_vrchat_cli_playbook.md)。ここでは Claude が CLI 経由で何を呼ぶかを概観する。
+
+### サブコマンド一覧
+
+すべて `uv run vrcpilot <subcommand> ...` で起動する（PEP 723 の console-script `vrcpilot` 経由）。詳細は `--help` または各 `cli/<name>.py` の docstring。
+
+| サブコマンド | 用途                                                                                                   | 状態系の出力                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `launch`     | Steam 経由で VRChat を起動。`--no-vr` / `--screen-{width,height}` / `--osc-in-port` / `--wait-timeout` | stdout に PID（待機完了時）、`--wait-timeout 0` で即時 return                                |
+| `pid`        | 動作中 VRChat の PID 一覧                                                                              | 1 行 1 PID。誰もいなければ exit 1                                                            |
+| `terminate`  | VRChat を強制終了（idempotent）                                                                        | 殺した PID のみ stdout、対象なしは無音で exit 0                                              |
+| `focus`      | VRChat ウィンドウを前面に                                                                              | 成功は無音、失敗は stderr 1 行                                                               |
+| `unfocus`    | VRChat ウィンドウを z-order 末尾に                                                                     | 同上                                                                                         |
+| `screenshot` | 1 枚撮って `Screenshot` を YAML で吐く                                                                 | `-o <path>` で PNG を書き出し YAML に `path:` を、未指定で base64 PNG を埋め込む（`image:`） |
+| `capture`    | 一定 FPS で録画                                                                                        | `-o <path>` で mp4、未指定で y4m を stdout（TTY なら拒否）                                   |
+| `mouse`      | `move` / `click` / `scroll`（`press`/`release` は意図的に未公開）                                      | guard 失敗で exit 1                                                                          |
+| `keyboard`   | `press` のみ公開（`down` / `up` をプロセスに跨いで持てないため）                                       | `--duration` のデフォルト 0.1（VRChat に届く下限。0.0 にしない）                             |
+| `paste`      | クリップボード経由で文字列を Ctrl+V 投入（非 ASCII 用）                                                | 引数 or stdin から読む。tty かつ引数なしは exit 2                                            |
+| `ocr`        | `Screenshot` を入力に RapidOCR を回し、認識単語を YAML で返す                                          | `--viz` で bbox 重ね PNG。**`--screenshot` か stdin pipe が必須**                            |
+| `detect`     | `Screenshot` 内をクエリ画像でテンプレート検索                                                          | `-q <png>` 必須。`--threshold` / `--top-k` / `--viz`。同じく入力 YAML 必須                   |
+
+### 標準パイプライン（重要）
+
+`vrcpilot ocr` と `vrcpilot detect` は **自身でスクリーンショットを撮らない**（過去にあった live capture は `feat(cli)!: ocr/detect の自動 live capture 経路を廃止` で削除）。`vrcpilot screenshot` の出力 YAML を pipe するか、`--screenshot <yaml>` で渡すこと。
+
+```bash
+# ① インライン base64 を pipe（一番短い形）
+uv run vrcpilot screenshot | uv run vrcpilot ocr --viz /tmp/viz.png > /tmp/ocr.yaml
+
+# ② PNG を残しつつ pipe（後で目視確認したいとき）
+uv run vrcpilot screenshot -o /tmp/shot.png | uv run vrcpilot ocr > /tmp/ocr.yaml
+
+# ③ 既存の YAML を再利用
+uv run vrcpilot screenshot -o /tmp/shot.png > /tmp/shot.yaml
+uv run vrcpilot detect -q ./assets/button.png --screenshot /tmp/shot.yaml > /tmp/det.yaml
+```
+
+`vrcpilot screenshot` 単体も挙動が 2 系統ある:
+
+- `-o <path>` あり: PNG を書き出し、YAML には `path:` で絶対パスを記録（履歴を残す pipeline 向け）
+- `-o` なし（デフォルト）: PNG ファイルは作らず、YAML 内 `image:` に base64 PNG を埋め込む（pipe で消費する想定）
+
+### 座標系
+
+OCR / detect の YAML は同じ座標スキーマで揃えてある:
+
+- `pos.{polygon,bbox}`: ウィンドウローカル（左上 origin）
+- `display_pos.{polygon,bbox}`: デスクトップ絶対（`window.x` / `window.y` でシフト済み）
+- `vrcpilot mouse move <x> <y>` に渡すのは **必ず `display_pos.bbox`**。`pos` をそのまま渡すとマルチモニタや非原点ウィンドウで外れる
 
 ## pytest 設定の注意点
 

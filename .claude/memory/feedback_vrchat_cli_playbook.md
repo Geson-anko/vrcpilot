@@ -53,14 +53,25 @@ stdout に YAML が出る。重要なのは `x` / `y` (ウィンドウの絶対�
 
 ### 3.2 OCR (テキスト + 座標)
 
+`vrcpilot ocr` は **自身でキャプチャしない**（live capture 経路は 2026-05-06 に廃止）。`vrcpilot screenshot` を pipe するか、保存済みの YAML を `--screenshot` で渡す。
+
 ```bash
-uv run vrcpilot ocr --viz /tmp/vrc_<step>_viz.png > /tmp/vrc_<step>_ocr.yaml
+# 一番短い形: インライン base64 を pipe
+uv run vrcpilot screenshot | uv run vrcpilot ocr --viz /tmp/vrc_<step>_viz.png > /tmp/vrc_<step>_ocr.yaml
+
+# PNG も残したいとき
+uv run vrcpilot screenshot -o /tmp/vrc_<step>.png | uv run vrcpilot ocr --viz /tmp/vrc_<step>_viz.png > /tmp/vrc_<step>_ocr.yaml
+
+# 既存の screenshot YAML を再利用するとき
+uv run vrcpilot ocr --screenshot /tmp/vrc_<step>.yaml > /tmp/vrc_<step>_ocr.yaml
 ```
 
 - 各 word に `pos` (window 内座標) と `display_pos` (絶対デスクトップ座標) の両方が入る
 - mouse コマンドへ渡すなら **`display_pos.bbox`** を使う：`[x, y, width, height]` の中央 = `(x + w/2, y + h/2)` が click point
 - `--viz` を付けると bbox を重ねた PNG が落ちる。Read ツールで開けば視覚的に妥当性確認できる
 - RapidOCR は cp932 関係なくフルで日本語/英語を読める。Launch Pad の "Worlds" / "Avatars" / "Social" / "Safety" / "Home" / "Respawn" などはすべて 99% 信頼度で取れる実績あり
+
+`vrcpilot detect -q <png>` も同じ入力規約。テンプレートマッチ (`TM_CCOEFF_NORMED`) なので Launch Pad のアイコンや特定 UI 要素を OCR より正確に位置特定したいときに使う。
 
 ### 3.3 ループの基本形
 
@@ -91,8 +102,8 @@ VRChat 2026 系の UI では旧 Quick Menu / 旧 Main Menu が **Launch Pad** �
 ```bash
 # 開く
 uv run vrcpilot keyboard press escape
-# クリック対象を OCR で特定
-uv run vrcpilot ocr > /tmp/menu.yaml
+# クリック対象を OCR で特定 (screenshot を pipe する)
+uv run vrcpilot screenshot | uv run vrcpilot ocr > /tmp/menu.yaml
 # 例: "Worlds" タブの display_pos.bbox = [1163, 507, 40, 14] → 中心 (1183, 514)
 uv run vrcpilot mouse move 1183 514
 uv run vrcpilot mouse click left
@@ -116,7 +127,7 @@ uv run vrcpilot mouse move 879 371 && uv run vrcpilot mouse click left
 # ③ 中央のグリッドから world card のサムネイルを click
 #    text label を直接クリックすると「お気に入り追加」が出てしまう。
 #    label の y より 30-40 px 上 = 画像中心を狙う
-uv run vrcpilot ocr > /tmp/worlds.yaml          # 各 card のラベル位置を取得
+uv run vrcpilot screenshot | uv run vrcpilot ocr > /tmp/worlds.yaml   # 各 card のラベル位置を取得
 uv run vrcpilot mouse move <label_x> <label_y - 30> && uv run vrcpilot mouse click left
 
 # ④ 詳細ペインで Public Instance を確認 → "Join" を click (例: 1117, 404)
@@ -231,10 +242,10 @@ uv run vrcpilot pid; echo "exit=$?"   # exit=1 で何もいないことを確認
   uv run vrcpilot launch --no-vr --screen-width 1280 --screen-height 720 --wait-timeout 60 && \
   sleep 45 && \
   uv run vrcpilot keyboard press escape && \
-  uv run vrcpilot screenshot -o /tmp/vrc_menu.png && \
-  uv run vrcpilot ocr --viz /tmp/vrc_menu_viz.png > /tmp/vrc_menu.yaml && \
+  uv run vrcpilot screenshot -o /tmp/vrc_menu.png \
+    | uv run vrcpilot ocr --viz /tmp/vrc_menu_viz.png > /tmp/vrc_menu.yaml && \
   uv run vrcpilot keyboard press escape && \
   uv run vrcpilot terminate)
 ```
 
-これで「起動 → メニュー開く → 状態取得 → 閉じる → 終了」が再現できる。`/tmp/vrc_menu.png` と `/tmp/vrc_menu.yaml` を Read で読めば次の操作（クリック対象の選定など）が組める。
+これで「起動 → メニュー開く → 状態取得 → 閉じる → 終了」が再現できる。`screenshot -o` で残した `/tmp/vrc_menu.png`、`ocr --viz` で残した `/tmp/vrc_menu_viz.png`、stdout を流し込んだ `/tmp/vrc_menu.yaml` の 3 つを Read で読めば次の操作（クリック対象の選定など）が組める。
