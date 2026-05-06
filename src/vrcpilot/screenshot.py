@@ -14,11 +14,14 @@ import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
 import mss
 import numpy as np
+import yaml
 from numpy.typing import NDArray
+from PIL import Image
 
 from vrcpilot.geometry import get_vrchat_window_rect
 from vrcpilot.session import is_wayland_native
@@ -51,6 +54,90 @@ class Screenshot:
     height: int
     monitor_index: int
     captured_at: datetime
+
+    def save(self, png_path: Path) -> str:
+        """Write the image to ``png_path`` and return the matching YAML text.
+
+        The PNG is written via :class:`PIL.Image.Image.save` (format
+        inferred from the extension). The returned YAML document mirrors
+        the ``vrcpilot screenshot`` CLI contract verbatim — keys are
+        emitted in the order ``path``, ``x``, ``y``, ``width``,
+        ``height``, ``monitor_index``, ``captured_at`` so callers can
+        rely on it for line-oriented parsing. ``path`` is always
+        absolute (``png_path.resolve()``).
+
+        Args:
+            png_path: Destination for the PNG. May be relative; the
+                YAML records its resolved absolute form.
+
+        Returns:
+            YAML text suitable for piping to stdout or writing to a
+            ``.yaml`` file. The matching :meth:`load` round-trips it.
+        """
+        Image.fromarray(self.image).save(png_path)
+        payload: dict[str, object] = {
+            "path": str(png_path.resolve()),
+            "x": self.x,
+            "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "monitor_index": self.monitor_index,
+            "captured_at": self.captured_at.isoformat(),
+        }
+        return yaml.safe_dump(payload, sort_keys=False, default_flow_style=False)
+
+    @classmethod
+    def load(cls, text: str) -> Screenshot:
+        """Restore a :class:`Screenshot` from YAML text written by
+        :meth:`save`.
+
+        The PNG referenced by the ``path`` field is read from disk and
+        converted to ``(H, W, 3)`` RGB ``uint8``. Field types are
+        coerced via :func:`int` / :func:`str`, so any non-mapping
+        payload, missing key, malformed value, or invalid timestamp is
+        surfaced as :class:`ValueError`. A missing PNG is reported with
+        a dedicated message that names the file.
+
+        Args:
+            text: YAML text in the ``vrcpilot screenshot`` schema.
+
+        Raises:
+            ValueError: ``text`` is not a YAML mapping, a required key
+                is missing, a field cannot be coerced, ``captured_at``
+                is not ISO-8601, or the referenced PNG does not exist.
+
+        Returns:
+            A new :class:`Screenshot` whose ``image`` is detached from
+            the on-disk file (safe to keep after the file is removed).
+        """
+        raw = yaml.safe_load(text)
+        if not isinstance(raw, dict):
+            raise ValueError("screenshot YAML must be a mapping")
+        # ``yaml.safe_load`` returns ``dict[Unknown, Unknown]`` under
+        # pyright strict; cast to a permissive ``dict[str, Any]`` so the
+        # downstream ``int()`` / ``str()`` coercions are well-typed. The
+        # actual type validation is performed at runtime via the
+        # ``(KeyError, TypeError, ValueError)`` catch below.
+        payload = cast(dict[str, Any], raw)
+        try:
+            png_path = Path(str(payload["path"]))
+            with Image.open(png_path) as img:
+                image = np.asarray(img.convert("RGB"), dtype=np.uint8).copy()
+            return cls(
+                image=image,
+                x=int(payload["x"]),
+                y=int(payload["y"]),
+                width=int(payload["width"]),
+                height=int(payload["height"]),
+                monitor_index=int(payload["monitor_index"]),
+                captured_at=datetime.fromisoformat(str(payload["captured_at"])),
+            )
+        except FileNotFoundError as exc:
+            raise ValueError(
+                f"PNG referenced by screenshot YAML not found: {exc.filename}"
+            ) from exc
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"invalid screenshot YAML: {exc}") from exc
 
 
 def _resolve_monitor_index(

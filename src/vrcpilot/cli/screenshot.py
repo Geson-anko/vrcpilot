@@ -21,9 +21,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-import yaml
 from argcomplete.completers import FilesCompleter
-from PIL import Image
 
 from vrcpilot.screenshot import Screenshot, take_screenshot
 
@@ -72,16 +70,5 @@ def run(args: argparse.Namespace) -> int:
     if output is None:
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output = Path.cwd() / f"vrcpilot_screenshot_{stamp}.png"
-    Image.fromarray(shot.image).save(output)
-
-    payload: dict[str, object] = {
-        "path": str(output.resolve()),
-        "x": shot.x,
-        "y": shot.y,
-        "width": shot.width,
-        "height": shot.height,
-        "monitor_index": shot.monitor_index,
-        "captured_at": shot.captured_at.isoformat(),
-    }
-    sys.stdout.write(yaml.safe_dump(payload, sort_keys=False, default_flow_style=False))
+    sys.stdout.write(shot.save(output))
     return 0

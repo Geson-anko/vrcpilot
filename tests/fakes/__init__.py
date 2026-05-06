@@ -30,6 +30,7 @@ from .inputtino import FakeInputtinoKeyboard, FakeInputtinoMouse, FakeMouseButto
 from .ocr import FakeOCREngine
 from .process import FakePopen, FakeProcess
 from .pydirectinput import FakePyDirectInput
+from .screenshot import write_screenshot_payload
 from .x11 import (
     FakePixmap,
     FakePixmapImage,
@@ -63,4 +64,5 @@ __all__ = [
     "fake_x11_display_cm",
     "make_fresh_windows_capture_subclass",
     "make_xerror_subclass",
+    "write_screenshot_payload",
 ]
