@@ -1,149 +1,174 @@
 # vrcpilot
 
-VRChat の操作を自動化するための Python ライブラリ。VRChat クライアントの UI 操作からゲーム内操作までを対象とする。
+**English** | [日本語](README.ja.md)
+
+[![PyPI](https://img.shields.io/pypi/v/vrcpilot?color=blue)](https://pypi.org/project/vrcpilot/)
+[![Python](https://img.shields.io/pypi/pyversions/vrcpilot)](https://pypi.org/project/vrcpilot/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Test](https://github.com/MLShukai/vrcpilot/actions/workflows/test.yml/badge.svg)](https://github.com/MLShukai/vrcpilot/actions/workflows/test.yml)
+[![Type Check](https://github.com/MLShukai/vrcpilot/actions/workflows/type-check.yaml/badge.svg)](https://github.com/MLShukai/vrcpilot/actions/workflows/type-check.yaml)
+[![Format & Lint](https://github.com/MLShukai/vrcpilot/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/MLShukai/vrcpilot/actions/workflows/pre-commit.yml)
+
+Python automation toolkit for VRChat (Windows / Linux). Drives the desktop client end-to-end — launch, focus, capture, OCR, image-template detection, and synthetic input — through both a typed Python API and a `vrcpilot` CLI.
+
+## Features
+
+- **Process control** — launch VRChat through Steam (`vrcpilot.launch`), find PIDs, terminate cleanly.
+- **Window control** — focus / unfocus / foreground checks on Win32 and X11 / XWayland.
+- **Screen capture** — `Capture` for streaming (mp4 / y4m sinks), `take_screenshot` for one-off shots that round-trip through YAML.
+- **OCR** — pluggable `OCREngine` ABC with a default `RapidOCREngine`; `recognize()` returns word-level results in both window-local and desktop-absolute coordinates.
+- **Image-template detection** — `TemplateDetectEngine` (OpenCV `TM_CCOEFF_NORMED`) returns coordinate-bearing detections matching the OCR coordinate schema.
+- **Synthetic input** — keyboard / mouse via `pydirectinput` on Windows and `inputtino` (`/dev/uinput`) on Linux, with VRChat focus-guarding.
+- **Non-ASCII text injection** — `vrcpilot.clipboard` sends arbitrary Unicode through clipboard + Ctrl+V.
+- **CLI front-end** — `vrcpilot launch / screenshot / ocr / detect / mouse / keyboard / paste / capture / ...` with shell completion via `argcomplete`.
 
 ## Installation
 
-開発環境のセットアップは `uv` を利用する。
-
 ```bash
-# このリポジトリ内で開発インストール
+# Library + CLI (alpha — needs --pre)
+pip install --pre vrcpilot
+
+# With OCR extras
+pip install --pre "vrcpilot[ocr]"
+
+# As an isolated CLI tool
+uv tool install --prerelease=allow vrcpilot
+
+# Development install
+git clone https://github.com/MLShukai/vrcpilot
+cd vrcpilot
 uv sync --all-extras
 ```
 
-将来の利用者向けには、配布された `vrcpilot` を CLI ツールとしてインストールする想定。
+Python `>= 3.12` is required.
 
-```bash
-uv tool install vrcpilot
-```
-
-## プラットフォーム別前提条件
+## Platform requirements
 
 ### Windows
 
-追加インストールは不要。`pywin32` および `pydirectinput` が依存として自動で入る。`vrcpilot.controls.mouse` / `vrcpilot.controls.keyboard` は `pydirectinput` 経由で `SendInput` を呼ぶので、追加のセットアップは不要。
+No additional system packages — `pywin32` and `pydirectinput` are pulled in automatically.
 
-### Linux (X11 / XWayland)
+### Linux
 
-`vrcpilot.focus()` / `vrcpilot.unfocus()` は X11 EWMH 経由で VRChat ウィンドウの z-order を操作する。`python-xlib` は依存として自動で入るので、Linux パッケージを別途インストールする必要はないが、X11 が動作するセッションが必要。
+An X11 or XWayland session is required. Wayland-native sessions are not supported (`focus()` / `unfocus()` warn and return `False`).
 
-- **X11 セッション**: そのまま動作する。
-- **XWayland**: Wayland コンポジタ上でも `DISPLAY` が設定されていれば X11 アプリ（VRChat / Proton）として動作する。GNOME / KDE / Sway 等の主要コンポジタはデフォルトで XWayland 有効。
-- **Wayland ネイティブ（XWayland 無効）**: 非対応。`focus()` / `unfocus()` は `RuntimeWarning` を出して `False` を返す。XWayland を有効にするか X11 セッションでログインし直すこと。
-
-セッション種別の確認:
+`inputtino-python` is built natively from git, so the following system packages are needed before `pip install`:
 
 ```bash
-echo $XDG_SESSION_TYPE   # x11 または wayland
-echo $DISPLAY            # XWayland 経由時もセットされていれば OK
+sudo apt-get install -y cmake build-essential pkg-config libevdev-dev
+sudo usermod -aG input "$USER"   # for /dev/uinput; log out and back in
 ```
-
-### vrcpilot.controls (合成入力) の追加要件
-
-`vrcpilot.controls` は VRChat への合成 mouse / keyboard 入力を Linux 上で
-[inputtino](https://github.com/games-on-whales/inputtino) (`/dev/uinput`
-経由) で送出する。`uv sync` 時に inputtino が git ソースからネイティブ
-ビルドされるため、以下のシステム依存とランタイム要件が必要になる。
-
-- **ビルド依存** (Ubuntu / Debian の例。他ディストリは
-  [inputtino bindings/python](https://github.com/games-on-whales/inputtino/tree/stable/bindings/python)
-  を参照):
-
-  ```bash
-  sudo apt-get install -y cmake build-essential pkg-config libevdev-dev
-  ```
-
-- **`/dev/uinput` への書き込み権限**: 通常は `input` グループに所属するか、
-  udev rule で許可する。
-
-  ```bash
-  sudo usermod -aG input $USER
-  # ログインし直してグループ反映
-  ```
-
-- **`uinput` カーネルモジュール**: 多くのディストリでは標準で有効。
-  無効な場合 `sudo modprobe uinput` で読み込む。
-
-- **distribution name vs import name**: PyPI 上は `inputtino-python`、
-  Python の import 名は `inputtino`。`pyproject.toml` の依存名は前者。
 
 ### macOS
 
-サポート対象外。
+Not supported.
+
+## Quick Start (CLI)
+
+The CLI is the fastest way to drive VRChat. The pipeline is: `screenshot` produces a `Screenshot` YAML, and `ocr` / `detect` consume it from stdin or `--screenshot`. Use the `display_pos.bbox` of an OCR/detect result as the click target — never the window-local `pos`.
+
+```bash
+# Launch VRChat in desktop mode and wait until it's up
+vrcpilot launch --no-vr --screen-width 1280 --screen-height 720 --wait-timeout 60
+
+# Capture a screenshot, run OCR, and save a visualization
+vrcpilot screenshot | vrcpilot ocr --viz /tmp/viz.png > /tmp/ocr.yaml
+
+# Or pipe straight into image-template detection
+vrcpilot screenshot | vrcpilot detect -q assets/button.png > /tmp/det.yaml
+
+# Move the mouse and click (display-absolute coordinates)
+vrcpilot mouse move 1183 514
+vrcpilot mouse click left
+
+# Press a key (default duration is 0.1s, the lower bound VRChat reliably accepts)
+vrcpilot keyboard press w --duration 1.0
+
+# Paste non-ASCII text (clipboard + Ctrl+V)
+vrcpilot paste "こんにちは、VRChat！"
+
+# Shut down (idempotent)
+vrcpilot terminate
+```
+
+`vrcpilot --help` and `vrcpilot <subcommand> --help` show every flag.
+
+## Quick Start (Python API)
+
+```python
+from time import sleep
+import vrcpilot
+
+# Launch and wait until the process is observable
+pid = vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720, wait_timeout=60)
+sleep(45)  # warm up: shaders, avatar load, network sync
+
+try:
+    # One-off screenshot
+    shot = vrcpilot.take_screenshot()
+
+    # OCR all visible words
+    result = vrcpilot.recognize(shot, vrcpilot.RapidOCREngine())
+    for word in result.words:
+        print(word.text, word.display_pos.bbox)
+
+    # Move the mouse to the first word and click
+    if result.words:
+        x, y, w, h = result.words[0].display_pos.bbox
+        vrcpilot.mouse.move(int(x + w / 2), int(y + h / 2))
+        vrcpilot.mouse.click(vrcpilot.MouseButton.LEFT)
+
+    # Press a key
+    vrcpilot.keyboard.press(vrcpilot.Key.W, duration=1.0)
+finally:
+    vrcpilot.terminate()
+```
+
+## CLI subcommands
+
+| Subcommand   | Purpose                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| `launch`     | Start VRChat through Steam. `--no-vr`, `--screen-{width,height}`, `--wait-timeout`.        |
+| `pid`        | List running VRChat PIDs (one per line).                                                   |
+| `terminate`  | Kill VRChat. Idempotent.                                                                   |
+| `focus`      | Bring the VRChat window to the foreground.                                                 |
+| `unfocus`    | Send the VRChat window to the bottom of the z-order.                                       |
+| `screenshot` | One-shot capture. Emits a `Screenshot` YAML on stdout (PNG file path or inline base64).    |
+| `capture`    | Record at a fixed FPS. `-o file.mp4`, or y4m on stdout if no file.                         |
+| `mouse`      | `move` / `click` / `scroll` (display-absolute coordinates).                                |
+| `keyboard`   | `press` (default `--duration 0.1`).                                                        |
+| `paste`      | Inject text via clipboard + Ctrl+V (non-ASCII safe).                                       |
+| `ocr`        | Run OCR on a `Screenshot` YAML (stdin pipe or `--screenshot <path>`).                      |
+| `detect`     | Image-template detection on a `Screenshot` YAML. `-q query.png`, `--threshold`, `--top-k`. |
 
 ## Shell completion
 
-`vrcpilot` は [`argcomplete`](https://pypi.org/project/argcomplete/) を利用して、サブコマンド (`launch` / `pid` / `terminate` / `focus` / `unfocus` / `screenshot` / `capture` / `mouse` / `keyboard` / `paste` / `ocr` / `detect`)、オプション (`--steam-path` など)、および `--steam-path` に渡す `.exe` や `--query` に渡す `.png` などのファイルパスの Tab 補完を提供する。
+The CLI ships with [`argcomplete`](https://pypi.org/project/argcomplete/) hooks for subcommands, options, and file-path arguments.
 
-### 前提条件
+For a one-line setup in the development repo, source the bundled bootstrap script:
 
-- `uv sync` で開発インストール、または `uv tool install vrcpilot` を済ませて、`register-python-argcomplete` が PATH に通っていること。
-- PATH を汚したくない場合は、以下のコマンドを `uv run register-python-argcomplete ...` に置き換えても代替できる。
+- bash / Git Bash: `. ./clicomp.sh`
+- PowerShell: `. .\CliComp.ps1`
 
-### ワンショットセットアップ（開発リポジトリ向け）
-
-クローン直後に「venv 作成 → activate → 補完登録」までを 1 行で済ませたい場合、リポジトリ同梱のブートストラップスクリプトを **source / dot-source** する。
-
-- bash: `. ./clicomp.sh`
-- pwsh: `. .\CliComp.ps1`
-
-スクリプトは以下を順に行う:
-
-1. `.venv` が存在すれば activate する
-2. `vrcpilot` がまだ PATH に無ければ `just setup` を実行し、再 activate する
-3. `register-python-argcomplete` で現セッションに `vrcpilot` の補完を登録する
-
-サブシェル（`bash clicomp.sh` や `.\CliComp.ps1` のような実行）では venv も補完も親シェルに残らないため、必ず source / dot-source すること（実行された場合はスクリプト側で拒否する）。永続化したい場合は、起動 rc ファイルに以下を追記する。
+For a manual / system-wide install:
 
 ```bash
-# ~/.bashrc
-. /path/to/vrcpilot/clicomp.sh
-```
-
-```powershell
-# $PROFILE
-. C:\path\to\vrcpilot\CliComp.ps1
-```
-
-### Bash / Git Bash
-
-現セッションのみで一時的に有効化する場合。
-
-```bash
+# bash, Git Bash
 eval "$(register-python-argcomplete vrcpilot)"
-```
 
-永続化するには、上記の 1 行を `~/.bashrc`（Git Bash 環境では `~/.bash_profile` でも可）に追記する。
-
-動作確認の例。
-
-```bash
-vrcpilot <TAB><TAB>           # → capture detect focus keyboard launch mouse ocr paste pid screenshot terminate unfocus
-vrcpilot launch --<TAB><TAB>  # → --app-id --steam-path --no-vr ...
-vrcpilot launch --steam-path <TAB>  # → カレントの .exe / ディレクトリ
-```
-
-### PowerShell
-
-Windows PowerShell 5.1 / pwsh 7.x のいずれでも動作する想定だが、開発時は pwsh 7.x を推奨する。
-
-現セッションのみで一時的に有効化する場合。
-
-```powershell
+# PowerShell
 register-python-argcomplete --shell powershell vrcpilot | Out-String | Invoke-Expression
 ```
 
-永続化するには、PowerShell プロファイルに上記の `Invoke-Expression` 行を追記する。
+Add the line above to your `~/.bashrc` or `$PROFILE` to persist it. See [README.ja.md](README.ja.md#shell-completion) for the full breakdown.
 
-```powershell
-# PowerShell プロファイルを開く
-code $PROFILE   # または notepad $PROFILE
-# 上記 Invoke-Expression 行を末尾に追記して保存
-# 新しいセッションを開くか、`. $PROFILE` で再読込
-```
+## Documentation
 
-`register-python-argcomplete --shell powershell vrcpilot` を実行すると、`Register-ArgumentCompleter -Native -CommandName vrcpilot -ScriptBlock { ... }` 形式の補完スクリプトが標準出力に書き出される。これをそのままプロファイル内で評価すれば、新しいセッションから補完が有効になる。
+- **CLI reference**: `vrcpilot <subcommand> --help`
+- **Changelog**: [`CHANGELOG.md`](CHANGELOG.md)
+- **Contributing**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Japanese README** (more setup detail and historical notes): [`README.ja.md`](README.ja.md)
 
-### トラブルシュート
+## License
 
-補完が効かない場合は、argcomplete の公式ドキュメント <https://kislyuk.github.io/argcomplete/> を参照。
+[MIT](LICENSE)
