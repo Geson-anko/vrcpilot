@@ -168,7 +168,7 @@ class TestTemplateDetectEngineBasic:
 
 
 class TestTemplateDetectEngineScale:
-    @pytest.mark.parametrize("scale", [0.5, 0.7, 1.0, 1.3])
+    @pytest.mark.parametrize("scale", [0.5, 0.65, 1.0, 1.25])
     def test_recovers_scale(self, scale: float):
         bg = _make_flat_background()
         icon = _make_simple_icon()
