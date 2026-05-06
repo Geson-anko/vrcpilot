@@ -26,10 +26,14 @@ def launch(
     screen_height: int | None = None,
     osc: OscConfig | None = None,
     extra_args: list[str] | None = None,
-) -> None: ...
+    wait_timeout: float = 30.0,
+    wait_interval: float = 1.0,
+) -> int | None: ...
 ```
 
-Start VRChat through Steam. The new process is detached from the calling process group. Returns once Steam has been told to launch the app — use [`find_pid()`](#vrcpilotfind_pid) (or your own polling) to wait for the process to appear.
+Start VRChat through Steam. The new process is detached from the calling process group. After spawning Steam, polls [`find_pid()`](#vrcpilotfind_pid) for up to `wait_timeout` seconds (default 30s) and returns the observed PID. Pass `wait_timeout=0` (or any non-positive value) to skip the wait and return immediately — useful for "fire and forget" launches where you intend to poll later yourself.
+
+**Returns**: the PID once VRChat is observed, or `None` if `wait_timeout <= 0` or the timeout is exceeded. A `None` return on a positive timeout is *not* an exception — branch on the return value if you need a stricter signal.
 
 `app_id` defaults to VRChat's Steam app id. If you need to reference the constant directly (e.g. when building a custom launch wrapper), import it from the implementation module: `from vrcpilot.process import VRCHAT_STEAM_APP_ID`.
 
@@ -443,8 +447,12 @@ from time import sleep
 
 import vrcpilot
 
-vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
-sleep(45)  # warm up: shaders, avatar load, network sync
+# launch() now waits up to wait_timeout seconds for VRChat's PID and
+# returns it. None means the timeout expired before VRChat appeared.
+pid = vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
+if pid is None:
+    raise RuntimeError("VRChat did not start before launch() timed out")
+sleep(45)  # extra warm up: shaders, avatar load, network sync
 
 try:
     shot = vrcpilot.take_screenshot()

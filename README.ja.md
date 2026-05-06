@@ -111,9 +111,12 @@ from time import sleep
 
 import vrcpilot
 
-# VRChat を起動 (Steam に launch を依頼した時点で return する)
-vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
-sleep(45)  # ウォームアップ: シェーダ / avatar ロード / ネットワーク同期
+# launch() は VRChat の PID を最大 wait_timeout 秒 (default 30s) 待って
+# 返す。None はその時間内に VRChat が観測できなかったことを意味する。
+pid = vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
+if pid is None:
+    raise RuntimeError("launch() のタイムアウト前に VRChat が起動しなかった")
+sleep(45)  # 追加のウォームアップ: シェーダ / avatar ロード / ネットワーク同期
 
 try:
     # 1 枚撮り (回復可能な失敗時は None)

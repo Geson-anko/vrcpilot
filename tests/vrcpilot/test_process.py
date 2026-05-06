@@ -179,7 +179,11 @@ class TestBuildLaunchCommand:
 
 
 class TestLaunch:
-    """Cross-platform argv assembly is the same shape on every host."""
+    """Cross-platform argv assembly is the same shape on every host.
+
+    All tests pass ``wait_timeout=0`` to skip the post-spawn PID poll;
+    the wait behaviour itself is exercised in :class:`TestLaunchWait`.
+    """
 
     def test_invokes_popen_with_default_argv(
         self, mocker: MockerFixture, fake_popen: type[FakePopen]
@@ -187,7 +191,7 @@ class TestLaunch:
         steam = Path("/usr/bin/steam")
         _patch_steam_path(mocker, steam)
 
-        launch()
+        launch(wait_timeout=0)
 
         assert fake_popen.last_argv == [str(steam), "-applaunch", "438100"]
 
@@ -197,7 +201,7 @@ class TestLaunch:
         override = Path("/custom/steam")
         _patch_steam_path(mocker, override)
 
-        launch(steam_path=override)
+        launch(steam_path=override, wait_timeout=0)
 
         assert fake_popen.last_argv is not None
         assert fake_popen.last_argv[0] == str(override)
@@ -206,7 +210,7 @@ class TestLaunch:
         steam = Path("/usr/bin/steam")
         _patch_steam_path(mocker, steam)
 
-        launch(app_id=440)
+        launch(app_id=440, wait_timeout=0)
 
         assert fake_popen.last_argv == [str(steam), "-applaunch", "440"]
 
@@ -216,7 +220,7 @@ class TestLaunch:
         steam = Path("/usr/bin/steam")
         _patch_steam_path(mocker, steam)
 
-        launch(no_vr=True)
+        launch(no_vr=True, wait_timeout=0)
 
         assert fake_popen.last_argv is not None
         assert "--no-vr" in fake_popen.last_argv
@@ -227,7 +231,7 @@ class TestLaunch:
         steam = Path("/usr/bin/steam")
         _patch_steam_path(mocker, steam)
 
-        launch(osc=OscConfig(in_port=9000))
+        launch(osc=OscConfig(in_port=9000), wait_timeout=0)
 
         assert fake_popen.last_argv is not None
         assert "--osc=9000:127.0.0.1:9001" in fake_popen.last_argv
@@ -238,7 +242,7 @@ class TestLaunch:
     ):
         _patch_steam_path(mocker, Path("C:/Steam/Steam.exe"))
 
-        launch()
+        launch(wait_timeout=0)
 
         assert "creationflags" in fake_popen.last_kwargs
         assert "start_new_session" not in fake_popen.last_kwargs
@@ -249,10 +253,72 @@ class TestLaunch:
     ):
         _patch_steam_path(mocker, Path("/usr/bin/steam"))
 
-        launch()
+        launch(wait_timeout=0)
 
         assert fake_popen.last_kwargs.get("start_new_session") is True
         assert "creationflags" not in fake_popen.last_kwargs
+
+
+class TestLaunchWait:
+    """The post-spawn ``wait_for_pid`` integration in :func:`launch`."""
+
+    def test_wait_timeout_zero_returns_none_without_polling(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
+        del fake_popen
+        _patch_steam_path(mocker, Path("/usr/bin/steam"))
+        wait_spy = mocker.patch("vrcpilot.process.wait_for_pid")
+
+        result = launch(wait_timeout=0)
+
+        assert result is None
+        wait_spy.assert_not_called()
+
+    def test_negative_wait_timeout_returns_none_without_polling(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
+        del fake_popen
+        _patch_steam_path(mocker, Path("/usr/bin/steam"))
+        wait_spy = mocker.patch("vrcpilot.process.wait_for_pid")
+
+        result = launch(wait_timeout=-1.0)
+
+        assert result is None
+        wait_spy.assert_not_called()
+
+    def test_returns_pid_when_observed_within_window(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
+        del fake_popen
+        _patch_steam_path(mocker, Path("/usr/bin/steam"))
+        _process_iter_returning(mocker, FakeProcess(name=VRCHAT_PROCESS_NAME, pid=4242))
+
+        result = launch(wait_timeout=5.0, wait_interval=0.01)
+
+        assert result == 4242
+
+    def test_returns_none_when_pid_never_appears(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
+        del fake_popen
+        _patch_steam_path(mocker, Path("/usr/bin/steam"))
+        # autouse fixture leaves process_iter empty -> find_pid is None.
+        # Tiny timeout/interval to keep the wall-clock loop short.
+        result = launch(wait_timeout=0.05, wait_interval=0.01)
+
+        assert result is None
+
+    def test_forwards_timeout_and_interval_to_wait_for_pid(
+        self, mocker: MockerFixture, fake_popen: type[FakePopen]
+    ):
+        del fake_popen
+        _patch_steam_path(mocker, Path("/usr/bin/steam"))
+        wait_spy = mocker.patch("vrcpilot.process.wait_for_pid", return_value=12345)
+
+        result = launch(wait_timeout=7.0, wait_interval=0.5)
+
+        assert result == 12345
+        wait_spy.assert_called_once_with(timeout=7.0, interval=0.5)
 
 
 class TestFindPid:

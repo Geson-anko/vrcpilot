@@ -100,9 +100,12 @@ from time import sleep
 
 import vrcpilot
 
-# Launch VRChat (returns once Steam has been told to start the app)
-vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
-sleep(45)  # warm up: shaders, avatar load, network sync
+# launch() waits for VRChat's PID (up to wait_timeout, default 30s) and
+# returns it. None means the timeout expired before VRChat appeared.
+pid = vrcpilot.launch(no_vr=True, screen_width=1280, screen_height=720)
+if pid is None:
+    raise RuntimeError("VRChat did not start before launch() timed out")
+sleep(45)  # extra warm up: shaders, avatar load, network sync
 
 try:
     # One-off screenshot (returns None on a recoverable failure)

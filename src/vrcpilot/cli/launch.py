@@ -13,10 +13,6 @@ from vrcpilot.process import (
     VRCHAT_STEAM_APP_ID,
     OscConfig,
     launch,
-    # Imported by name (rather than referenced via ``vrcpilot.process``)
-    # so tests can patch ``vrcpilot.cli.launch.wait_for_pid`` to control
-    # the wait outcome without touching the rest of the process module.
-    wait_for_pid,
 )
 from vrcpilot.steam import SteamNotFoundError
 
@@ -122,25 +118,24 @@ def run(args: argparse.Namespace) -> int:
         if args.osc_in_port is not None
         else None
     )
+    timeout: float = args.wait_timeout
     try:
-        launch(
+        pid = launch(
             app_id=args.app_id,
             steam_path=args.steam_path,
             no_vr=args.no_vr,
             screen_width=args.screen_width,
             screen_height=args.screen_height,
             osc=osc,
+            wait_timeout=timeout,
         )
     except SteamNotFoundError as exc:
         print(f"vrcpilot: {exc}", file=sys.stderr)
         return 2
 
-    timeout: float = args.wait_timeout
-    if timeout <= 0:
-        return 0
-
-    pid = wait_for_pid(timeout=timeout)
     if pid is None:
+        if timeout <= 0:
+            return 0
         print(
             f"vrcpilot: VRChat did not start within {timeout}s",
             file=sys.stderr,

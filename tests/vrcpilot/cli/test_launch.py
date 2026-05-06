@@ -43,11 +43,14 @@ def fake_popen(mocker: MockerFixture, tmp_path: Path) -> type[FakePopen]:
 def fake_wait_for_pid(mocker: MockerFixture) -> MockerFixture:
     """Stub ``wait_for_pid`` so launch tests do not poll for real.
 
-    Default return is ``12345`` so the happy path "saw a PID" branch
-    runs by default. Tests that need a different value override the
-    return via ``mocker.patch(..., return_value=...)`` directly.
+    The CLI no longer calls ``wait_for_pid`` directly; the polling now
+    happens inside ``vrcpilot.process.launch``, so we patch the helper
+    where it actually runs. Default return is ``12345`` so the happy
+    path "saw a PID" branch runs by default. Tests that need a
+    different value override the return via
+    ``mocker.patch(..., return_value=...)`` directly.
     """
-    mocker.patch("vrcpilot.cli.launch.wait_for_pid", return_value=12345)
+    mocker.patch("vrcpilot.process.wait_for_pid", return_value=12345)
     return mocker
 
 
@@ -189,7 +192,7 @@ class TestLaunchWaitTimeout:
         capsys: pytest.CaptureFixture[str],
     ):
         del fake_popen
-        wait_mock = mocker.patch("vrcpilot.cli.launch.wait_for_pid")
+        wait_mock = mocker.patch("vrcpilot.process.wait_for_pid")
 
         exit_code = main(["launch", "--wait-timeout", "0"])
 
@@ -206,7 +209,7 @@ class TestLaunchWaitTimeout:
         # The plan says "any value <= 0" skips the wait; lock that in
         # explicitly so the boundary stays inclusive of zero.
         del fake_popen
-        wait_mock = mocker.patch("vrcpilot.cli.launch.wait_for_pid")
+        wait_mock = mocker.patch("vrcpilot.process.wait_for_pid")
 
         exit_code = main(["launch", "--wait-timeout", "-1"])
 
@@ -221,7 +224,7 @@ class TestLaunchWaitTimeout:
         capsys: pytest.CaptureFixture[str],
     ):
         del fake_popen
-        mocker.patch("vrcpilot.cli.launch.wait_for_pid", return_value=54321)
+        mocker.patch("vrcpilot.process.wait_for_pid", return_value=54321)
 
         exit_code = main(["launch", "--wait-timeout", "10"])
 
@@ -235,7 +238,7 @@ class TestLaunchWaitTimeout:
         capsys: pytest.CaptureFixture[str],
     ):
         del fake_popen
-        mocker.patch("vrcpilot.cli.launch.wait_for_pid", return_value=None)
+        mocker.patch("vrcpilot.process.wait_for_pid", return_value=None)
 
         exit_code = main(["launch", "--wait-timeout", "2.5"])
 
@@ -244,15 +247,30 @@ class TestLaunchWaitTimeout:
         assert captured.out == ""
         assert "vrcpilot: VRChat did not start within 2.5s" in captured.err
 
+    def test_wait_timeout_zero_silent_when_launch_returns_none(
+        self,
+        fake_popen: type[FakePopen],
+        capsys: pytest.CaptureFixture[str],
+    ):
+        # No wait helper patch: with --wait-timeout 0, launch() returns
+        # None up-front (no polling) and the CLI must exit 0 silently.
+        del fake_popen
+        exit_code = main(["launch", "--wait-timeout", "0"])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
+
     def test_wait_timeout_forwarded_to_helper(
         self,
         fake_popen: type[FakePopen],
         mocker: MockerFixture,
     ):
         del fake_popen
-        wait_mock = mocker.patch("vrcpilot.cli.launch.wait_for_pid", return_value=99999)
+        wait_mock = mocker.patch("vrcpilot.process.wait_for_pid", return_value=99999)
 
         exit_code = main(["launch", "--wait-timeout", "7"])
 
         assert exit_code == 0
-        wait_mock.assert_called_once_with(timeout=7.0)
+        wait_mock.assert_called_once_with(timeout=7.0, interval=1.0)
