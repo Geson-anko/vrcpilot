@@ -8,6 +8,7 @@ This document is a hand-curated reference for every symbol exposed at `vrcpilot.
 - Submodules `vrcpilot.keyboard`, `vrcpilot.mouse`, and `vrcpilot.clipboard` are also part of the public surface.
 - Most call sites that send synthetic input or talk to the VRChat window expect VRChat to be **running and focused** — that requirement is enforced by [`ensure_target()`](#ensure_target) and is called for you by the high-level helpers. The relevant exceptions (`VRChatNotRunningError`, `VRChatNotFocusedError`) are re-raised so callers can recover.
 - All coordinate-bearing types (`Screenshot`, `OCRWord`, `OCRResult`, `Detection`, `DetectResult`) carry both window-local (`pos*`) and desktop-absolute (`display_pos*`) views. Always feed `display_pos.bbox` into `mouse.move()` — see [coordinate system](cli.md#coordinate-system).
+- Code blocks use `...` as the body of every signature so they paste back cleanly into a Python REPL or stub file.
 
 ______________________________________________________________________
 
@@ -25,7 +26,7 @@ def launch(
     screen_height: int | None = None,
     osc: OscConfig | None = None,
     extra_args: list[str] | None = None,
-) -> None
+) -> None: ...
 ```
 
 Start VRChat through Steam. The new process is detached from the calling process group. Returns once Steam has been told to launch the app — use [`find_pid()`](#vrcpilotfind_pid) (or your own polling) to wait for the process to appear.
@@ -35,7 +36,7 @@ Start VRChat through Steam. The new process is detached from the calling process
 ### `vrcpilot.terminate`
 
 ```python
-def terminate(*, timeout: float = 5.0) -> list[int]
+def terminate(*, timeout: float = 5.0) -> list[int]: ...
 ```
 
 Force-kill every running VRChat process and wait up to `timeout` seconds for them to exit. Idempotent — returns an empty list when nothing is running.
@@ -45,7 +46,7 @@ Force-kill every running VRChat process and wait up to `timeout` seconds for the
 ### `vrcpilot.find_pid`
 
 ```python
-def find_pid() -> int | None
+def find_pid() -> int | None: ...
 ```
 
 **Returns**: the first running VRChat PID, or `None` when nothing matches.
@@ -58,7 +59,7 @@ def build_launch_command(
     app_id: int = VRCHAT_STEAM_APP_ID,
     *,
     vrchat_args: list[str] | None = None,
-) -> list[str]
+) -> list[str]: ...
 ```
 
 Build the argv that `launch()` would pass to `subprocess`. Useful for logging, sandboxing, or wrapping the launch in another runner.
@@ -73,7 +74,7 @@ def build_vrchat_launch_args(
     screen_height: int | None = None,
     osc: OscConfig | None = None,
     extra_args: list[str] | None = None,
-) -> list[str]
+) -> list[str]: ...
 ```
 
 Build only the VRChat-side argv (the part after Steam's `-applaunch <app_id>` token).
@@ -110,7 +111,7 @@ ______________________________________________________________________
 ### `vrcpilot.focus`
 
 ```python
-def focus() -> bool
+def focus() -> bool: ...
 ```
 
 Bring the VRChat window to the foreground (and de-minimize it if needed).
@@ -122,7 +123,7 @@ Bring the VRChat window to the foreground (and de-minimize it if needed).
 ### `vrcpilot.unfocus`
 
 ```python
-def unfocus() -> bool
+def unfocus() -> bool: ...
 ```
 
 Send the VRChat window to the bottom of the z-order without raising any other window. Same return / raise contract as `focus()`.
@@ -130,7 +131,7 @@ Send the VRChat window to the bottom of the z-order without raising any other wi
 ### `vrcpilot.is_foreground`
 
 ```python
-def is_foreground() -> bool
+def is_foreground() -> bool: ...
 ```
 
 **Returns**: `True` iff the VRChat window is currently in the foreground.
@@ -143,9 +144,9 @@ ______________________________________________________________________
 
 ```python
 class Capture:
-    def __init__(self, *, frame_timeout: float = 2.0) -> None
-    def read(self) -> np.ndarray
-    def close(self) -> None
+    def __init__(self, *, frame_timeout: float = 2.0) -> None: ...
+    def read(self) -> np.ndarray: ...
+    def close(self) -> None: ...
 ```
 
 Streaming capture session for the VRChat window. Captures without focus. The internal buffer keeps only the most recent frame, so `read()` always returns "now".
@@ -171,14 +172,14 @@ class CaptureLoop:
         *,
         fps: float,
         frame_timeout: float = 2.0,
-    ) -> None
+    ) -> None: ...
 
     @property
-    def is_running(self) -> bool
+    def is_running(self) -> bool: ...
 
-    def start(self) -> None
-    def stop(self) -> None
-    def close(self) -> None
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
+    def close(self) -> None: ...
 ```
 
 Drives a `Capture` on a background thread at a fixed `fps`. Each frame is delivered to `callback` as `(H, W, 3)` `uint8` RGB. Supports `with`.
@@ -204,9 +205,9 @@ class Screenshot:
     monitor_index: int         # mss.MSS().monitors index
     captured_at: datetime      # UTC
 
-    def save(self, png_path: Path | None = None) -> str
+    def save(self, png_path: Path | None = None) -> str: ...
     @classmethod
-    def load(cls, text: str) -> Screenshot
+    def load(cls, text: str) -> Screenshot: ...
 ```
 
 Pixel data plus the on-screen geometry needed to translate window-local coordinates back to the desktop. `eq=False` because numpy arrays cannot be compared element-wise in `__eq__`.
@@ -216,7 +217,7 @@ Pixel data plus the on-screen geometry needed to translate window-local coordina
 ### `vrcpilot.take_screenshot`
 
 ```python
-def take_screenshot(*, settle_seconds: float = 0.05) -> Screenshot | None
+def take_screenshot(*, settle_seconds: float = 0.05) -> Screenshot | None: ...
 ```
 
 Focus VRChat, sleep `settle_seconds`, and grab a one-shot capture of the VRChat window only.
@@ -239,9 +240,9 @@ class OCRWord:
     confidence: float         # 0.0–1.0
 
     @property
-    def bbox(self) -> tuple[int, int, int, int]    # (x, y, w, h), axis-aligned
+    def bbox(self) -> tuple[int, int, int, int]: ...   # (x, y, w, h), axis-aligned
     @property
-    def center(self) -> tuple[float, float]
+    def center(self) -> tuple[float, float]: ...
 ```
 
 ### `vrcpilot.OCRResult`
@@ -252,8 +253,8 @@ class OCRResult:
     screenshot: Screenshot
     words: tuple[OCRWord, ...]
 
-    def display_polygon(self, word: OCRWord) -> Polygon
-    def display_bbox(self, word: OCRWord) -> tuple[int, int, int, int]
+    def display_polygon(self, word: OCRWord) -> Polygon: ...
+    def display_bbox(self, word: OCRWord) -> tuple[int, int, int, int]: ...
 ```
 
 Bundles a `Screenshot` with the words detected on it. `display_*` shifts a word's window-local coordinates to desktop-absolute space using the `Screenshot`'s `x` / `y`.
@@ -272,7 +273,7 @@ Swap in your own backend by implementing this ABC.
 
 ```python
 class RapidOCREngine(OCREngine):
-    def __init__(self, *, params: dict[str, Any] | None = None) -> None
+    def __init__(self, *, params: dict[str, Any] | None = None) -> None: ...
 ```
 
 Default backend (PP-OCRv4 via `rapidocr`). Lazy-imports `rapidocr` in the constructor so the rest of the package is usable without the `ocr` extra installed.
@@ -286,7 +287,7 @@ def recognize(
     screenshot: Screenshot,
     *,
     engine: OCREngine | None = None,
-) -> OCRResult
+) -> OCRResult: ...
 ```
 
 Run OCR on `screenshot`. When `engine` is `None`, a process-cached `RapidOCREngine` instance is used.
@@ -306,9 +307,9 @@ class Detection:
     rotation: float     # radians, counter-clockwise positive
 
     @property
-    def bbox(self) -> tuple[int, int, int, int]
+    def bbox(self) -> tuple[int, int, int, int]: ...
     @property
-    def center(self) -> tuple[float, float]
+    def center(self) -> tuple[float, float]: ...
 ```
 
 ### `vrcpilot.DetectResult`
@@ -320,8 +321,8 @@ class DetectResult:
     query: NDArray[np.uint8]    # (h, w, 3) uint8 RGB
     detections: tuple[Detection, ...]
 
-    def display_polygon(self, det: Detection) -> Polygon
-    def display_bbox(self, det: Detection) -> tuple[int, int, int, int]
+    def display_polygon(self, det: Detection) -> Polygon: ...
+    def display_bbox(self, det: Detection) -> tuple[int, int, int, int]: ...
 ```
 
 ### `vrcpilot.DetectEngine`
@@ -351,7 +352,7 @@ class TemplateDetectEngine(DetectEngine):
         rotations_deg: Sequence[float] = (0.0,),
         nms_iou: float = 0.3,
         max_results: int = 32,
-    ) -> None
+    ) -> None: ...
 ```
 
 Multi-scale (and optionally multi-rotation) `cv2.matchTemplate(..., TM_CCOEFF_NORMED)` runner with non-maximum suppression.
@@ -364,7 +365,7 @@ def detect(
     query: NDArray[np.uint8],
     *,
     engine: DetectEngine | None = None,
-) -> DetectResult
+) -> DetectResult: ...
 ```
 
 Run `engine.detect(screenshot.image, query)`. When `engine` is `None`, a process-cached `TemplateDetectEngine` is used.
@@ -373,7 +374,7 @@ ______________________________________________________________________
 
 ## Synthetic input
 
-The `keyboard` and `mouse` modules are thin objects (not classes) — call methods on them directly. All methods accept `focus: bool = True` to opt out of the VRChat focus guard; leave it `True` unless you have a reason.
+The `keyboard` and `mouse` modules are thin objects (not classes) — call methods on them directly. All methods accept `focus: bool = True` to opt out of the VRChat focus guard; leave it `True` unless you have a reason. The signatures below are written as `def`s for paste-friendliness; in practice you call them as `vrcpilot.keyboard.press(...)` and so on.
 
 ### `vrcpilot.Key`
 
@@ -390,9 +391,9 @@ The `keyboard` and `mouse` modules are thin objects (not classes) — call metho
 ### `vrcpilot.keyboard`
 
 ```python
-keyboard.press(*keys: Key, duration: float = 0.1, focus: bool = True) -> None
-keyboard.down(*keys: Key, focus: bool = True) -> None
-keyboard.up(*keys: Key, focus: bool = True) -> None
+def press(*keys: Key, duration: float = 0.1, focus: bool = True) -> None: ...
+def down(*keys: Key, focus: bool = True) -> None: ...
+def up(*keys: Key, focus: bool = True) -> None: ...
 ```
 
 `press` is a chord-tap: keys are pressed left-to-right, held for `duration` seconds, then released right-to-left. Do not lower `duration` below `0.1` — VRChat / Unity drops shorter taps.
@@ -408,11 +409,11 @@ keyboard.up(*keys: Key, focus: bool = True) -> None
 ### `vrcpilot.mouse`
 
 ```python
-mouse.move(x: int, y: int, *, relative: bool = False, focus: bool = True) -> None
-mouse.click(*buttons: MouseButton, count: int = 1, duration: float = 0.0, focus: bool = True) -> None
-mouse.scroll(amount: int, *, focus: bool = True) -> None
-mouse.press(*buttons: MouseButton, focus: bool = True) -> None
-mouse.release(*buttons: MouseButton, focus: bool = True) -> None
+def move(x: int, y: int, *, relative: bool = False, focus: bool = True) -> None: ...
+def click(*buttons: MouseButton, count: int = 1, duration: float = 0.0, focus: bool = True) -> None: ...
+def scroll(amount: int, *, focus: bool = True) -> None: ...
+def press(*buttons: MouseButton, focus: bool = True) -> None: ...
+def release(*buttons: MouseButton, focus: bool = True) -> None: ...
 ```
 
 `move(x, y)` defaults to pixels in the virtual-desktop bounding box (`mss.MSS().monitors[0]` on Linux, the Win32 virtual screen on Windows). On standard left-origin monitor layouts this matches "desktop-absolute pixels" and round-trips with the `display_pos.bbox` from OCR / detect; on layouts where another monitor extends leftward of the primary the origin shifts accordingly. With `relative=True`, `(x, y)` is added to the current cursor position.
@@ -424,7 +425,7 @@ mouse.release(*buttons: MouseButton, focus: bool = True) -> None
 ### `vrcpilot.ensure_target`
 
 ```python
-def ensure_target() -> None
+def ensure_target() -> None: ...
 ```
 
 Verify VRChat is running and currently focused, focusing it if necessary. Idempotent. The high-level `keyboard` / `mouse` / `clipboard.paste` calls invoke this for you when `focus=True` (the default).
@@ -442,7 +443,7 @@ ______________________________________________________________________
 ### `vrcpilot.clipboard.paste`
 
 ```python
-def paste(text: str, *, focus: bool = True) -> None
+def paste(text: str, *, focus: bool = True) -> None: ...
 ```
 
 Copy `text` to the OS clipboard, then send Ctrl+V to VRChat. Use this for non-ASCII content (Japanese, emoji, …) — scancode-based `keyboard.press` cannot type those directly.
