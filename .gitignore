@@ -175,3 +175,6 @@ cython_debug/
 
 # End-to-end verification artifacts
 _e2e_artifacts/
+
+# Claude Code agent worktrees (Agent tool with isolation="worktree")
+.claude/worktrees/

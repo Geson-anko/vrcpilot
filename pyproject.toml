@@ -75,7 +75,8 @@ exclude = [
   "**/node_modules",
   "**/__pycache__",
   "**/.venv",
-  "tests/vrcpilot/"
+  "tests/vrcpilot/",
+  ".claude/worktrees/",
 ]
 strict = ["./src/"]
 reportMissingTypeStubs = false
