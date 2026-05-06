@@ -217,7 +217,7 @@ vrcpilot mouse scroll AMOUNT
 
 **Exit codes** (all `mouse` subcommands): `0` on success, `1` if VRChat is not running or not focused.
 
-**Side effects**: synthesizes input via `pydirectinput` (Windows) or `inputtino` (Linux uinput).
+**Side effects**: synthesizes input via [`pydirectinput`](https://github.com/learncodebygaming/pydirectinput) (Windows) or [`inputtino`](https://github.com/games-on-whales/inputtino) (Linux uinput).
 
 > `mouse press` / `mouse release` are intentionally not exposed — buttons released by the kernel when a CLI process exits cannot be paired across separate invocations. For paired down/up, drive the input from a single Python process via [`vrcpilot.mouse.press` / `vrcpilot.mouse.release`](python-api.md#mouse).
 

@@ -18,7 +18,7 @@ Python automation toolkit for VRChat (Windows / Linux). Drives the desktop clien
 - **Screen capture** — `Capture` for streaming (mp4 / y4m sinks), `take_screenshot` for one-off shots that round-trip through YAML.
 - **OCR** — pluggable `OCREngine` ABC with a default `RapidOCREngine`; `recognize()` returns word-level results in both window-local and desktop-absolute coordinates.
 - **Image-template detection** — `TemplateDetectEngine` (OpenCV `TM_CCOEFF_NORMED`) returns coordinate-bearing detections matching the OCR coordinate schema.
-- **Synthetic input** — keyboard / mouse via `pydirectinput` on Windows and `inputtino` (`/dev/uinput`) on Linux, with VRChat focus-guarding.
+- **Synthetic input** — keyboard / mouse via [`pydirectinput`](https://github.com/learncodebygaming/pydirectinput) on Windows and [`inputtino`](https://github.com/games-on-whales/inputtino) (`/dev/uinput`) on Linux, with VRChat focus-guarding.
 - **Non-ASCII text injection** — `vrcpilot.clipboard` sends arbitrary Unicode through clipboard + Ctrl+V.
 - **CLI front-end** — `vrcpilot launch / screenshot / ocr / detect / mouse / keyboard / paste / capture / ...` with shell completion via `argcomplete`.
 
@@ -52,7 +52,7 @@ No additional system packages — `pywin32` and `pydirectinput` are pulled in au
 
 An X11 or XWayland session is required. Wayland-native sessions are not supported (`focus()` / `unfocus()` warn and return `False`).
 
-`inputtino-python` is built natively from git, so the following system packages are needed before `pip install`:
+[`inputtino-python`](https://github.com/games-on-whales/inputtino/tree/stable/bindings/python) is built natively from git, so the following system packages are needed before `pip install`:
 
 ```bash
 sudo apt-get install -y cmake build-essential pkg-config libevdev-dev

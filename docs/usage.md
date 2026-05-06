@@ -11,7 +11,7 @@ ______________________________________________________________________
 - **VRChat is installed via Steam**, and Steam is logged in.
 - **The desktop session is X11 or XWayland.** Run `loginctl show-session "$XDG_SESSION_ID" -p Type` to confirm `Type=x11`. Wayland-native sessions are not supported — `focus()` / `unfocus()` warn and return `False`, and synthetic input cannot reach the window.
 - **Steam is already running.** If Steam is not running, `vrcpilot launch` will spend its 30-second wait on Steam's startup screen and then fail with `VRChat PID was not observed before timeout`. Bring Steam up first.
-- **Linux only — write access to `/dev/uinput`.** `sudo usermod -aG input $USER`, then log out and back in. Confirm with `groups` showing `input`.
+- **Linux only — write access to `/dev/uinput`.** Synthetic input goes through [`inputtino`](https://github.com/games-on-whales/inputtino), which writes to `/dev/uinput`. `sudo usermod -aG input $USER`, then log out and back in. Confirm with `groups` showing `input`.
 - **The screen is not locked.** Window operations are unstable while the screen is locked.
 
 ______________________________________________________________________

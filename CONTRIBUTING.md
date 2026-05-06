@@ -31,7 +31,7 @@ uv run pre-commit install
 
 - **Windows**: no extra system packages; `pywin32` and `pydirectinput` are installed automatically.
 
-- **Linux**: `inputtino-python` is built natively from git. Install build prerequisites first:
+- **Linux**: [`inputtino-python`](https://github.com/games-on-whales/inputtino/tree/stable/bindings/python) is built natively from git. Install build prerequisites first:
 
   ```bash
   sudo apt-get install -y cmake build-essential pkg-config libevdev-dev
