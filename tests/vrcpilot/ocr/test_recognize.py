@@ -6,9 +6,11 @@ is triggered. The function itself takes a :class:`Screenshot`
 directly, so capture is no longer mocked here.
 
 The submodule reference is fetched via ``sys.modules`` because the
-package binds the ``ocr`` *function* under the name
-``vrcpilot.ocr.recognize``-resolved attributes, which would otherwise
-shadow the submodule in attribute-walking patch helpers.
+top-level package re-exports the ``ocr`` *function* as
+``vrcpilot.ocr``, which shadows the submodule attribute on the
+``vrcpilot`` package. Submodule access via ``sys.modules`` is the
+unaffected path; see ``tests/vrcpilot/test_init.py`` for the
+regression that pins this invariant.
 """
 
 from __future__ import annotations
