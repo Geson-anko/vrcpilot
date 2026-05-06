@@ -1,9 +1,17 @@
-"""AKAZE-based detection engine.
+"""AKAZE-based detection engine (opt-in; kept for comparison / future use).
 
-AKAZE は OpenCV の main module 同梱で、低テクスチャな UI アイコン
-(VRChat の Launch Pad など 18-51 px の小さなアイコン) でも SIFT より
-多くの keypoint を出すことが多い。実機 e2e で SIFT が 10 個中 3 個し
-か検出できなかったため、こちらをデフォルトに採用する。
+AKAZE は OpenCV の main module 同梱の特徴点抽出器で、SIFT と比べて
+低テクスチャ画像でも keypoint が出やすい設計。ただし VRChat の Launch
+Pad 等 18-51 px の小型 UI アイコンに対しては実機 e2e で **0/10** 件と
+事実上機能せず、``threshold`` を OpenCV デフォルト ``0.001`` から
+``0.0001`` まで一桁下げても有効解は得られなかった (フィーチャースケー
+ル自体が画像に対して大きすぎる)。同じ条件で SIFT は 3/10、Template は
+10/10 出るため :class:`.template.TemplateDetectEngine` をデフォルトに
+据えている (詳細は :func:`.detect._get_default_engine`)。
+
+本モジュールは「より大きい / よりテクスチャのある対象 (アバターパネル
+全体、ワールドサムネイル等) で AKAZE 由来のスケール / 回転不変性が
+役立つ場面」のための opt-in バックエンドとして残す。
 
 差分 (vs. SiftDetectEngine):
 
@@ -29,8 +37,7 @@ from .base import DetectEngine, Detection
 
 
 class AkazeDetectEngine(DetectEngine):
-    """AKAZE + BFMatcher(Hamming) + RANSAC Homography ベースの
-    :class:`DetectEngine`.
+    """AKAZE + BFMatcher(Hamming) + 反復 RANSAC ベースの :class:`DetectEngine`.
 
     AKAZE 特徴点を抽出し、BFMatcher(Hamming) で knn=2 マッチング、
     Lowe's ratio test で良マッチを絞り、``cv2.findHomography`` で
@@ -38,6 +45,10 @@ class AkazeDetectEngine(DetectEngine):
     同一クエリの複数インスタンスを順次拾い、最後に IoU ベースの NMS
     で重複候補を抑制する。Scale / rotation は Homography の上左 2x2
     から復元する。
+
+    VRChat の小型 UI アイコンでは keypoint がほぼ抽出できず実用解に
+    ならない (モジュール docstring 参照)。テクスチャ豊富なクエリ向け
+    の opt-in バックエンドとして扱うこと。
     """
 
     def __init__(
@@ -67,10 +78,13 @@ class AkazeDetectEngine(DetectEngine):
             max_results: 出力する :class:`Detection` の最大数。
                 デフォルト ``32``。
             threshold: AKAZE の応答閾値 (``cv2.AKAZE_create(threshold=...)``)。
-                小型・低テクスチャの UI アイコンに対しては OpenCV の
-                デフォルト ``0.001`` だと keypoint が不足するので、
-                ``0.0001`` 程度まで下げると感度が上がる。下げすぎると
-                誤検出が増えるトレードオフがある。
+                デフォルト ``0.001`` は OpenCV の標準値。VRChat の小型
+                UI アイコン (18-51 px) では実機 e2e で本値を ``0.0001``
+                まで一桁下げても有効な keypoint が抽出できず 0/10 件
+                だったため、本エンジンはデフォルトに採用していない
+                (Template Engine がデフォルト)。``threshold`` 引数は
+                より大きい / テクスチャ豊富な対象向けの実験フックとして
+                残してある。
         """
         self._ratio = ratio
         self._min_inliers = min_inliers

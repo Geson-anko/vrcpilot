@@ -1,11 +1,17 @@
-"""SIFT-based detection engine.
+"""SIFT-based detection engine (opt-in; kept for textured queries).
 
 OpenCV main module (since 4.4) ships SIFT, so we depend only on
 ``opencv-python`` (already in core deps). Scale and rotation
-invariance are handled natively by SIFT -- no template grid sweep.
+invariance are handled natively by SIFT — no template grid sweep.
 Multiple instances of the same query in one screenshot are recovered
 by an iterative RANSAC loop that masks out inlier keypoints between
 rounds.
+
+Not the default. VRChat の小型 UI アイコンに対する実機 e2e では SIFT
+が 3/10 (AKAZE 0/10、Template 10/10) で、ピクセルパーフェクトに描画
+される UI には :class:`.template.TemplateDetectEngine` が原理的に強い。
+本エンジンは「サムネイル画像、アバターパネル、ワールド画像など模様が
+豊富で SIFT のスケール / 回転不変性が活きる対象」向けに残してある。
 """
 
 from __future__ import annotations

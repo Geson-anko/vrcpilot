@@ -7,9 +7,12 @@ Public surface:
 * :class:`DetectResult` — screenshot + query + detections のバンドル。
   デスクトップ絶対座標へ変換するヘルパを提供する。
 * :class:`TemplateDetectEngine` — デフォルトの multi-scale テンプレート
-  マッチ実装。
-* :class:`AkazeDetectEngine` — AKAZE ベースの opt-in 実装（特徴点向き）。
-* :class:`SiftDetectEngine` — SIFT ベースの opt-in 実装。
+  マッチ実装。VRChat の小型 UI アイコンで最も検出率が高い。
+* :class:`AkazeDetectEngine` — AKAZE 特徴点ベースの opt-in 実装。
+  小型 UI アイコンでは実用解にならない実測がある (詳細はクラス
+  docstring) ため、テクスチャ豊富な対象向け。
+* :class:`SiftDetectEngine` — SIFT 特徴点ベースの opt-in 実装。
+  AKAZE よりは拾えるが、UI アイコンでは Template に劣る。
 * :func:`detect` — :class:`DetectEngine` を :class:`Screenshot` と
   クエリ画像に対して実行し結果をまとめる関数。
 * :func:`render` — :class:`DetectResult` を screenshot 上に重ね描き

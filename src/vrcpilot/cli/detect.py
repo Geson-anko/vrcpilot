@@ -5,6 +5,13 @@ a YAML document on stdout describing each detection in both
 image-local and desktop-absolute coordinates. Optionally writes an
 annotated PNG visualization for human review.
 
+Engine selection: when neither ``--min-inliers`` nor ``--ratio`` is
+passed, :func:`vrcpilot.detect.detect` is invoked with ``engine=None``
+and uses its lazily cached default (currently
+:class:`~vrcpilot.detect.TemplateDetectEngine`). Passing either tuning
+flag opts the run into a fresh :class:`~vrcpilot.detect.SiftDetectEngine`
+so the SIFT-specific knobs apply.
+
 YAML schema (stable, ``sort_keys=False`` so the order is fixed):
 
 - ``captured_at`` - ISO-8601 timestamp of the underlying screenshot
@@ -76,7 +83,8 @@ def register(subparsers: SubParsersAction) -> None:
         default=None,
         help=(
             "Minimum RANSAC inlier count required to accept a homography. "
-            "Defaults to the SiftDetectEngine default when unset."
+            "SIFT-only: passing this flag switches the run to "
+            "SiftDetectEngine instead of the default TemplateDetectEngine."
         ),
     )
     parser.add_argument(
@@ -85,7 +93,8 @@ def register(subparsers: SubParsersAction) -> None:
         default=None,
         help=(
             "Lowe's ratio test threshold for SIFT match filtering. "
-            "Defaults to the SiftDetectEngine default when unset."
+            "SIFT-only: passing this flag switches the run to "
+            "SiftDetectEngine instead of the default TemplateDetectEngine."
         ),
     )
     parser.add_argument(
