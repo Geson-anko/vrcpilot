@@ -1,9 +1,4 @@
-"""Geometry helpers shared by :class:`DetectEngine` implementations.
-
-Currently used by :class:`TemplateDetectEngine` for its post-match
-deduplication. The module is private to :mod:`vrcpilot.detect` — not
-re-exported through ``vrcpilot.detect.__init__``.
-"""
+"""Private geometry helpers (IoU + NMS) shared by detect engines."""
 
 from __future__ import annotations
 
@@ -14,10 +9,7 @@ def iou(
     a: tuple[int, int, int, int],
     b: tuple[int, int, int, int],
 ) -> float:
-    """Axis-aligned IoU for ``(x, y, w, h)`` boxes.
-
-    Returns ``0.0`` when either box has zero area.
-    """
+    """Axis-aligned IoU for ``(x, y, w, h)`` boxes; ``0.0`` if degenerate."""
     ax, ay, aw, ah = a
     bx, by, bw, bh = b
     if aw <= 0 or ah <= 0 or bw <= 0 or bh <= 0:
@@ -39,11 +31,10 @@ def nms(
     detections: list[Detection],
     iou_threshold: float,
 ) -> list[Detection]:
-    """Greedy NMS in confidence-descending order.
+    """Greedy non-maximum suppression, returned confidence-descending.
 
-    Higher-confidence detections suppress lower-confidence ones whose
-    bbox IoU exceeds ``iou_threshold``. Order within the result is
-    confidence-descending.
+    A detection is dropped if its bbox IoU with any already-kept
+    detection exceeds ``iou_threshold``.
     """
     if not detections:
         return []

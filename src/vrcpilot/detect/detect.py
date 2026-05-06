@@ -1,23 +1,10 @@
-"""High-level :func:`detect` helper and the :class:`DetectResult` value type.
+"""High-level :func:`detect` helper and :class:`DetectResult` value type.
 
-:class:`DetectResult` ties a :class:`Screenshot` to the
-:class:`Detection` list produced by a :class:`DetectEngine` so callers
-can move between image-local and desktop-absolute coordinates without
-re-doing the geometry math.
-
-:func:`detect` is a thin wrapper: the caller supplies the
-:class:`Screenshot` (typically from
-:func:`vrcpilot.screenshot.take_screenshot`) and a query image, and
-this function only runs the engine and packages the result. Capture
-and detection are kept as separate concerns so the same detection
-pipeline can be replayed against existing images, fed cropped regions,
-or driven by a custom capture source.
-
-The module-level ``_default_engine`` cache keeps :func:`detect` cheap
-on repeat calls: the (heavy) :class:`TemplateDetectEngine` is built
-exactly once per process when the user does not pass an ``engine``
-argument. Tests that need a fresh cache should reset the variable
-explicitly (``vrcpilot.detect.detect._default_engine = None``).
+Capture and detection are kept separate so the same engine can run
+against live screenshots, replayed images, or cropped regions. The
+default :class:`TemplateDetectEngine` is built lazily once per process
+and cached; tests that need a fresh instance should reset
+``_default_engine`` explicitly.
 """
 
 from __future__ import annotations
@@ -36,23 +23,18 @@ from .template import TemplateDetectEngine
 
 @dataclass(frozen=True, eq=False)
 class DetectResult:
-    """Captured screenshot + query bundled with their detections.
+    """Screenshot + query + detections, ready to translate to desktop coords.
 
-    ``eq=False`` mirrors :class:`vrcpilot.screenshot.Screenshot`:
-    ``screenshot.image`` is a numpy ``ndarray`` and element-wise
-    ``__eq__`` cannot back the dataclass-synthesised equality.
+    ``eq=False`` because numpy element-wise ``__eq__`` cannot back a
+    dataclass equality. ``query`` is stored without copying (engines
+    do not mutate it).
 
     Attributes:
-        screenshot: The :class:`Screenshot` the detections came from.
-            ``screenshot.x`` / ``screenshot.y`` are the desktop offsets
-            used by :meth:`display_polygon` and :meth:`display_bbox`.
-        query: The query image (``(h, w, 3)`` uint8 RGB) passed to the
-            engine. Stored verbatim for later reference; **not** copied
-            (the engine does not mutate it).
-        detections: Detected :class:`Detection` tuple. Always a tuple
-            so the sequence is immutable from the caller's point of
-            view (matches the frozen-dataclass posture of
-            :class:`Detection`).
+        screenshot: Source screenshot. Its ``x`` / ``y`` are the
+            desktop offsets used by :meth:`display_polygon` and
+            :meth:`display_bbox`.
+        query: ``(h, w, 3)`` uint8 RGB query passed to the engine.
+        detections: Detections in image-local coordinates.
     """
 
     screenshot: Screenshot
@@ -60,15 +42,10 @@ class DetectResult:
     detections: tuple[Detection, ...]
 
     def display_polygon(self, det: Detection) -> Polygon:
-        """Return ``det.polygon`` shifted to desktop-absolute coordinates.
+        """Return ``det.polygon`` shifted by the screenshot offset.
 
-        Each ``(x, y)`` corner is offset by
-        ``(screenshot.x, screenshot.y)``; values stay ``float``.
-
-        Membership in ``self.detections`` is **not** checked: the method
-        is a pure geometric transform driven by ``det.polygon``, so a
-        caller who builds a :class:`Detection` separately can still
-        translate it.
+        Pure geometric transform; ``det`` need not belong to
+        :attr:`detections`.
         """
         dx = float(self.screenshot.x)
         dy = float(self.screenshot.y)
@@ -81,12 +58,7 @@ class DetectResult:
         )
 
     def display_bbox(self, det: Detection) -> tuple[int, int, int, int]:
-        """Return ``det.bbox`` shifted to desktop-absolute coordinates.
-
-        ``(x, y)`` move by the screenshot offset; ``(width, height)``
-        are unchanged. ``screenshot.x`` / ``screenshot.y`` are already
-        ``int`` so no extra rounding is needed.
-        """
+        """Return ``det.bbox`` shifted by the screenshot offset."""
         x, y, w, h = det.bbox
         return (x + self.screenshot.x, y + self.screenshot.y, w, h)
 
@@ -95,18 +67,10 @@ _default_engine: DetectEngine | None = None
 
 
 def _get_default_engine() -> DetectEngine:
-    """Return the cached default :class:`DetectEngine`, building it if needed.
+    """Return a process-cached :class:`TemplateDetectEngine`.
 
-    :class:`TemplateDetectEngine` is the only shipped engine. VRChat
-    UI is rendered pixel-perfect, so scale-grid ``matchTemplate``
-    works well even on the 18-50 px icons that defeat feature-based
-    detectors.
-
-    The first call constructs a :class:`TemplateDetectEngine`;
-    subsequent calls reuse the cached instance. Not thread-safe —
-    the project runs in a single context, so the worst case under
-    racy access is a transient duplicate engine that is immediately
-    replaced.
+    Not thread-safe; the project runs single-threaded, so the worst case
+    under racy access is a transient duplicate engine.
     """
     global _default_engine
     if _default_engine is None:
@@ -120,28 +84,12 @@ def detect(
     *,
     engine: DetectEngine | None = None,
 ) -> DetectResult:
-    """Run detection on *screenshot* against *query* and bundle the results.
+    """Run *engine* on *screenshot* against *query*.
 
-    The caller is responsible for capture; pass any
-    :class:`Screenshot` (typically from
-    :func:`vrcpilot.screenshot.take_screenshot`, but a hand-built one
-    or a replayed capture works just as well).
-
-    Args:
-        screenshot: Image to search. ``screenshot.image`` is fed to the
-            engine and ``screenshot.x`` / ``y`` are preserved so
-            :meth:`DetectResult.display_polygon` /
-            :meth:`DetectResult.display_bbox` can shift to desktop
-            coordinates.
-        query: ``(h, w, 3)`` uint8 RGB image to look for in
-            *screenshot*.
-        engine: Detection backend. ``None`` (default) lazily builds
-            and caches a :class:`TemplateDetectEngine` via
-            :func:`_get_default_engine`.
-
-    Returns:
-        :class:`DetectResult` pairing the inputs with the detected
-        instances (possibly empty). Never returns ``None``.
+    The caller owns capture: typically *screenshot* comes from
+    :func:`vrcpilot.screenshot.take_screenshot`, but any
+    :class:`Screenshot` works. Passing ``engine=None`` reuses the
+    process-wide default :class:`TemplateDetectEngine`.
     """
     if engine is None:
         engine = _get_default_engine()

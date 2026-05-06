@@ -1,11 +1,4 @@
-"""Detect-related test doubles.
-
-Stand-in for :class:`vrcpilot.detect.DetectEngine` used by integration
-tests of :func:`vrcpilot.detect.detect` and the ``vrcpilot detect`` CLI
-command. ``FakeDetectEngine`` returns a pre-baked list of
-:class:`Detection` from every :meth:`detect` call regardless of the
-input image or query.
-"""
+"""Detect-related test doubles."""
 
 from __future__ import annotations
 
@@ -19,13 +12,10 @@ from vrcpilot.detect import DetectEngine, Detection
 
 
 class FakeDetectEngine(DetectEngine):
-    """Detect engine that always returns a fixed detection list.
+    """Engine that returns a fixed detection list, recording call inputs.
 
-    The constructor takes a ``Sequence[Detection]`` and stores it
-    verbatim. Each :meth:`detect` call returns the same list, records
-    the image and query identities in :attr:`last_image` /
-    :attr:`last_query`, and increments :attr:`calls` so tests can assert
-    what the engine saw and how often it was hit.
+    :attr:`calls`, :attr:`last_image`, :attr:`last_query` let tests
+    assert how often the engine ran and what it saw.
     """
 
     def __init__(self, detections: Sequence[Detection]) -> None:

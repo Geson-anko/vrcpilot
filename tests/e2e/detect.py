@@ -1,33 +1,10 @@
 """E2E scenario: detect Launch Pad icons in a real VRChat window.
 
-Drives :func:`vrcpilot.detect.detect` end-to-end against a running
-VRChat client. The default landing screen has no icon panel to match,
-so the scenario presses ``Escape`` to bring up the Launch Pad before
-running detection; that gives a stable, icon-rich target.
-
-Steps:
-
-1. Launch VRChat in Desktop mode (1280x720).
-2. Wait for warmup, then ``vrcpilot.keyboard.press(Key.ESCAPE)`` to
-   open the Launch Pad.
-3. ``vrcpilot.take_screenshot()`` grabs the focused VRChat window.
-4. For every PNG under ``tests/e2e/fixtures/detect_icons/``, run
-   ``vrcpilot.detect.detect`` and accumulate the detections.
-5. Save **one** annotated PNG that overlays *every* query's detections
-   on the same screenshot (each polygon labelled with the icon name).
-6. The scenario fails iff **any** icon was not detected — a partial
-   pass still surfaces the offending query names so the engine can be
-   tuned (e.g. switching the backend to ORB/AKAZE for tiny icons).
-
-Run with::
-
-    just e2e-test detect
-
-Artifacts written to ``_e2e_artifacts/``:
-
-- ``detect_screenshot_<YYYYMMDD_HHMMSS>.png`` — raw Launch Pad capture
-- ``detect_viz_<YYYYMMDD_HHMMSS>.png`` — single annotated PNG with all
-  query detections overlaid; each box labelled with the icon name
+Opens the Launch Pad (Escape), screenshots it, then runs
+:func:`vrcpilot.detect.detect` for every PNG under
+``tests/e2e/fixtures/detect_icons/``. Fails if any icon goes
+undetected. Run with ``just e2e-test detect``; artifacts are written
+to ``_e2e_artifacts/``.
 """
 
 from __future__ import annotations
@@ -53,7 +30,7 @@ _ICONS_DIR: Path = Path(__file__).resolve().parent / "fixtures" / "detect_icons"
 
 
 def _load_query(path: Path) -> NDArray[np.uint8]:
-    """Read *path* as RGB ``uint8`` ndarray, raising on failure."""
+    """Read *path* as RGB ``uint8`` ndarray; raises on failure."""
     bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if bgr is None:
         raise RuntimeError(f"could not read query image: {path}")
@@ -65,12 +42,7 @@ def _draw_combined_viz(
     image: NDArray[np.uint8],
     detections_by_query: dict[str, tuple[Detection, ...]],
 ) -> NDArray[np.uint8]:
-    """Overlay all queries' detections on a single copy of *image*.
-
-    Each detection is drawn as a green polygon with the query name and
-    confidence placed just above the bounding box. The input array is
-    not mutated.
-    """
+    """Overlay every query's detections onto a single copy of *image*."""
     canvas: NDArray[np.uint8] = image.copy()
     for name, detections in detections_by_query.items():
         for det in detections:
