@@ -254,3 +254,55 @@ class TestTemplateDetectEngineMaxResults:
         engine = TemplateDetectEngine(max_results=1)
         dets = engine.detect(img, icon)
         assert len(dets) <= 1
+
+
+def _recolor_icon(
+    icon: NDArray[np.uint8],
+    *,
+    body_color: tuple[int, int, int],
+    accent_color: tuple[int, int, int],
+) -> NDArray[np.uint8]:
+    """Rebuild the simple icon with different fill colours but identical shape.
+
+    Same outline / cross / circle as :func:`_make_simple_icon`; only the
+    fill RGB triplets differ. Used to verify that RGB matching penalises
+    a colour-only change while grayscale matching would treat the variant
+    as a hit.
+    """
+    size = icon.shape[0]
+    recoloured: NDArray[np.uint8] = np.full((size, size, 3), 255, dtype=np.uint8)
+    cv2.rectangle(recoloured, (4, 4), (size - 4, size - 4), body_color, -1)
+    cv2.circle(recoloured, (size // 2, size // 2), size // 4, accent_color, -1)
+    cv2.line(recoloured, (4, 4), (size - 4, size - 4), (10, 10, 10), 2)
+    cv2.line(recoloured, (4, size - 4), (size - 4, 4), (10, 10, 10), 2)
+    return recoloured
+
+
+class TestTemplateDetectEngineColorDiscrimination:
+    def test_colour_only_variant_is_not_detected_as_query(self):
+        # Same outline, different fill colours: grayscale matching would
+        # match both because TM_CCOEFF_NORMED is brightness-invariant; RGB
+        # matching scores the colour mismatch low enough to drop the variant.
+        query = _make_simple_icon()
+        # Inverted complement: blue body / pink accent vs original blue/yellow.
+        variant = _recolor_icon(
+            query, body_color=(200, 30, 30), accent_color=(40, 200, 200)
+        )
+        bg = _make_flat_background()
+        img, (true_cx, true_cy) = _paste_at(bg, query, 100, 100)
+        img, (variant_cx, variant_cy) = _paste_at(img, variant, 380, 250)
+
+        engine = TemplateDetectEngine()
+        dets = engine.detect(img, query)
+
+        assert len(dets) >= 1
+        # The query paste must be detected.
+        assert any(
+            abs(d.center[0] - true_cx) < 4 and abs(d.center[1] - true_cy) < 4
+            for d in dets
+        ), "expected to detect the original-colour query paste"
+        # The colour-only variant must not be detected.
+        assert not any(
+            abs(d.center[0] - variant_cx) < 4 and abs(d.center[1] - variant_cy) < 4
+            for d in dets
+        ), "RGB matching should reject the colour-mismatched variant"
