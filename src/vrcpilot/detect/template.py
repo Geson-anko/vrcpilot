@@ -48,8 +48,11 @@ class TemplateDetectEngine(DetectEngine):
     def __init__(
         self,
         *,
-        threshold: float = 0.7,
+        threshold: float = 0.85,
         scales: Sequence[float] = (
+            0.25,
+            0.3,
+            0.35,
             0.4,
             0.5,
             0.6,
@@ -57,7 +60,6 @@ class TemplateDetectEngine(DetectEngine):
             0.8,
             0.9,
             1.0,
-            1.1,
             1.25,
             1.5,
         ),
@@ -69,14 +71,19 @@ class TemplateDetectEngine(DetectEngine):
 
         Args:
             threshold: ``cv2.TM_CCOEFF_NORMED`` の score 閾値。``[-1,
-                1]`` が理論域だが、UI アイコンなど描画が安定した対象
-                では ``0.85+`` で拾えることが多い。デフォルト ``0.7``
-                は保守的な値で、ノイズが多ければ ``0.8`` 程度まで
-                上げる運用を想定している。
+                1]`` が理論域。VRChat の Launch Pad アイコン (44-105 px
+                クエリを画面上 ~35 px に縮小して描画) で実機 e2e を
+                スイープした結果、``0.85`` で 10/10 検出かつ false
+                positive がほぼ消える sweet spot だったので採用。
+                ``0.9`` まで上げると誤検出は 0 になる代わり弱マッチ
+                (confidence 0.85 付近のもの) が落ちるトレードオフ。
             scales: 試行するスケール係数の列。各値で
                 ``cv2.resize(query, (int(w*scale), int(h*scale)))``
                 を作って matchTemplate にかける。デフォルトは
-                ``0.4`` から ``1.5`` までを 10 段でカバーする。
+                ``0.25`` から ``1.5`` までを 12 段でカバーする。
+                Launch Pad 上の icon は 100 px クエリに対して画面上
+                35 px 程度 (scale ≈ 0.35) で表示されるため lower
+                bound は 0.25 まで広げてある。
             rotations_deg: 試行する回転角 (度) の列。``0.0`` のみ
                 指定された場合、回転変換そのものを skip して高速に
                 処理する (VRChat UI のようにそもそも回転しない用途
