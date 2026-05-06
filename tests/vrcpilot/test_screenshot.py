@@ -111,8 +111,12 @@ class TestScreenshotSave:
 
         text = shot.save(png_path)
 
-        keys = [line.split(":", 1)[0] for line in text.splitlines() if ":" in line]
-        assert keys == [
+        # Python 3.7+ preserves dict insertion order, and
+        # ``yaml.safe_dump(sort_keys=False)`` emits keys in that order,
+        # so ``yaml.safe_load(...).keys()`` round-trips the on-disk
+        # ordering. This is more explicit than splitting lines on ``:``.
+        loaded = yaml.safe_load(text)
+        assert list(loaded.keys()) == [
             "path",
             "x",
             "y",
@@ -222,6 +226,17 @@ class TestScreenshotLoad:
         broken = yaml.safe_dump(payload, sort_keys=False)
 
         with pytest.raises(ValueError, match="PNG referenced by"):
+            Screenshot.load(broken)
+
+    def test_load_rejects_non_image_file(self, tmp_path: Path):
+        _, yaml_text = write_screenshot_payload(tmp_path)
+        payload = yaml.safe_load(yaml_text)
+        bogus = tmp_path / "not_an_image.png"
+        bogus.write_bytes(b"this is not a PNG, just plain text")
+        payload["path"] = str(bogus)
+        broken = yaml.safe_dump(payload, sort_keys=False)
+
+        with pytest.raises(ValueError, match="not a valid image"):
             Screenshot.load(broken)
 
     def test_load_rejects_invalid_captured_at(self, tmp_path: Path):

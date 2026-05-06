@@ -21,7 +21,7 @@ import mss
 import numpy as np
 import yaml
 from numpy.typing import NDArray
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from vrcpilot.geometry import get_vrchat_window_rect
 from vrcpilot.session import is_wayland_native
@@ -68,7 +68,13 @@ class Screenshot:
 
         Args:
             png_path: Destination for the PNG. May be relative; the
-                YAML records its resolved absolute form.
+                YAML records its resolved absolute form. The parent
+                directory must already exist (callers are responsible
+                for ``mkdir(parents=True)`` when needed).
+
+        Raises:
+            FileNotFoundError: ``png_path`` parent directory does not
+                exist (propagated from :class:`PIL.Image.Image.save`).
 
         Returns:
             YAML text suitable for piping to stdout or writing to a
@@ -88,15 +94,14 @@ class Screenshot:
 
     @classmethod
     def load(cls, text: str) -> Screenshot:
-        """Restore a :class:`Screenshot` from YAML text written by
-        :meth:`save`.
+        """Restore a :class:`Screenshot` from YAML text written by ``save``.
 
         The PNG referenced by the ``path`` field is read from disk and
         converted to ``(H, W, 3)`` RGB ``uint8``. Field types are
         coerced via :func:`int` / :func:`str`, so any non-mapping
         payload, missing key, malformed value, or invalid timestamp is
-        surfaced as :class:`ValueError`. A missing PNG is reported with
-        a dedicated message that names the file.
+        surfaced as :class:`ValueError`. A missing or non-image PNG is
+        reported with a dedicated message that names the file.
 
         Args:
             text: YAML text in the ``vrcpilot screenshot`` schema.
@@ -104,7 +109,8 @@ class Screenshot:
         Raises:
             ValueError: ``text`` is not a YAML mapping, a required key
                 is missing, a field cannot be coerced, ``captured_at``
-                is not ISO-8601, or the referenced PNG does not exist.
+                is not ISO-8601, or the referenced PNG is missing /
+                cannot be decoded as an image.
 
         Returns:
             A new :class:`Screenshot` whose ``image`` is detached from
@@ -135,6 +141,10 @@ class Screenshot:
         except FileNotFoundError as exc:
             raise ValueError(
                 f"PNG referenced by screenshot YAML not found: {exc.filename}"
+            ) from exc
+        except UnidentifiedImageError as exc:
+            raise ValueError(
+                f"PNG referenced by screenshot YAML is not a valid image: {exc}"
             ) from exc
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"invalid screenshot YAML: {exc}") from exc
