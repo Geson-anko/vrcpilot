@@ -57,23 +57,27 @@ def render(
 ) -> NDArray[np.uint8]:
     """Draw detections onto a copy of the screenshot image.
 
-    各 :class:`~vrcpilot.detect.Detection` を polygon 線描画 +
-    ``"<confidence> x<scale>"`` 形式の信頼度ラベルで重ねる。ラベルは
-    bbox の上に置き、上端が画像端に近すぎる場合は bbox の下に
-    フォールバックする (OCR の :func:`vrcpilot.ocr.render` と同じ流儀)。
+    Each :class:`~vrcpilot.detect.Detection` is rendered as a polygon
+    outline plus a ``"<confidence> x<scale>"`` label placed just above
+    the bounding box (or just below, when the text would otherwise go
+    off the top of the image). Same placement convention as the OCR
+    renderer in :func:`vrcpilot.ocr.render`.
 
     Args:
-        result: 描画する :class:`DetectResult`。``screenshot.image`` が
-            背景になり、``detections`` が描画対象。
-        box_color: ポリゴン線の RGB（OCR と同じく ``(0, 255, 0)``）。
-        text_color: ラベルの RGB。``None`` (default) は各 detection の
-            bbox 領域の輝度から自動選択する。
-        font_scale: ``cv2.putText`` の font scale。
-        thickness: ポリゴンとテキストの線幅。
+        result: :class:`DetectResult` to render. ``screenshot.image``
+            is the background and ``detections`` are drawn on top.
+        box_color: RGB triple for the polygon outline (same green as
+            OCR, ``(0, 255, 0)``).
+        text_color: RGB triple for the label. ``None`` (default) picks
+            black or white per detection based on the underlying
+            patch's mean luminance.
+        font_scale: ``cv2.putText`` font scale.
+        thickness: Stroke thickness for both polygon and label.
 
     Returns:
-        ``(H, W, 3)`` uint8 RGB ndarray。``result.screenshot.image`` は
-        無変更。
+        ``(H, W, 3)`` ``uint8`` RGB ndarray with the same shape and
+        dtype as ``result.screenshot.image``. The input image is left
+        untouched.
     """
     original = result.screenshot.image
     canvas: NDArray[np.uint8] = original.copy()

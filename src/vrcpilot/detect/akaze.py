@@ -1,26 +1,29 @@
 """AKAZE-based detection engine (opt-in; kept for comparison / future use).
 
-AKAZE は OpenCV の main module 同梱の特徴点抽出器で、SIFT と比べて
-低テクスチャ画像でも keypoint が出やすい設計。ただし VRChat の Launch
-Pad 等 18-51 px の小型 UI アイコンに対しては実機 e2e で **0/10** 件と
-事実上機能せず、``threshold`` を OpenCV デフォルト ``0.001`` から
-``0.0001`` まで一桁下げても有効解は得られなかった (フィーチャースケー
-ル自体が画像に対して大きすぎる)。同じ条件で SIFT は 3/10、Template は
-10/10 出るため :class:`.template.TemplateDetectEngine` をデフォルトに
-据えている (詳細は :func:`.detect._get_default_engine`)。
+AKAZE ships with the OpenCV main module and is designed to extract
+keypoints even on low-texture images more readily than SIFT. Against
+VRChat's small UI icons (18-51 px) such as the Launch Pad, however,
+real-device e2e produced **0/10** detections, and dropping
+``threshold`` from the OpenCV default ``0.001`` to ``0.0001`` was not
+enough to recover usable results (the feature scale itself is too
+large relative to the image). Under the same conditions SIFT scored
+3/10 and Template scored 10/10, so
+:class:`.template.TemplateDetectEngine` is the default (see
+:func:`.detect._get_default_engine`).
 
-本モジュールは「より大きい / よりテクスチャのある対象 (アバターパネル
-全体、ワールドサムネイル等) で AKAZE 由来のスケール / 回転不変性が
-役立つ場面」のための opt-in バックエンドとして残す。
+This module is kept as an opt-in backend for larger / more textured
+targets (full avatar panels, world thumbnails, etc.) where AKAZE's
+scale and rotation invariance pay off.
 
-差分 (vs. SiftDetectEngine):
+Differences vs. :class:`SiftDetectEngine`:
 
-* 抽出器: ``cv2.AKAZE_create()``
-* descriptor: AKAZE デフォルトは M-LDB (バイナリ)。FLANN KDTree は
-  float 専用なので使えず、``cv2.BFMatcher(cv2.NORM_HAMMING)`` の
-  knnMatch に切り替える
-* それ以外 (Lowe's ratio test → 反復 RANSAC → polygon 復元 → NMS) は
-  SIFT と同じパイプラインを共有 (helpers は :mod:`._geometry`)
+* Detector: ``cv2.AKAZE_create()``.
+* Descriptor: AKAZE defaults to M-LDB (binary). FLANN KDTree only
+  supports float descriptors, so this engine matches with
+  ``cv2.BFMatcher(cv2.NORM_HAMMING)`` and knnMatch instead.
+* Everything else (Lowe's ratio test, iterative RANSAC, polygon
+  recovery, NMS) shares the SIFT pipeline (helpers in
+  :mod:`._geometry`).
 """
 
 from __future__ import annotations
@@ -37,18 +40,18 @@ from .base import DetectEngine, Detection
 
 
 class AkazeDetectEngine(DetectEngine):
-    """AKAZE + BFMatcher(Hamming) + 反復 RANSAC ベースの :class:`DetectEngine`.
+    """AKAZE + BFMatcher(Hamming) + iterative RANSAC :class:`DetectEngine`.
 
-    AKAZE 特徴点を抽出し、BFMatcher(Hamming) で knn=2 マッチング、
-    Lowe's ratio test で良マッチを絞り、``cv2.findHomography`` で
-    RANSAC を回す。インライアを除外して再度 RANSAC をかけることで
-    同一クエリの複数インスタンスを順次拾い、最後に IoU ベースの NMS
-    で重複候補を抑制する。Scale / rotation は Homography の上左 2x2
-    から復元する。
+    Extracts AKAZE keypoints, matches with ``BFMatcher(NORM_HAMMING)``
+    and knn=2, filters with Lowe's ratio test, and runs
+    ``cv2.findHomography`` under RANSAC. Multiple instances of the
+    same query are recovered by removing inliers and re-running RANSAC;
+    an IoU-based NMS suppresses duplicates at the end. Scale and
+    rotation are recovered from the upper-left 2x2 of the homography.
 
-    VRChat の小型 UI アイコンでは keypoint がほぼ抽出できず実用解に
-    ならない (モジュール docstring 参照)。テクスチャ豊富なクエリ向け
-    の opt-in バックエンドとして扱うこと。
+    Not viable in practice on VRChat's small UI icons (see the module
+    docstring) — keypoints can hardly be extracted. Treat this as an
+    opt-in backend for texture-rich queries.
     """
 
     def __init__(
@@ -64,36 +67,36 @@ class AkazeDetectEngine(DetectEngine):
         """Configure AKAZE/BFMatcher/RANSAC/NMS thresholds.
 
         Args:
-            ratio: Lowe's ratio test の閾値。``m.distance < ratio *
-                n.distance`` を満たす knn=2 マッチのみを残す。
-                デフォルト ``0.75``。
-            min_inliers: Homography が成立したと見なす最小インライア
-                数。次ラウンドの継続条件にもなる。デフォルト ``8``。
-            ransac_reproj_threshold: ``cv2.findHomography`` の
-                ``ransacReprojThreshold``。射影誤差 (px) の閾値。
-                デフォルト ``5.0``。
-            nms_iou: NMS で重複と判定する IoU 閾値。confidence 降順で
-                ソートしたうえで、より高い候補と IoU が ``nms_iou`` を
-                超えるものを除外する。デフォルト ``0.3``。
-            max_results: 出力する :class:`Detection` の最大数。
-                デフォルト ``32``。
-            threshold: AKAZE の応答閾値 (``cv2.AKAZE_create(threshold=...)``)。
-                デフォルト ``0.001`` は OpenCV の標準値。VRChat の小型
-                UI アイコン (18-51 px) では実機 e2e で本値を ``0.0001``
-                まで一桁下げても有効な keypoint が抽出できず 0/10 件
-                だったため、本エンジンはデフォルトに採用していない
-                (Template Engine がデフォルト)。``threshold`` 引数は
-                より大きい / テクスチャ豊富な対象向けの実験フックとして
-                残してある。
+            ratio: Lowe's ratio test threshold. Only knn=2 matches with
+                ``m.distance < ratio * n.distance`` are kept. Defaults
+                to ``0.75``.
+            min_inliers: Minimum inlier count for a homography to be
+                accepted; also gates iteration of the next round.
+                Defaults to ``8``.
+            ransac_reproj_threshold: ``ransacReprojThreshold`` (px) for
+                ``cv2.findHomography``. Defaults to ``5.0``.
+            nms_iou: IoU threshold for NMS suppression. Candidates are
+                sorted by confidence descending; any whose IoU with a
+                higher-confidence candidate exceeds ``nms_iou`` is
+                dropped. Defaults to ``0.3``.
+            max_results: Maximum number of :class:`Detection` to return.
+                Defaults to ``32``.
+            threshold: AKAZE response threshold
+                (``cv2.AKAZE_create(threshold=...)``). Default
+                ``0.001`` is OpenCV's standard. On VRChat's small UI
+                icons (18-51 px) real-device e2e produced 0/10 even
+                after lowering this to ``0.0001``, so this engine is
+                not the default (Template Engine is). The argument
+                remains as an experimental knob for larger /
+                texture-rich targets.
         """
         self._ratio = ratio
         self._min_inliers = min_inliers
         self._ransac_reproj_threshold = ransac_reproj_threshold
         self._nms_iou = nms_iou
         self._max_results = max_results
-        # cv2 自体に型 stub が薄いため Any で受ける。
-        # AKAZE の descriptor デフォルトは M-LDB (バイナリ) なので、
-        # FLANN KDTree ではなく BFMatcher(Hamming) を使う。
+        # AKAZE's default descriptor is M-LDB (binary), so we use
+        # BFMatcher(Hamming) instead of FLANN KDTree.
         self._akaze: Any = cv2.AKAZE_create(threshold=threshold)  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
         self._matcher: Any = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
 
@@ -103,31 +106,31 @@ class AkazeDetectEngine(DetectEngine):
         image: NDArray[np.uint8],
         query: NDArray[np.uint8],
     ) -> Sequence[Detection]:
-        """``image`` 中から ``query`` のインスタンスを検出する。
+        """Detect instances of *query* in *image*.
 
         Args:
-            image: 検索対象の RGB ``uint8`` ndarray (``(H, W, 3)``)。
-            query: 検出したいクエリ画像の RGB ``uint8`` ndarray
-                (``(h, w, 3)``)。
+            image: RGB ``uint8`` ndarray ``(H, W, 3)`` to search.
+            query: RGB ``uint8`` ndarray ``(h, w, 3)`` to look for.
 
         Returns:
-            :class:`Detection` の list。AKAZE 特徴点が片側でも 2 点
-            未満、もしくは Homography が成立しなかった場合は空 list。
+            List of :class:`Detection`. Empty when either side has
+            fewer than 2 AKAZE keypoints, or when no homography passed
+            RANSAC.
         """
-        # AKAZE は grayscale 入力前提
+        # AKAZE operates on grayscale.
         image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         query_gray = cv2.cvtColor(query, cv2.COLOR_RGB2GRAY)
 
         kp_q, des_q = self._akaze.detectAndCompute(query_gray, None)
         kp_i, des_i = self._akaze.detectAndCompute(image_gray, None)
 
-        # knnMatch は両側 >= 2 点必須
+        # knnMatch needs at least 2 keypoints on each side.
         if des_q is None or des_i is None:
             return []
         if len(kp_q) < 2 or len(kp_i) < 2:
             return []
 
-        # knn=2 と Lowe's ratio test で初期 good matches を作る
+        # knn=2 plus Lowe's ratio test produces the initial good matches.
         raw_matches: Any = self._matcher.knnMatch(des_q, des_i, k=2)
         good_matches: list[Any] = []
         for pair in raw_matches:
@@ -140,7 +143,7 @@ class AkazeDetectEngine(DetectEngine):
         h, w = query_gray.shape[:2]
         candidates: list[Detection] = []
 
-        # インライアを除外しながら同一クエリの多重インスタンスを順次拾う
+        # Recover multiple instances by stripping inliers between rounds.
         while len(good_matches) >= self._min_inliers:
             src_pts = np.array(
                 [kp_q[m.queryIdx].pt for m in good_matches],
@@ -182,9 +185,9 @@ class AkazeDetectEngine(DetectEngine):
                 )
             )
 
-            # 同じインスタンスを 2 度拾わないようインライアを除外する
+            # Drop inliers so the same instance is not picked up twice.
             good_matches = [m for m, keep in zip(good_matches, inlier_mask) if not keep]
 
-        # 重複候補を NMS で抑制してから max_results で打ち切り
+        # Suppress duplicates with NMS, then cap at max_results.
         deduped = nms(candidates, self._nms_iou)
         return deduped[: self._max_results]

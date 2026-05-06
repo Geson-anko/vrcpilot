@@ -1,24 +1,24 @@
-"""画像クエリで UI 要素位置を検出する vrcpilot.detect パッケージ。
+"""Image-query detection of UI elements within :mod:`vrcpilot`.
 
 Public surface:
 
-* :class:`DetectEngine` — 差し替え可能なバックエンドの ABC。
-* :class:`Detection` — 検出 1 件の値型 (image-local)。
-* :class:`DetectResult` — screenshot + query + detections のバンドル。
-  デスクトップ絶対座標へ変換するヘルパを提供する。
-* :class:`TemplateDetectEngine` — デフォルトの multi-scale テンプレート
-  マッチ実装。VRChat の小型 UI アイコンで最も検出率が高い。
-* :class:`AkazeDetectEngine` — AKAZE 特徴点ベースの opt-in 実装。
-  小型 UI アイコンでは実用解にならない実測がある (詳細はクラス
-  docstring) ため、テクスチャ豊富な対象向け。
-* :class:`SiftDetectEngine` — SIFT 特徴点ベースの opt-in 実装。
-  AKAZE よりは拾えるが、UI アイコンでは Template に劣る。
-* :func:`detect` — :class:`DetectEngine` を :class:`Screenshot` と
-  クエリ画像に対して実行し結果をまとめる関数。
-* :func:`render` — :class:`DetectResult` を screenshot 上に重ね描き
-  した RGB ndarray を返す。
-* :data:`Polygon` — 4 頂点ポリゴンの型エイリアス。独自エンジンを書く
-  ユーザーが同じ形状で型注釈を付けられるよう再エクスポート。
+* :class:`DetectEngine` — ABC for swappable detection backends.
+* :class:`Detection` — single image-local detection value type.
+* :class:`DetectResult` — bundle of screenshot + query + detections,
+  with helpers to translate to desktop-absolute coordinates.
+* :class:`TemplateDetectEngine` — default multi-scale template-match
+  implementation. Highest detection rate on VRChat's small UI icons.
+* :class:`AkazeDetectEngine` — opt-in AKAZE feature-based engine.
+  Not viable on VRChat's small UI icons in practice (see the class
+  docstring); kept for texture-rich targets.
+* :class:`SiftDetectEngine` — opt-in SIFT feature-based engine. Picks
+  up more than AKAZE but still trails Template on UI icons.
+* :func:`detect` — run a :class:`DetectEngine` against a
+  :class:`Screenshot` plus query image and bundle the result.
+* :func:`render` — return an RGB ndarray with a :class:`DetectResult`
+  drawn over its screenshot.
+* :data:`Polygon` — 4-corner polygon type alias. Re-exported so users
+  writing custom engines can annotate with the same shape.
 """
 
 from __future__ import annotations

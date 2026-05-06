@@ -1,7 +1,9 @@
 """Unit tests for :class:`vrcpilot.detect.template.TemplateDetectEngine`.
 
-合成画像で動作確認する。テンプレートマッチは特徴点不要なので、 SIFT/AKAZE 用のテクスチャ icon は不要。むしろ単純な単色 +
-シンプル な図形のクエリで動かしたほうがリアルな VRChat UI に近い。
+Verified against synthetic images. Template matching does not need
+features, so the textured icons used for SIFT / AKAZE are unnecessary
+here; a flat-coloured background plus a simple-shape query is closer to
+the real VRChat UI.
 """
 
 from __future__ import annotations
@@ -23,8 +25,9 @@ def _make_flat_background(
 ) -> NDArray[np.uint8]:
     """Solid-colour RGB ``uint8`` canvas.
 
-    UI 背景に近い単色キャンバス。テンプレートマッチは背景テクスチャ を必要としないので、検出対象が際立つこの形のほうがテストの真値
-    が読みやすい。
+    A flat-coloured canvas mirrors the real VRChat UI background.
+    Template matching does not need background texture, and isolating
+    the target this way makes ground-truth coordinates easy to read.
     """
     bg = np.empty((height, width, 3), dtype=np.uint8)
     bg[:, :, 0] = color[0]
@@ -36,9 +39,9 @@ def _make_flat_background(
 def _make_simple_icon(size: int = 40) -> NDArray[np.uint8]:
     """Simple high-contrast icon: filled square + circle + cross.
 
-    ピクセルパーフェクトに描かれた単純な図形。VRChat の Launch Pad
-    アイコン (~50px) に近い特性で、特徴点ベースは keypoint をほぼ
-    取れないがテンプレートマッチは安定する。
+    Pixel-perfect simple shapes that mirror VRChat's Launch Pad icons
+    (~50 px). Feature-based engines hardly extract keypoints from
+    targets like these, but template matching is stable.
     """
     icon: NDArray[np.uint8] = np.full((size, size, 3), 255, dtype=np.uint8)
     cv2.rectangle(icon, (4, 4), (size - 4, size - 4), (20, 80, 200), -1)
@@ -139,8 +142,8 @@ class TestTemplateDetectEngineBasic:
 
         best = max(dets, key=lambda d: d.confidence)
         cx, cy = best.center
-        # ピクセルパーフェクトに貼った同一画像なので極めて高精度
-        # で一致するはず。
+        # Pixel-perfect identical paste, so the match should be
+        # extremely precise.
         assert abs(cx - true_cx) < 2
         assert abs(cy - true_cy) < 2
         assert best.confidence > 0.9
@@ -177,10 +180,11 @@ class TestTemplateDetectEngineScale:
         assert len(dets) >= 1
         best = max(dets, key=lambda d: d.confidence)
         cx, cy = best.center
-        # Scale grid 上で最近傍を選ぶので center 誤差は数 px。
+        # Picking the nearest neighbour on the scale grid leaves a
+        # few-pixel centre error.
         assert abs(cx - true_cx) < 5
         assert abs(cy - true_cy) < 5
-        # Scale grid のステップ幅 (~0.1) を考慮した許容。
+        # Tolerance accounts for the scale grid step (~0.1).
         assert abs(best.scale - scale) <= 0.15
 
 
@@ -190,18 +194,20 @@ class TestTemplateDetectEngineRotation:
         icon = _make_simple_icon()
         img, (true_cx, true_cy) = _paste_rotated(bg, icon, 30.0, 250, 200)
 
-        # rotations_deg を明示的に渡したときだけ回転に追従する。
+        # The engine only follows rotation when rotations_deg is
+        # passed explicitly.
         engine = TemplateDetectEngine(rotations_deg=(0.0, 30.0, -30.0))
         dets = engine.detect(img, icon)
 
         assert len(dets) >= 1
         best = max(dets, key=lambda d: d.confidence)
         cx, cy = best.center
-        # 回転貼り付けの bbox 中心と検出 bbox 中心は一致する。
+        # The bbox centre of the rotated paste matches the detected
+        # bbox centre.
         assert abs(cx - true_cx) < 6
         assert abs(cy - true_cy) < 6
-        # rotation はラジアン (CCW 正)。テンプレ側は rot_deg=30 で
-        # マッチするので、Detection.rotation は -30deg = -π/6 に近い。
+        # rotation is radians (CCW positive). The template matches at
+        # rot_deg=30, so Detection.rotation is close to -30deg = -pi/6.
         expected_rad = -math.radians(30.0)
         diff = (best.rotation - expected_rad + math.pi) % (2 * math.pi) - math.pi
         assert abs(diff) < 1e-6
@@ -218,7 +224,7 @@ class TestTemplateDetectEngineMultiInstance:
         dets = engine.detect(img, icon)
 
         assert len(dets) >= 2
-        # それぞれの真値が、いずれかの検出と近接していること。
+        # Each ground-truth centre must land near at least one detection.
         for truth in (c1, c2):
             assert any(
                 abs(d.center[0] - truth[0]) < 4 and abs(d.center[1] - truth[1]) < 4

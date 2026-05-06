@@ -7,11 +7,12 @@ Multiple instances of the same query in one screenshot are recovered
 by an iterative RANSAC loop that masks out inlier keypoints between
 rounds.
 
-Not the default. VRChat の小型 UI アイコンに対する実機 e2e では SIFT
-が 3/10 (AKAZE 0/10、Template 10/10) で、ピクセルパーフェクトに描画
-される UI には :class:`.template.TemplateDetectEngine` が原理的に強い。
-本エンジンは「サムネイル画像、アバターパネル、ワールド画像など模様が
-豊富で SIFT のスケール / 回転不変性が活きる対象」向けに残してある。
+Not the default. In real-device e2e against VRChat's small UI icons,
+SIFT detected 3/10 (AKAZE 0/10, Template 10/10), and
+:class:`.template.TemplateDetectEngine` is fundamentally better suited
+to the pixel-perfect rendering of the UI. This engine is kept for
+texture-rich targets (thumbnails, avatar panels, world images, etc.)
+where SIFT's scale/rotation invariance pays off.
 """
 
 from __future__ import annotations
@@ -28,13 +29,14 @@ from .base import DetectEngine, Detection
 
 
 class SiftDetectEngine(DetectEngine):
-    """SIFT + FLANN + RANSAC Homography ベースの :class:`DetectEngine`.
+    """SIFT + FLANN + RANSAC homography :class:`DetectEngine`.
 
-    SIFT 特徴点を抽出し FLANN (KDTree) でマッチング、Lowe's ratio
-    test で良マッチを絞り、``cv2.findHomography`` で RANSAC を回す。
-    インライアを除外して再度 RANSAC をかけることで同一クエリの複数
-    インスタンスを順次拾い、最後に IoU ベースの NMS で重複候補を
-    抑制する。Scale / rotation は Homography の上左 2x2 から復元する。
+    Extracts SIFT keypoints, matches via FLANN (KDTree), filters with
+    Lowe's ratio test, and runs ``cv2.findHomography`` under RANSAC.
+    Multiple instances of the same query are recovered by removing
+    inliers and re-running RANSAC; an IoU-based NMS suppresses
+    duplicates at the end. Scale and rotation are recovered from the
+    upper-left 2x2 of the homography.
     """
 
     def __init__(
@@ -50,34 +52,35 @@ class SiftDetectEngine(DetectEngine):
         """Configure SIFT/FLANN/RANSAC/NMS thresholds.
 
         Args:
-            ratio: Lowe's ratio test の閾値。``m.distance < ratio *
-                n.distance`` を満たす knn=2 マッチのみを残す。
-                デフォルト ``0.75``。
-            min_inliers: Homography が成立したと見なす最小インライア
-                数。次ラウンドの継続条件にもなる。デフォルト ``8``。
-            ransac_reproj_threshold: ``cv2.findHomography`` の
-                ``ransacReprojThreshold``。射影誤差 (px) の閾値。
-                デフォルト ``5.0``。
-            nms_iou: NMS で重複と判定する IoU 閾値。confidence 降順で
-                ソートしたうえで、より高い候補と IoU が ``nms_iou`` を
-                超えるものを除外する。デフォルト ``0.3``。
-            max_results: 出力する :class:`Detection` の最大数。
-                デフォルト ``32``。
-            sift_n_features: ``cv2.SIFT_create(nfeatures=...)`` に渡す
-                上限。``0`` (デフォルト) は OpenCV の制限なし設定。
+            ratio: Lowe's ratio test threshold. Only knn=2 matches with
+                ``m.distance < ratio * n.distance`` are kept. Defaults
+                to ``0.75``.
+            min_inliers: Minimum inlier count for a homography to be
+                accepted; also gates iteration of the next round.
+                Defaults to ``8``.
+            ransac_reproj_threshold: ``ransacReprojThreshold`` (px) for
+                ``cv2.findHomography``. Defaults to ``5.0``.
+            nms_iou: IoU threshold for NMS suppression. Candidates are
+                sorted by confidence descending; any whose IoU with a
+                higher-confidence candidate exceeds ``nms_iou`` is
+                dropped. Defaults to ``0.3``.
+            max_results: Maximum number of :class:`Detection` to return.
+                Defaults to ``32``.
+            sift_n_features: Forwarded to
+                ``cv2.SIFT_create(nfeatures=...)``. ``0`` (default) is
+                OpenCV's "no limit" setting.
         """
         self._ratio = ratio
         self._min_inliers = min_inliers
         self._ransac_reproj_threshold = ransac_reproj_threshold
         self._nms_iou = nms_iou
         self._max_results = max_results
-        # cv2 自体に型 stub が薄いため Any で受ける
         # cv2 stubs do not expose SIFT_create / FlannBasedMatcher kwargs,
         # so we suppress strict-mode complaints at the call site.
         self._sift: Any = cv2.SIFT_create(  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
             nfeatures=sift_n_features
         )
-        # KDTree-based FLANN: SIFT (float descriptors) と相性が良い
+        # KDTree-based FLANN pairs well with SIFT's float descriptors.
         index_params: dict[str, bool | int | float | str] = {
             "algorithm": 1,
             "trees": 5,
@@ -91,31 +94,31 @@ class SiftDetectEngine(DetectEngine):
         image: NDArray[np.uint8],
         query: NDArray[np.uint8],
     ) -> Sequence[Detection]:
-        """``image`` 中から ``query`` のインスタンスを検出する。
+        """Detect instances of *query* in *image*.
 
         Args:
-            image: 検索対象の RGB ``uint8`` ndarray (``(H, W, 3)``)。
-            query: 検出したいクエリ画像の RGB ``uint8`` ndarray
-                (``(h, w, 3)``)。
+            image: RGB ``uint8`` ndarray ``(H, W, 3)`` to search.
+            query: RGB ``uint8`` ndarray ``(h, w, 3)`` to look for.
 
         Returns:
-            :class:`Detection` の list。SIFT 特徴点が片側でも 2 点
-            未満、もしくは Homography が成立しなかった場合は空 list。
+            List of :class:`Detection`. Empty when either side has
+            fewer than 2 SIFT keypoints, or when no homography passed
+            RANSAC.
         """
-        # SIFT は grayscale 入力前提
+        # SIFT operates on grayscale.
         image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         query_gray = cv2.cvtColor(query, cv2.COLOR_RGB2GRAY)
 
         kp_q, des_q = self._sift.detectAndCompute(query_gray, None)
         kp_i, des_i = self._sift.detectAndCompute(image_gray, None)
 
-        # FLANN knnMatch は両側 >= 2 点必須
+        # FLANN knnMatch needs at least 2 keypoints on each side.
         if des_q is None or des_i is None:
             return []
         if len(kp_q) < 2 or len(kp_i) < 2:
             return []
 
-        # knn=2 と Lowe's ratio test で初期 good matches を作る
+        # knn=2 plus Lowe's ratio test produces the initial good matches.
         raw_matches: Any = self._matcher.knnMatch(des_q, des_i, k=2)
         good_matches: list[Any] = []
         for pair in raw_matches:
@@ -128,7 +131,7 @@ class SiftDetectEngine(DetectEngine):
         h, w = query_gray.shape[:2]
         candidates: list[Detection] = []
 
-        # インライアを除外しながら同一クエリの多重インスタンスを順次拾う
+        # Recover multiple instances by stripping inliers between rounds.
         while len(good_matches) >= self._min_inliers:
             src_pts = np.array(
                 [kp_q[m.queryIdx].pt for m in good_matches],
@@ -170,9 +173,9 @@ class SiftDetectEngine(DetectEngine):
                 )
             )
 
-            # 同じインスタンスを 2 度拾わないようインライアを除外する
+            # Drop inliers so the same instance is not picked up twice.
             good_matches = [m for m, keep in zip(good_matches, inlier_mask) if not keep]
 
-        # 重複候補を NMS で抑制してから max_results で打ち切り
+        # Suppress duplicates with NMS, then cap at max_results.
         deduped = nms(candidates, self._nms_iou)
         return deduped[: self._max_results]

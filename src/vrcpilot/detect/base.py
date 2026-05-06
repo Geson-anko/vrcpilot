@@ -23,11 +23,11 @@ class Detection:
     """Single detection in image-local coordinates.
 
     Attributes:
-        polygon: 4 頂点 (TL, TR, BR, BL)。Homography 等で射影された
-            一般四角形を許容する。
-        confidence: 0.0–1.0 の信頼度（マッチングのインライア比率等）。
-        scale: クエリ画像基準のスケール（1.0 = 等倍）。
-        rotation: ラジアン (反時計回り正)。
+        polygon: 4 corners (TL, TR, BR, BL). Arbitrary quadrilaterals
+            (e.g. projected through a homography) are allowed.
+        confidence: 0.0-1.0 score (typically a match-inlier ratio).
+        scale: Scale relative to the query image (1.0 = same size).
+        rotation: Radians (counter-clockwise positive).
     """
 
     polygon: Polygon
@@ -74,9 +74,10 @@ class Detection:
 
 
 class DetectEngine(ABC):
-    """差し替え可能な検出バックエンドの抽象基底。
+    """Abstract base for swappable detection backends.
 
-    ユーザーは自前のサブクラスを定義することで SIFT 以外のエンジン (ORB、テンプレートマッチ、商用 API 等) を差し込める。
+    Users plug in alternative engines (ORB, template match, a hosted
+    API, etc.) by subclassing and implementing :meth:`detect`.
     """
 
     @abstractmethod
@@ -85,14 +86,14 @@ class DetectEngine(ABC):
         image: NDArray[np.uint8],
         query: NDArray[np.uint8],
     ) -> Sequence[Detection]:
-        """``(H, W, 3)`` uint8 RGB の screenshot から *query* を検出する。
+        """Detect instances of *query* in ``(H, W, 3)`` uint8 RGB *image*.
 
         Args:
-            image: 検索対象の RGB 画像。``np.uint8`` dtype 必須。
-            query: 検出したいクエリ画像。同じく ``(h, w, 3)`` uint8 RGB。
+            image: RGB image to search. Must be ``np.uint8`` dtype.
+            query: Query image to look for. ``(h, w, 3)`` uint8 RGB.
 
         Returns:
-            検出された :class:`Detection` の列。座標はすべて image-local
-            (``image`` 左上原点)。デスクトップ座標への変換は呼び出し側
-            の責務。
+            Detected :class:`Detection` sequence. Coordinates are
+            image-local (origin = top-left of *image*); translation to
+            desktop coordinates is the caller's responsibility.
         """

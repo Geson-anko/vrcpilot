@@ -137,7 +137,7 @@ class TestAkazeDetectEngineBasic:
 
         best = max(dets, key=lambda d: d.confidence)
         cx, cy = best.center
-        # AKAZE は SIFT より keypoint 局在化が粗めなため ±6px に緩める。
+        # AKAZE localizes keypoints more coarsely than SIFT, so ±6 px.
         assert abs(cx - true_cx) < 6
         assert abs(cy - true_cy) < 6
         assert best.confidence > 0.5

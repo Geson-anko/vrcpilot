@@ -1,22 +1,23 @@
 """Multi-scale template-matching detection engine.
 
-VRChat の Launch Pad 等の UI アイコンはピクセルパーフェクトに描画
-されており、18-50 px の小さなクエリでは特徴点ベース (SIFT / AKAZE /
-ORB) が満足な keypoint を出せない。実機 e2e でも SIFT が 10 件中 3
-件、AKAZE が 0 件しか検出できなかったため、本モジュールでは
-``cv2.matchTemplate`` を scale grid 上で sweep し、必要に応じて
-rotation も列挙するシンプルな実装をデフォルトに据える。
+VRChat UI icons such as Launch Pad entries are rendered
+pixel-perfect, and at 18-50 px feature-based detectors (SIFT / AKAZE
+/ ORB) cannot extract enough keypoints. In real-device e2e SIFT
+recovered only 3/10 and AKAZE 0/10, so this module makes
+``cv2.matchTemplate`` swept across a scale grid (with optional
+rotation enumeration) the default detector.
 
-差分 (vs. SIFT / AKAZE):
+Differences vs. SIFT / AKAZE:
 
-* 抽出器なし — クエリ画像そのものを各 scale (× rotation) に変換し
-  ``cv2.matchTemplate(..., cv2.TM_CCOEFF_NORMED)`` で score map を
-  作り、``threshold`` 以上の位置を候補化する。
-* polygon は :func:`._geometry.project_query_corners` を使わず、
-  scale + rotation を持つ axis-aligned 矩形を 4 隅に展開して直接
-  写像する (Homography は介在しない)。
-* それ以外 (NMS による重複抑制、``max_results`` での打ち切り) は
-  SIFT / AKAZE と同じ helpers を共有する。
+* No feature extractor — the query image itself is transformed at
+  each ``(scale, rotation)`` and ``cv2.matchTemplate(...,
+  cv2.TM_CCOEFF_NORMED)`` produces a score map; positions at or above
+  ``threshold`` become candidates.
+* Polygons are not derived from a homography. The axis-aligned bbox
+  carrying the chosen ``scale`` and ``rotation`` is mapped directly
+  to its 4 corners.
+* Everything else (NMS deduplication, ``max_results`` cap) shares the
+  helpers used by SIFT / AKAZE.
 """
 
 from __future__ import annotations
@@ -36,13 +37,14 @@ from .base import DetectEngine, Detection
 
 
 class TemplateDetectEngine(DetectEngine):
-    """Multi-scale (+ optional rotation) テンプレートマッチ実装。
+    """Multi-scale (+ optional rotation) template-matching engine.
 
-    各 ``(scale, rotation)`` ペアについてクエリを変換した上で
-    ``cv2.matchTemplate`` で score map を作り、``threshold`` 以上の
-    位置を ``Detection`` として収集する。VRChat の UI アイコンの
-    ようにピクセルレベルで安定描画される対象に対しては SIFT / AKAZE
-    より検出率が高い。最後に IoU ベースの NMS で重複候補を抑制する。
+    For each ``(scale, rotation)`` pair the query is transformed,
+    ``cv2.matchTemplate`` produces a score map, and any position at or
+    above ``threshold`` becomes a :class:`Detection`. Detection rate
+    is higher than SIFT / AKAZE on pixel-stable targets such as
+    VRChat's UI icons. An IoU-based NMS suppresses duplicates at the
+    end.
     """
 
     def __init__(
@@ -70,29 +72,32 @@ class TemplateDetectEngine(DetectEngine):
         """Configure scale grid / rotation list / threshold / NMS.
 
         Args:
-            threshold: ``cv2.TM_CCOEFF_NORMED`` の score 閾値。``[-1,
-                1]`` が理論域。VRChat の Launch Pad アイコン (44-105 px
-                クエリを画面上 ~35 px に縮小して描画) で実機 e2e を
-                スイープした結果、``0.85`` で 10/10 検出かつ false
-                positive がほぼ消える sweet spot だったので採用。
-                ``0.9`` まで上げると誤検出は 0 になる代わり弱マッチ
-                (confidence 0.85 付近のもの) が落ちるトレードオフ。
-            scales: 試行するスケール係数の列。各値で
-                ``cv2.resize(query, (int(w*scale), int(h*scale)))``
-                を作って matchTemplate にかける。デフォルトは
-                ``0.25`` から ``1.5`` までを 12 段でカバーする。
-                Launch Pad 上の icon は 100 px クエリに対して画面上
-                35 px 程度 (scale ≈ 0.35) で表示されるため lower
-                bound は 0.25 まで広げてある。
-            rotations_deg: 試行する回転角 (度) の列。``0.0`` のみ
-                指定された場合、回転変換そのものを skip して高速に
-                処理する (VRChat UI のようにそもそも回転しない用途
-                を想定)。デフォルト ``(0.0,)``。
-            nms_iou: NMS で重複と判定する IoU 閾値。confidence 降順
-                でソートしたうえで、より高い候補と IoU が ``nms_iou``
-                を超えるものを除外する。デフォルト ``0.3``。
-            max_results: 出力する :class:`Detection` の最大数。
-                デフォルト ``32``。
+            threshold: ``cv2.TM_CCOEFF_NORMED`` score threshold; the
+                theoretical range is ``[-1, 1]``. Real-device e2e on
+                Launch Pad icons (44-105 px queries rendered at ~35 px
+                on screen) showed ``0.85`` to be the sweet spot — 10/10
+                detections with false positives essentially gone.
+                Raising it to ``0.9`` eliminates false positives at
+                the cost of dropping weak matches (around 0.85
+                confidence).
+            scales: Scale factors to sweep. For each value the query
+                is resized via ``cv2.resize(query, (int(w*scale),
+                int(h*scale)))`` before ``matchTemplate`` runs.
+                Default covers ``0.25`` to ``1.5`` in 12 steps. Launch
+                Pad icons render at ~35 px from a 100 px query
+                (scale ~0.35), so the lower bound is widened to
+                ``0.25``.
+            rotations_deg: Rotation angles (degrees) to enumerate.
+                When only ``0.0`` is provided, the rotation step is
+                skipped entirely for speed (intended for use cases
+                like VRChat UI where rotation is never expected).
+                Defaults to ``(0.0,)``.
+            nms_iou: IoU threshold for NMS suppression. Candidates are
+                sorted by confidence descending; any whose IoU with a
+                higher-confidence candidate exceeds ``nms_iou`` is
+                dropped. Defaults to ``0.3``.
+            max_results: Maximum number of :class:`Detection` to return.
+                Defaults to ``32``.
         """
         self._threshold = threshold
         self._scales = tuple(scales)
@@ -106,20 +111,19 @@ class TemplateDetectEngine(DetectEngine):
         image: NDArray[np.uint8],
         query: NDArray[np.uint8],
     ) -> Sequence[Detection]:
-        """``image`` 中から ``query`` のインスタンスを検出する。
+        """Detect instances of *query* in *image*.
 
         Args:
-            image: 検索対象の RGB ``uint8`` ndarray (``(H, W, 3)``)。
-            query: 検出したいクエリ画像の RGB ``uint8`` ndarray
-                (``(h, w, 3)``)。
+            image: RGB ``uint8`` ndarray ``(H, W, 3)`` to search.
+            query: RGB ``uint8`` ndarray ``(h, w, 3)`` to look for.
 
         Returns:
-            :class:`Detection` の list。閾値超過候補が無い、または
-            すべての (scale, rotation) でクエリが image より大きく
-            なる場合は空 list。
+            List of :class:`Detection`. Empty when no candidate
+            exceeds the threshold, or when the query is larger than
+            the image at every ``(scale, rotation)``.
         """
-        # matchTemplate は単チャネル前提。RGB のまま渡すと結果が
-        # 不定なので grayscale 化する。
+        # matchTemplate expects a single channel; passing RGB directly
+        # yields undefined behaviour, so convert to grayscale.
         image_gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         query_gray = cv2.cvtColor(query, cv2.COLOR_RGB2GRAY)
 
@@ -136,11 +140,11 @@ class TemplateDetectEngine(DetectEngine):
                 if transformed is None:
                     continue
                 t_h, t_w = transformed.shape[:2]
-                # matchTemplate は template <= image を要求する
+                # matchTemplate requires template <= image.
                 if t_h > img_h or t_w > img_w:
                     continue
 
-                # TM_CCOEFF_NORMED は [-1, 1] (1 が完全一致)
+                # TM_CCOEFF_NORMED yields [-1, 1] (1 = perfect match).
                 score_map: Any = cv2.matchTemplate(
                     image_gray, transformed, cv2.TM_CCOEFF_NORMED
                 )
@@ -166,7 +170,7 @@ class TemplateDetectEngine(DetectEngine):
                         )
                     )
 
-        # 重複候補を NMS で抑制してから max_results で打ち切り
+        # Suppress duplicates with NMS, then cap at max_results.
         deduped = nms(candidates, self._nms_iou)
         return deduped[: self._max_results]
 
@@ -185,12 +189,12 @@ def _resize_query(
     h, w = query_gray.shape[:2]
     new_w = max(1, int(round(w * scale)))
     new_h = max(1, int(round(h * scale)))
-    # 縮小は INTER_AREA、拡大は INTER_CUBIC が一般的なベストプラ
-    # クティス (cv2 ドキュメント参照)。等倍は INTER_AREA で問題なし。
+    # Best practice per cv2 docs: INTER_AREA when shrinking,
+    # INTER_CUBIC when growing. Identity scale is fine with INTER_AREA.
     interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
     resized: Any = cv2.resize(query_gray, (new_w, new_h), interpolation=interp)
     if resized.shape[0] < 2 or resized.shape[1] < 2:
-        # matchTemplate は 1px template を実用上扱えない。安全側に倒す。
+        # matchTemplate cannot meaningfully handle a 1px template.
         return None
     return resized
 
@@ -201,10 +205,10 @@ def _rotate_query(
 ) -> NDArray[Any] | None:
     """Rotate ``query_gray`` around its centre by ``rotation_deg``.
 
-    ``rotation_deg == 0`` のときは回転変換を **skip** して入力を
-    そのまま返す (高速化)。回転後のキャンバスは回転後の bbox に
-    リサイズされ、外側は 0 padding。型が ``NDArray[Any]`` で広く
-    なっている理由は :func:`_resize_query` と同じ。
+    When ``rotation_deg == 0`` the rotation step is **skipped**
+    entirely and the input is returned as-is (fast path). The output
+    canvas is sized to the rotated bbox with 0-padding outside. Loose
+    typing for the same reason as :func:`_resize_query`.
     """
     if rotation_deg == 0.0:
         return query_gray
