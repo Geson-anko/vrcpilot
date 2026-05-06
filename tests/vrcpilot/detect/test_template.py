@@ -29,11 +29,7 @@ def _make_flat_background(
     Template matching does not need background texture, and isolating
     the target this way makes ground-truth coordinates easy to read.
     """
-    bg = np.empty((height, width, 3), dtype=np.uint8)
-    bg[:, :, 0] = color[0]
-    bg[:, :, 1] = color[1]
-    bg[:, :, 2] = color[2]
-    return bg
+    return np.full((height, width, 3), color, dtype=np.uint8)
 
 
 def _make_simple_icon(size: int = 40) -> NDArray[np.uint8]:
