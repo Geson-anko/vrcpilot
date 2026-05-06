@@ -65,6 +65,7 @@ def register(subparsers: SubParsersAction) -> None:
         help="Detect a query image inside the running VRChat window.",
     )
     query_action = parser.add_argument(
+        "-q",
         "--query",
         type=Path,
         required=True,

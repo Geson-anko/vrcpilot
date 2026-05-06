@@ -40,6 +40,7 @@ def add_screenshot_input_arg(parser: argparse.ArgumentParser) -> None:
     ``.yaml`` / ``.yml`` files plus directories.
     """
     action = parser.add_argument(
+        "-s",
         "--screenshot",
         type=Path,
         default=None,
