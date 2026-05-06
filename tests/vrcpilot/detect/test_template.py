@@ -47,6 +47,29 @@ def _make_simple_icon(size: int = 40) -> NDArray[np.uint8]:
     return icon
 
 
+def _blit_bounded(
+    dst: NDArray[np.uint8],
+    src: NDArray[np.uint8],
+    x: int,
+    y: int,
+) -> None:
+    """Copy ``src`` into ``dst`` at ``(x, y)``, clipped to ``dst`` bounds.
+
+    In-place mutation of ``dst``. Out-of-bounds portions of ``src`` are
+    silently dropped, matching how a paste at a partly-off-canvas
+    coordinate is expected to behave.
+    """
+    dh, dw = dst.shape[:2]
+    sh, sw = src.shape[:2]
+    x0 = max(0, x)
+    y0 = max(0, y)
+    x1 = min(dw, x + sw)
+    y1 = min(dh, y + sh)
+    if x0 >= x1 or y0 >= y1:
+        return
+    dst[y0:y1, x0:x1] = src[y0 - y : y1 - y, x0 - x : x1 - x]
+
+
 def _paste_at(
     bg: NDArray[np.uint8],
     icon: NDArray[np.uint8],
@@ -66,21 +89,8 @@ def _paste_at(
     new_h = max(1, int(round(h * scale)))
     interp = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_CUBIC
     resized = cv2.resize(icon, (new_w, new_h), interpolation=interp)
-
-    bg_h, bg_w = out.shape[:2]
-    x0 = max(0, x)
-    y0 = max(0, y)
-    x1 = min(bg_w, x + new_w)
-    y1 = min(bg_h, y + new_h)
-    if x0 < x1 and y0 < y1:
-        src_x0 = x0 - x
-        src_y0 = y0 - y
-        src_x1 = src_x0 + (x1 - x0)
-        src_y1 = src_y0 + (y1 - y0)
-        out[y0:y1, x0:x1] = resized[src_y0:src_y1, src_x0:src_x1]
-    cx = x + new_w / 2.0
-    cy = y + new_h / 2.0
-    return out, (cx, cy)
+    _blit_bounded(out, resized, x, y)
+    return out, (x + new_w / 2.0, y + new_h / 2.0)
 
 
 def _paste_rotated(
@@ -106,21 +116,8 @@ def _paste_rotated(
     rot_mat[0, 2] += new_w / 2 - center[0]
     rot_mat[1, 2] += new_h / 2 - center[1]
     warped = cv2.warpAffine(icon, rot_mat, (new_w, new_h), borderValue=(40, 40, 40))
-
-    bg_h, bg_w = out.shape[:2]
-    x0 = max(0, x)
-    y0 = max(0, y)
-    x1 = min(bg_w, x + new_w)
-    y1 = min(bg_h, y + new_h)
-    if x0 < x1 and y0 < y1:
-        src_x0 = x0 - x
-        src_y0 = y0 - y
-        src_x1 = src_x0 + (x1 - x0)
-        src_y1 = src_y0 + (y1 - y0)
-        out[y0:y1, x0:x1] = warped[src_y0:src_y1, src_x0:src_x1]
-    cx = x + new_w / 2.0
-    cy = y + new_h / 2.0
-    return out, (cx, cy)
+    _blit_bounded(out, warped, x, y)
+    return out, (x + new_w / 2.0, y + new_h / 2.0)
 
 
 class TestTemplateDetectEngineBasic:
