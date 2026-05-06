@@ -20,6 +20,13 @@ from vrcpilot.controls import (
     keyboard,
     mouse,
 )
+from vrcpilot.detect import (
+    DetectEngine,
+    Detection,
+    DetectResult,
+    TemplateDetectEngine,
+    detect,
+)
 from vrcpilot.ocr import OCREngine, OCRResult, OCRWord, RapidOCREngine, recognize
 from vrcpilot.process import (
     VRCHAT_PROCESS_NAME,
@@ -46,6 +53,10 @@ __all__ = [
     "Capture",
     "CaptureLoop",
     "clipboard",
+    "detect",
+    "DetectEngine",
+    "DetectResult",
+    "Detection",
     "ensure_target",
     "find_pid",
     "focus",
@@ -64,6 +75,7 @@ __all__ = [
     "Screenshot",
     "SteamNotFoundError",
     "take_screenshot",
+    "TemplateDetectEngine",
     "terminate",
     "unfocus",
     "VRChatNotFocusedError",
