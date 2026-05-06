@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -11,7 +10,7 @@ import pytest
 import yaml
 from pytest_mock import MockerFixture
 
-from tests.fakes import write_screenshot_payload
+from tests.fakes import patch_stdin_with_screenshot, write_screenshot_payload
 from vrcpilot.cli import main
 from vrcpilot.cli.ocr import _VIZ_DEFAULT, _resolve_viz_path
 from vrcpilot.ocr import OCRResult, OCRWord
@@ -65,17 +64,14 @@ def patched_recognize(mocker: MockerFixture, tmp_path: Path) -> OCRResult:
 
     Since commit 10 removed the live-capture fallback,
     :func:`vrcpilot.cli._common.resolve_screenshot` only honours
-    ``--screenshot`` or piped stdin. This fixture takes the stdin path:
-    it builds a real screenshot YAML (PNG written under ``tmp_path``)
-    and patches ``vrcpilot.cli._common.sys.stdin`` with a
-    :class:`io.StringIO` so ``ocr`` reads the YAML on demand. ``recognize``
-    is patched in the ocr module where it is imported so the test never
-    touches the real engine.
+    ``--screenshot`` or piped stdin. This fixture takes the stdin path
+    via :func:`patch_stdin_with_screenshot` so ``ocr`` reads the YAML on
+    demand. ``recognize`` is patched in the ocr module where it is
+    imported so the test never touches the real engine.
     """
     shot = _make_screenshot()
     result = OCRResult(screenshot=shot, words=(_make_word(),))
-    _, yaml_text = write_screenshot_payload(tmp_path)
-    mocker.patch("vrcpilot.cli._common.sys.stdin", new=io.StringIO(yaml_text))
+    patch_stdin_with_screenshot(mocker, tmp_path)
     mocker.patch("vrcpilot.cli.ocr.recognize", return_value=result)
     return result
 
@@ -345,11 +341,11 @@ class TestOCRScreenshotInputIntegration:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ):
-        _, yaml_text = write_screenshot_payload(tmp_path)
-        # StringIO.isatty() returns False, which is exactly the
-        # piped-stdin signal resolve_screenshot looks for; the autouse
+        # ``patch_stdin_with_screenshot`` swaps sys.stdin for a
+        # StringIO whose ``isatty()`` returns False — exactly the
+        # piped-stdin signal resolve_screenshot looks for. The autouse
         # fixture's True override is shadowed by this fresh patch.
-        mocker.patch("vrcpilot.cli._common.sys.stdin", new=io.StringIO(yaml_text))
+        patch_stdin_with_screenshot(mocker, tmp_path)
         result = _make_result()
         mocker.patch("vrcpilot.cli.ocr.recognize", return_value=result)
 
@@ -418,5 +414,6 @@ class TestOCRScreenshotInputRequirement:
         assert captured.out == ""
         assert "vrcpilot: no screenshot provided" in captured.err
         assert "--screenshot" in captured.err
-        assert "stdin" in captured.err.lower() or "pipe" in captured.err.lower()
+        assert "stdin" in captured.err
+        assert "pipe" in captured.err
         recognize_spy.assert_not_called()

@@ -87,9 +87,9 @@ class Screenshot:
         Raises:
             FileNotFoundError: ``png_path`` is supplied and its parent
                 directory does not exist (propagated from
-                :class:`PIL.Image.Image.save`). The inline path only
-                surfaces the standard :class:`PIL.Image.Image.save`
-                failures, since it writes to an in-memory buffer.
+                :class:`PIL.Image.Image.save`). The inline path writes
+                to an in-memory buffer and effectively never raises in
+                normal use.
 
         Returns:
             YAML text that :meth:`load` round-trips back into an

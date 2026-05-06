@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import sys
 from collections.abc import Iterator
 from datetime import datetime, timezone
@@ -17,7 +16,7 @@ from numpy.typing import NDArray
 from pytest_mock import MockerFixture
 
 import vrcpilot.detect  # noqa: F401  ensures submodule is registered
-from tests.fakes import write_screenshot_payload
+from tests.fakes import patch_stdin_with_screenshot, write_screenshot_payload
 from tests.fakes.detect import FakeDetectEngine
 from vrcpilot.cli import main
 from vrcpilot.cli.detect import _VIZ_DEFAULT, _resolve_viz_path
@@ -90,12 +89,10 @@ def patched_detect(mocker: MockerFixture, tmp_path: Path) -> Iterator[FakeDetect
 
     Since commit 10 removed the live-capture fallback,
     :func:`vrcpilot.cli._common.resolve_screenshot` only honours
-    ``--screenshot`` or piped stdin. This fixture takes the stdin path:
-    it builds a real screenshot YAML (PNG written under ``tmp_path``)
-    and patches ``vrcpilot.cli._common.sys.stdin`` with a
-    :class:`io.StringIO` so ``detect`` reads the YAML on demand. A
-    :class:`FakeDetectEngine` with a single high-confidence detection is
-    injected into the cached default engine slot of
+    ``--screenshot`` or piped stdin. This fixture takes the stdin path
+    via :func:`patch_stdin_with_screenshot` so ``detect`` reads the YAML
+    on demand. A :class:`FakeDetectEngine` with a single high-confidence
+    detection is injected into the cached default engine slot of
     ``vrcpilot.detect.detect`` so the CLI's ``detect()`` call uses it
     without constructing a real TemplateDetectEngine.
     """
@@ -103,7 +100,8 @@ def patched_detect(mocker: MockerFixture, tmp_path: Path) -> Iterator[FakeDetect
     # Match the defaults assumed by tests in this module:
     # x=100, y=50, width=320, height=200, monitor_index=1, fixed
     # captured_at so ``test_captured_at_is_isoformat`` can compare.
-    _, yaml_text = write_screenshot_payload(
+    patch_stdin_with_screenshot(
+        mocker,
         tmp_path,
         width=320,
         height=200,
@@ -112,7 +110,6 @@ def patched_detect(mocker: MockerFixture, tmp_path: Path) -> Iterator[FakeDetect
         monitor_index=1,
         captured_at=datetime(2026, 5, 5, 12, 34, 56, 789012, tzinfo=timezone.utc),
     )
-    mocker.patch("vrcpilot.cli._common.sys.stdin", new=io.StringIO(yaml_text))
     engine = FakeDetectEngine([detection])
     _detect_module._default_engine = engine
     yield engine
@@ -295,8 +292,7 @@ class TestDetectCommandTopK:
         query_png: Path,
         tmp_path: Path,
     ):
-        _, yaml_text = write_screenshot_payload(tmp_path)
-        mocker.patch("vrcpilot.cli._common.sys.stdin", new=io.StringIO(yaml_text))
+        patch_stdin_with_screenshot(mocker, tmp_path)
         # Three detections in arbitrary confidence order.
         det_a = _make_detection(confidence=0.50)
         det_b = _make_detection(confidence=0.95)
@@ -321,8 +317,7 @@ class TestDetectCommandTopK:
         query_png: Path,
         tmp_path: Path,
     ):
-        _, yaml_text = write_screenshot_payload(tmp_path)
-        mocker.patch("vrcpilot.cli._common.sys.stdin", new=io.StringIO(yaml_text))
+        patch_stdin_with_screenshot(mocker, tmp_path)
         dets = [
             _make_detection(confidence=0.50),
             _make_detection(confidence=0.95),
@@ -408,8 +403,7 @@ class TestDetectCommandFailure:
         capsys: pytest.CaptureFixture[str],
         tmp_path: Path,
     ):
-        _, yaml_text = write_screenshot_payload(tmp_path)
-        mocker.patch("vrcpilot.cli._common.sys.stdin", new=io.StringIO(yaml_text))
+        patch_stdin_with_screenshot(mocker, tmp_path)
         missing = tmp_path / "does_not_exist.png"
 
         exit_code = main(["detect", "--query", str(missing)])
@@ -429,8 +423,7 @@ class TestDetectCommandEngineConstruction:
         query_png: Path,
         tmp_path: Path,
     ):
-        _, yaml_text = write_screenshot_payload(tmp_path)
-        mocker.patch("vrcpilot.cli._common.sys.stdin", new=io.StringIO(yaml_text))
+        patch_stdin_with_screenshot(mocker, tmp_path)
         engine_instance = FakeDetectEngine([])
         template_factory = mocker.patch(
             "vrcpilot.cli.detect.TemplateDetectEngine",
@@ -461,8 +454,7 @@ class TestDetectCommandEngineConstruction:
         query_png: Path,
         tmp_path: Path,
     ):
-        _, yaml_text = write_screenshot_payload(tmp_path)
-        mocker.patch("vrcpilot.cli._common.sys.stdin", new=io.StringIO(yaml_text))
+        patch_stdin_with_screenshot(mocker, tmp_path)
         template_factory = mocker.patch("vrcpilot.cli.detect.TemplateDetectEngine")
         # Provide a default cached engine so detect() does not lazy-build.
         engine_instance = FakeDetectEngine([])
@@ -528,11 +520,11 @@ class TestDetectScreenshotInputIntegration:
         capsys: pytest.CaptureFixture[str],
         query_png: Path,
     ):
-        _, yaml_text = write_screenshot_payload(tmp_path)
-        # StringIO.isatty() returns False, which is exactly the
-        # piped-stdin signal resolve_screenshot looks for; the autouse
+        # ``patch_stdin_with_screenshot`` swaps sys.stdin for a
+        # StringIO whose ``isatty()`` returns False — exactly the
+        # piped-stdin signal resolve_screenshot looks for. The autouse
         # fixture's True override is shadowed by this fresh patch.
-        mocker.patch("vrcpilot.cli._common.sys.stdin", new=io.StringIO(yaml_text))
+        patch_stdin_with_screenshot(mocker, tmp_path)
         engine = FakeDetectEngine([_make_detection()])
         _detect_module._default_engine = engine
 
@@ -624,5 +616,6 @@ class TestDetectScreenshotInputRequirement:
         assert captured.out == ""
         assert "vrcpilot: no screenshot provided" in captured.err
         assert "--screenshot" in captured.err
-        assert "stdin" in captured.err.lower() or "pipe" in captured.err.lower()
+        assert "stdin" in captured.err
+        assert "pipe" in captured.err
         detect_spy.assert_not_called()

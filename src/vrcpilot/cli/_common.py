@@ -65,6 +65,10 @@ def resolve_screenshot(args: argparse.Namespace) -> Screenshot | None:
     2. Piped stdin (``not sys.stdin.isatty()``) — read the YAML text from
        stdin and decode via :meth:`Screenshot.load`.
 
+    When ``--screenshot`` is given, stdin is *not* read even if it is
+    piped (the flag takes precedence and the stdin payload is silently
+    ignored). Pass exactly one source per invocation to avoid surprises.
+
     If neither is available (no flag and stdin is a tty), an explanatory
     message is written to stderr and ``None`` is returned. Callers
     typically map ``None`` to ``return 1``.
