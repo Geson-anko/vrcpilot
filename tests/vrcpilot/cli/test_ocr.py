@@ -337,6 +337,9 @@ class TestOCRScreenshotInputIntegration:
         tmp_path: Path,
         capsys: pytest.CaptureFixture[str],
     ):
+        # ``write_screenshot_payload`` intentionally returns the YAML
+        # text without writing the file, so flag-based tests must dump
+        # it to disk themselves (stdin tests use the text directly).
         yaml_path, yaml_text = write_screenshot_payload(tmp_path)
         yaml_path.write_text(yaml_text)
         take = mocker.patch("vrcpilot.cli._common.take_screenshot")
@@ -377,7 +380,7 @@ class TestOCRScreenshotInputIntegration:
         assert "window" in loaded
         assert "words" in loaded
 
-    def test_invalid_screenshot_yaml_exits_1(
+    def test_missing_screenshot_file_exits_1(
         self,
         mocker: MockerFixture,
         capsys: pytest.CaptureFixture[str],
@@ -390,4 +393,25 @@ class TestOCRScreenshotInputIntegration:
         captured = capsys.readouterr()
         assert captured.out == ""
         assert "vrcpilot: --screenshot file not found:" in captured.err
+        recognize_spy.assert_not_called()
+
+    def test_malformed_screenshot_yaml_exits_1(
+        self,
+        mocker: MockerFixture,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        # Write something that parses as YAML but is not a mapping, so
+        # ``Screenshot.load`` raises ValueError and the helper turns it
+        # into a single ``vrcpilot:`` stderr line.
+        broken = tmp_path / "broken.yaml"
+        broken.write_text("- not\n- a\n- mapping\n")
+        recognize_spy = mocker.patch("vrcpilot.cli.ocr.recognize")
+
+        exit_code = main(["ocr", "--screenshot", str(broken)])
+
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert "vrcpilot: screenshot YAML must be a mapping" in captured.err
         recognize_spy.assert_not_called()
