@@ -47,15 +47,13 @@ class Detection:
         """Axis-aligned bounding box ``(x, y, width, height)`` in pixels."""
         xs = [p[0] for p in self.polygon]
         ys = [p[1] for p in self.polygon]
-        x_min = min(xs)
-        x_max = max(xs)
-        y_min = min(ys)
-        y_max = max(ys)
+        x_min, x_max = min(xs), max(xs)
+        y_min, y_max = min(ys), max(ys)
         return (
-            int(round(x_min)),
-            int(round(y_min)),
-            int(round(x_max - x_min)),
-            int(round(y_max - y_min)),
+            round(x_min),
+            round(y_min),
+            round(x_max - x_min),
+            round(y_max - y_min),
         )
 
     @property
