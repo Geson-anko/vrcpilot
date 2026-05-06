@@ -156,7 +156,6 @@ class TemplateDetectEngine(DetectEngine):
                         y=int(y_int),
                         width=t_w,
                         height=t_h,
-                        rotation_deg=rot_deg,
                     )
                     candidates.append(
                         Detection(
@@ -231,15 +230,16 @@ def _build_polygon(
     y: int,
     width: int,
     height: int,
-    rotation_deg: float,
 ) -> Polygon:
     """Build the 4-corner polygon of a matched template instance.
 
     The polygon orientation matches :data:`vrcpilot.types.Polygon`
-    (TL, TR, BR, BL). When ``rotation_deg == 0`` the corners are the
-    axis-aligned bbox of the matched region; otherwise the corners
-    are the bbox of the *rotated* template at ``(x, y)`` (this matches
-    how the template was prepared by :func:`_rotate_query`).
+    (TL, TR, BR, BL). The corners are the axis-aligned bbox of the
+    *rotated* template at ``(x, y)``: ``cv2.matchTemplate`` returns
+    integer top-left coordinates of the rotated template's bounding
+    box (the canvas built by :func:`_rotate_query`), so the bbox of
+    that canvas — not of the original unrotated query — is what
+    aligns with the score-map peak.
     """
     return (
         (float(x), float(y)),
