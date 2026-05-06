@@ -7,7 +7,7 @@ Public surface:
 * :class:`OCRResult` — screenshot + word tuple, with helpers that
   shift coordinates to desktop-absolute space.
 * :class:`RapidOCREngine` — default rapidocr-backed engine.
-* :func:`recognize` — runs an :class:`OCREngine` on a captured
+* :func:`ocr` — runs an :class:`OCREngine` on a captured
   :class:`Screenshot` and bundles the words with it.
 * :func:`render` — draws an :class:`OCRResult` onto an ndarray
   suitable for ``PIL.Image.fromarray``.
@@ -15,13 +15,12 @@ Public surface:
   module; re-exported here so users implementing their own
   :class:`OCREngine` can annotate against the same shape.
 
-Note on the ``recognize`` name: the helper function and the submodule
-that defines it share the name. ``from vrcpilot.ocr import recognize``
-returns the function (CPython resolves it via attribute lookup on the
-package, where the explicit re-export wins over the auto-bound
-submodule). Tests that need to monkey-patch internals on the
-submodule should reach it via ``sys.modules['vrcpilot.ocr.recognize']``
-to bypass attribute resolution.
+Note on the ``ocr`` name: the helper function and the package share
+the name. ``from vrcpilot.ocr import ocr`` returns the function (the
+explicit re-export below wins over the auto-bound submodule). Tests
+that need to monkey-patch internals on the ``recognize`` submodule
+should reach it via ``sys.modules['vrcpilot.ocr.recognize']`` to
+bypass attribute resolution.
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ from vrcpilot.types import Polygon
 
 from .base import OCREngine, OCRWord
 from .rapidocr import RapidOCREngine
-from .recognize import OCRResult, recognize
+from .recognize import OCRResult, ocr
 from .visualize import render
 
 __all__ = [
@@ -39,6 +38,6 @@ __all__ = [
     "OCRWord",
     "Polygon",
     "RapidOCREngine",
-    "recognize",
+    "ocr",
     "render",
 ]

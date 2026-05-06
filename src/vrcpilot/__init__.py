@@ -2,7 +2,7 @@
 
 Pixel capture is split between :class:`Capture` (focus-free streaming for
 video / ML) and :func:`take_screenshot` (one focused shot with on-screen
-geometry, for GUI automation). :func:`recognize` consumes a captured
+geometry, for GUI automation). :func:`ocr` consumes a captured
 :class:`Screenshot` and runs OCR through a swappable :class:`OCREngine`,
 keeping capture and recognition as orthogonal steps.
 """
@@ -27,7 +27,15 @@ from vrcpilot.detect import (
     TemplateDetectEngine,
     detect,
 )
-from vrcpilot.ocr import OCREngine, OCRResult, OCRWord, RapidOCREngine, recognize
+
+# The local ``ocr`` binding from this ``from`` statement overwrites the
+# ``vrcpilot.ocr`` package attribute that the underlying
+# ``IMPORT_NAME`` instruction set to the submodule, so
+# ``vrcpilot.ocr(shot)`` calls the function. ``from vrcpilot.ocr
+# import OCREngine`` (etc.) keeps working because Python resolves
+# submodule imports through ``sys.modules['vrcpilot.ocr']`` rather
+# than attribute lookup. Pinned by ``test_init.py``.
+from vrcpilot.ocr import OCREngine, OCRResult, OCRWord, RapidOCREngine, ocr
 from vrcpilot.process import (
     OscConfig,
     find_pid,
@@ -60,12 +68,12 @@ __all__ = [
     "launch",
     "mouse",
     "MouseButton",
+    "ocr",
     "OCREngine",
     "OCRResult",
     "OCRWord",
     "OscConfig",
     "RapidOCREngine",
-    "recognize",
     "Screenshot",
     "SteamNotFoundError",
     "take_screenshot",

@@ -1,7 +1,7 @@
 """E2E scenario: open the VRChat menu and run OCR over it.
 
-Drives the public ``vrcpilot.recognize()`` helper end-to-end against a
-real running VRChat client. The default landing screen has very little
+Drives the public ``vrcpilot.ocr()`` helper end-to-end against a real
+running VRChat client. The default landing screen has very little
 on-screen text, so the scenario presses ``Escape`` to bring up the
 in-game quick menu (a panel with many labelled buttons) before running
 OCR; that gives a stable, text-rich target to verify the pipeline.
@@ -12,7 +12,7 @@ Steps:
 2. Wait for warmup, then ``vrcpilot.keyboard.press(Key.ESCAPE)`` to
    open the menu.
 3. ``vrcpilot.take_screenshot()`` grabs the focused VRChat window;
-   ``vrcpilot.recognize(shot)`` runs the default ``RapidOCREngine``
+   ``vrcpilot.ocr(shot)`` runs the default ``RapidOCREngine``
    (loads its ONNX models on first call -- downloads ~15 MB to the
    venv on first run) and bundles the words with the screenshot.
 4. Verify each :class:`vrcpilot.OCRWord` has a 4-corner polygon and a
@@ -76,8 +76,8 @@ def _scenario() -> None:
     shot = vrcpilot.take_screenshot()
     assert shot is not None, "take_screenshot() returned None"
 
-    _helpers.log("calling vrcpilot.recognize(shot) (loads OCR models on first run)")
-    result = vrcpilot.recognize(shot)
+    _helpers.log("calling vrcpilot.ocr(shot) (loads OCR models on first run)")
+    result = vrcpilot.ocr(shot)
     assert result.screenshot is shot
     _helpers.log(
         "screenshot: "

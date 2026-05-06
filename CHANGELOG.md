@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **BREAKING**: `vrcpilot.launch()` now waits for the VRChat PID by default and returns `int | None`. Pass `wait_timeout=0` to restore the previous fire-and-forget behaviour.
+- **BREAKING**: renamed `vrcpilot.recognize()` to `vrcpilot.ocr()` for clarity.
 
 ## [0.1.0a1] - 2026-05-06
 

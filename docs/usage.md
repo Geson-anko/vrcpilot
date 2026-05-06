@@ -238,10 +238,10 @@ try:
     if shot is None:
         raise RuntimeError("could not capture VRChat")
 
-    ocr = vrcpilot.recognize(shot)
-    target = next((w for w in ocr.words if w.text == "Worlds"), None)
+    result = vrcpilot.ocr(shot)
+    target = next((w for w in result.words if w.text == "Worlds"), None)
     if target is not None:
-        x, y, w, h = ocr.display_bbox(target)
+        x, y, w, h = result.display_bbox(target)
         vrcpilot.mouse.move(int(x + w / 2), int(y + h / 2))
         vrcpilot.mouse.click(vrcpilot.MouseButton.LEFT)
 

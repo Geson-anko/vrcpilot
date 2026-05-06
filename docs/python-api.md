@@ -251,10 +251,10 @@ Default backend (PP-OCRv4 via `rapidocr`). Lazy-imports `rapidocr` in the constr
 
 **Raises**: `ImportError` when `rapidocr` is not installed.
 
-### `vrcpilot.recognize`
+### `vrcpilot.ocr`
 
 ```python
-def recognize(
+def ocr(
     screenshot: Screenshot,
     *,
     engine: OCREngine | None = None,
@@ -262,6 +262,8 @@ def recognize(
 ```
 
 Run OCR on `screenshot`. When `engine` is `None`, a process-cached `RapidOCREngine` instance is used.
+
+> `vrcpilot.ocr` is callable directly (`vrcpilot.ocr(shot)`). The submodule `vrcpilot.ocr` is still accessible via `from vrcpilot.ocr import OCREngine` and similar import-from forms — Python's import machinery resolves these through `sys.modules`, so the function binding does not break submodule access.
 
 ______________________________________________________________________
 
@@ -459,7 +461,7 @@ try:
     if shot is None:
         raise RuntimeError("could not capture VRChat")
 
-    result = vrcpilot.recognize(shot)
+    result = vrcpilot.ocr(shot)
     for word in result.words:
         print(word.text, result.display_bbox(word), word.confidence)
 

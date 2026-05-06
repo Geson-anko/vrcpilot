@@ -16,7 +16,7 @@ VRChat を Python から自動操作するツールキット (Windows / Linux �
 - **プロセス制御** — Steam 経由で VRChat を起動 (`vrcpilot.launch`)、PID 検出、安全な終了
 - **ウィンドウ制御** — Win32 と X11 / XWayland での focus / unfocus / 前面確認
 - **画面キャプチャ** — ストリーミング用 `Capture` (mp4 / y4m sink)、YAML を介して保存・復元できる 1 枚撮り `take_screenshot`
-- **OCR** — 差し替え可能な `OCREngine` ABC とデフォルトの `RapidOCREngine`。`recognize()` は単語単位の結果をウィンドウローカルとデスクトップ絶対の両座標で返す
+- **OCR** — 差し替え可能な `OCREngine` ABC とデフォルトの `RapidOCREngine`。`ocr()` は単語単位の結果をウィンドウローカルとデスクトップ絶対の両座標で返す
 - **画像テンプレート検出** — OpenCV `TM_CCOEFF_NORMED` を使う `TemplateDetectEngine`。OCR と同じ座標スキーマで結果を返す
 - **合成入力** — keyboard / mouse は Windows で [`pydirectinput`](https://github.com/learncodebygaming/pydirectinput)、Linux で [`inputtino`](https://github.com/games-on-whales/inputtino) (`/dev/uinput`) を経由。VRChat フォーカスのガード付き
 - **非 ASCII テキスト入力** — `vrcpilot.clipboard` がクリップボード + Ctrl+V で任意の Unicode を投入
@@ -125,7 +125,7 @@ try:
         raise RuntimeError("could not capture VRChat")
 
     # 全単語を OCR (engine 未指定時は cache された RapidOCREngine を使う)
-    result = vrcpilot.recognize(shot)
+    result = vrcpilot.ocr(shot)
     for word in result.words:
         print(word.text, result.display_bbox(word))
 

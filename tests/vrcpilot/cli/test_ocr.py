@@ -59,20 +59,20 @@ def _make_result(*, words: tuple[OCRWord, ...] | None = None) -> OCRResult:
 
 
 @pytest.fixture
-def patched_recognize(mocker: MockerFixture, tmp_path: Path) -> OCRResult:
+def patched_ocr(mocker: MockerFixture, tmp_path: Path) -> OCRResult:
     """Patch the OCR boundary and feed a screenshot via piped stdin.
 
     Since commit 10 removed the live-capture fallback,
     :func:`vrcpilot.cli._common.resolve_screenshot` only honours
     ``--screenshot`` or piped stdin. This fixture takes the stdin path
     via :func:`patch_stdin_with_screenshot` so ``ocr`` reads the YAML on
-    demand. ``recognize`` is patched in the ocr module where it is
+    demand. ``ocr`` is patched in the ocr module where it is
     imported so the test never touches the real engine.
     """
     shot = _make_screenshot()
     result = OCRResult(screenshot=shot, words=(_make_word(),))
     patch_stdin_with_screenshot(mocker, tmp_path)
-    mocker.patch("vrcpilot.cli.ocr.recognize", return_value=result)
+    mocker.patch("vrcpilot.cli.ocr.ocr", return_value=result)
     return result
 
 
@@ -113,10 +113,10 @@ class TestResolveVizPath:
 class TestOCRCommandYAML:
     def test_top_level_keys_no_viz(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         capsys: pytest.CaptureFixture[str],
     ):
-        del patched_recognize
+        del patched_ocr
 
         exit_code = main(["ocr"])
 
@@ -126,10 +126,10 @@ class TestOCRCommandYAML:
 
     def test_window_key_order(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         capsys: pytest.CaptureFixture[str],
     ):
-        del patched_recognize
+        del patched_ocr
 
         exit_code = main(["ocr"])
 
@@ -145,10 +145,10 @@ class TestOCRCommandYAML:
 
     def test_word_key_order(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         capsys: pytest.CaptureFixture[str],
     ):
-        del patched_recognize
+        del patched_ocr
 
         exit_code = main(["ocr"])
 
@@ -161,10 +161,10 @@ class TestOCRCommandYAML:
 
     def test_pos_values(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         capsys: pytest.CaptureFixture[str],
     ):
-        del patched_recognize
+        del patched_ocr
 
         exit_code = main(["ocr"])
 
@@ -178,10 +178,10 @@ class TestOCRCommandYAML:
 
     def test_display_pos_arithmetic(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         capsys: pytest.CaptureFixture[str],
     ):
-        del patched_recognize
+        del patched_ocr
 
         exit_code = main(["ocr"])
 
@@ -198,10 +198,10 @@ class TestOCRCommandYAML:
 
     def test_window_values(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         capsys: pytest.CaptureFixture[str],
     ):
-        result = patched_recognize
+        result = patched_ocr
 
         exit_code = main(["ocr"])
 
@@ -216,10 +216,10 @@ class TestOCRCommandYAML:
 
     def test_captured_at_is_isoformat(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         capsys: pytest.CaptureFixture[str],
     ):
-        result = patched_recognize
+        result = patched_ocr
 
         exit_code = main(["ocr"])
 
@@ -232,12 +232,12 @@ class TestOCRCommandYAML:
 class TestOCRCommandViz:
     def test_no_viz_writes_no_png(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         capsys: pytest.CaptureFixture[str],
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        del patched_recognize
+        del patched_ocr
         monkeypatch.chdir(tmp_path)
 
         exit_code = main(["ocr"])
@@ -252,13 +252,13 @@ class TestOCRCommandViz:
 
     def test_viz_no_arg_writes_to_cwd(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         patched_render: None,
         capsys: pytest.CaptureFixture[str],
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
     ):
-        del patched_recognize, patched_render
+        del patched_ocr, patched_render
         monkeypatch.chdir(tmp_path)
 
         exit_code = main(["ocr", "--viz"])
@@ -271,12 +271,12 @@ class TestOCRCommandViz:
 
     def test_viz_with_file_path(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         patched_render: None,
         capsys: pytest.CaptureFixture[str],
         tmp_path: Path,
     ):
-        del patched_recognize, patched_render
+        del patched_ocr, patched_render
         target = tmp_path / "custom.png"
 
         exit_code = main(["ocr", "--viz", str(target)])
@@ -288,12 +288,12 @@ class TestOCRCommandViz:
 
     def test_viz_with_directory(
         self,
-        patched_recognize: OCRResult,
+        patched_ocr: OCRResult,
         patched_render: None,
         capsys: pytest.CaptureFixture[str],
         tmp_path: Path,
     ):
-        del patched_recognize, patched_render
+        del patched_ocr, patched_render
 
         exit_code = main(["ocr", "--viz", str(tmp_path)])
 
@@ -325,7 +325,7 @@ class TestOCRScreenshotInputIntegration:
         yaml_path.write_text(yaml_text)
         # Stub out OCR so the test never touches the real engine.
         result = _make_result()
-        mocker.patch("vrcpilot.cli.ocr.recognize", return_value=result)
+        mocker.patch("vrcpilot.cli.ocr.ocr", return_value=result)
 
         exit_code = main(["ocr", "--screenshot", str(yaml_path)])
 
@@ -347,7 +347,7 @@ class TestOCRScreenshotInputIntegration:
         # fixture's True override is shadowed by this fresh patch.
         patch_stdin_with_screenshot(mocker, tmp_path)
         result = _make_result()
-        mocker.patch("vrcpilot.cli.ocr.recognize", return_value=result)
+        mocker.patch("vrcpilot.cli.ocr.ocr", return_value=result)
 
         exit_code = main(["ocr"])
 
@@ -362,7 +362,7 @@ class TestOCRScreenshotInputIntegration:
         mocker: MockerFixture,
         capsys: pytest.CaptureFixture[str],
     ):
-        recognize_spy = mocker.patch("vrcpilot.cli.ocr.recognize")
+        ocr_spy = mocker.patch("vrcpilot.cli.ocr.ocr")
 
         exit_code = main(["ocr", "--screenshot", "/nonexistent/path.yaml"])
 
@@ -370,7 +370,7 @@ class TestOCRScreenshotInputIntegration:
         captured = capsys.readouterr()
         assert captured.out == ""
         assert "vrcpilot: --screenshot file not found:" in captured.err
-        recognize_spy.assert_not_called()
+        ocr_spy.assert_not_called()
 
     def test_malformed_screenshot_yaml_exits_1(
         self,
@@ -383,7 +383,7 @@ class TestOCRScreenshotInputIntegration:
         # into a single ``vrcpilot:`` stderr line.
         broken = tmp_path / "broken.yaml"
         broken.write_text("- not\n- a\n- mapping\n")
-        recognize_spy = mocker.patch("vrcpilot.cli.ocr.recognize")
+        ocr_spy = mocker.patch("vrcpilot.cli.ocr.ocr")
 
         exit_code = main(["ocr", "--screenshot", str(broken)])
 
@@ -391,7 +391,7 @@ class TestOCRScreenshotInputIntegration:
         captured = capsys.readouterr()
         assert captured.out == ""
         assert "vrcpilot: screenshot YAML must be a mapping" in captured.err
-        recognize_spy.assert_not_called()
+        ocr_spy.assert_not_called()
 
 
 class TestOCRScreenshotInputRequirement:
@@ -405,7 +405,7 @@ class TestOCRScreenshotInputRequirement:
         # The autouse ``_stdin_is_tty_by_default`` fixture pins
         # ``sys.stdin.isatty()`` to ``True`` so this test exercises the
         # "no flag, no pipe" branch without any extra setup.
-        recognize_spy = mocker.patch("vrcpilot.cli.ocr.recognize")
+        ocr_spy = mocker.patch("vrcpilot.cli.ocr.ocr")
 
         exit_code = main(["ocr"])
 
@@ -416,4 +416,4 @@ class TestOCRScreenshotInputRequirement:
         assert "--screenshot" in captured.err
         assert "stdin" in captured.err
         assert "pipe" in captured.err
-        recognize_spy.assert_not_called()
+        ocr_spy.assert_not_called()
