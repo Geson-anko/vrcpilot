@@ -1,0 +1,26 @@
+"""Shared fixtures for the :mod:`vrcpilot.cli` test suite.
+
+The autouse fixture here pins ``sys.stdin.isatty()`` to ``True`` for
+every CLI test by default. ``vrcpilot.cli._common.resolve_screenshot``
+takes the piped-stdin branch whenever stdin is not a tty, but pytest
+runners under common harnesses (uv, CI containers) leave stdin as a
+non-tty pipe -- without this fixture tests that exercise the live
+capture path would silently take the stdin branch and try to parse an
+empty / unrelated payload as a screenshot YAML.
+
+Tests that explicitly cover the stdin route override this fixture by
+patching ``vrcpilot.cli._common.sys.stdin`` (or the same module's
+``isatty`` attribute) inside the test body; the explicit patch shadows
+this autouse default and is unwound first when the test ends.
+"""
+
+from __future__ import annotations
+
+import pytest
+from pytest_mock import MockerFixture
+
+
+@pytest.fixture(autouse=True)
+def _stdin_is_tty_by_default(mocker: MockerFixture) -> None:
+    """Default ``sys.stdin.isatty()`` to ``True`` for CLI tests."""
+    mocker.patch("vrcpilot.cli._common.sys.stdin.isatty", return_value=True)
